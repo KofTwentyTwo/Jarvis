@@ -11,7 +11,8 @@
       "Bash(git mv *)",
       "Skill(gsd-ui-phase)",
       "Bash(git check-ignore *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
