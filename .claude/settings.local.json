@@ -4,7 +4,14 @@
       "WebSearch",
       "Bash(python3 -c ':*)",
       "Read(//tmp/**)",
-      "Bash(wc -l /Users/james.maes/Git.Local/Kof22/Jarvis/docs/*.md)"
+      "Bash(wc -l /Users/james.maes/Git.Local/Kof22/Jarvis/docs/*.md)",
+      "Bash(gsd-sdk query *)",
+      "Bash(git -C /Users/james.maes/Git.Local/kof22/Jarvis status --short .planning/)",
+      "Bash(git -C /Users/james.maes/Git.Local/kof22/Jarvis diff --stat .planning/REQUIREMENTS.md)",
+      "Bash(git mv *)",
+      "Skill(gsd-ui-phase)",
+      "Bash(git check-ignore *)",
+      "Bash(git add *)"
     ]
   }
 }
