@@ -52,7 +52,7 @@ Plans:
 - [x] 01-02-keychain-config-logging-PLAN.md — Keychain SystemKeychainStore + Config LaunchSnapshot/PerTurnSnapshot split (AGENT-05, SEC-05, SEC-08, OBS-05) + Logging four-channel multiplex + Redact 5 patterns (OBS-06) (Wave 2)
 - [x] 01-03-app-shell-ui-PLAN.md — MenuBarIconController + JarvisHUDPanel + HUDBannerCoordinator + BrandColors + AppDelegate entitlement hard-block (Wave 2, parallel with 01-02)
 - [x] 01-04-shell-wizard-wiring-PLAN.md — Shell package (HotkeyBinder, InputMonitoringProbe, LaunchAtLoginController, ShortcutRecorder) + first-launch Wizard + full AppDelegate wiring (Wave 3)
-- [ ] 01-05-codesign-entitlement-probe-PLAN.md — Build-time codesign + verify-entitlements pre/post-codesign + pbxproj linter + JarvisEntitlementProbeTests one-shot probe (MCP-05, MCP-06, SEC-03) (Wave 4)
+- [x] 01-05-codesign-entitlement-probe-PLAN.md — Build-time codesign + verify-entitlements pre/post-codesign + pbxproj linter + JarvisEntitlementProbeTests one-shot probe (MCP-05, MCP-06, SEC-03) (Wave 4)
 
 ### Phase 2: Bus
 
