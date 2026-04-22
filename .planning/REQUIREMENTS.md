@@ -108,7 +108,7 @@ v1 target per user scope decision: **"Everything through 'usable Jarvis'"** — 
 
 ### Security & Permissions (SEC)
 
-- [ ] **SEC-01**: Anthropic API key lives in macOS Keychain (`com.kingsrook.jarvis.anthropic`); never plaintext; never in the webview JS heap; entered via native SwiftUI `SecureField`
+- [ ] **SEC-01**: Anthropic API key lives in macOS Keychain (`com.koftwentytwo.jarvis.anthropic`); never plaintext; never in the webview JS heap; entered via native SwiftUI `SecureField`
 - [ ] **SEC-02**: Hardened Runtime is enabled from day one with `com.apple.security.cs.allow-jit`; `allow-unsigned-executable-memory` is NOT widened (MLX doesn't need it)
 - [ ] **SEC-03**: `com.apple.developer.speech-recognition-assets` entitlement + `NSSpeechRecognitionAssetsUsageDescription` Info.plist key in `Jarvis.entitlements` from day one; scaffold-time Release cold-launch verifies entitlement is load-bearing
 - [ ] **SEC-04**: TCC permissions prompt incrementally (Microphone, Camera, Input Monitoring, Automation per-target, Accessibility as needed) with graceful denial handling per surface

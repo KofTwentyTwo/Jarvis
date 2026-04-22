@@ -3,7 +3,7 @@ import Logging   // swift-log
 
 public enum JarvisLogHandlerFactory {
     /// The subsystem string baked into OSLogHandler — matches CLAUDE.md §os.Logger identity.
-    public static let subsystem = "com.kingsrook.jarvis"
+    public static let subsystem = "com.koftwentytwo.jarvis"
 
     /// Factory consumed by swift-log's LoggingSystem.bootstrap.
     public static func make(label: String) -> LogHandler {

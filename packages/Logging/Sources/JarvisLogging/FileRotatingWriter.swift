@@ -26,7 +26,7 @@ final class FileRotatingWriter: @unchecked Sendable {
         self.baseName = baseName
         self.retentionDays = retentionDays
         self.dateProvider = dateProvider
-        self.queue = DispatchQueue(label: "com.kingsrook.jarvis.filelog.\(baseName)")
+        self.queue = DispatchQueue(label: "com.koftwentytwo.jarvis.filelog.\(baseName)")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 

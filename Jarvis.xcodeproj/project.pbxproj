@@ -540,7 +540,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				OTHER_CODE_SIGN_FLAGS = "--options=runtime --timestamp";
-				PRODUCT_BUNDLE_IDENTIFIER = com.kingsrook.jarvis;
+				PRODUCT_BUNDLE_IDENTIFIER = com.koftwentytwo.jarvis;
 				PRODUCT_NAME = Jarvis;
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -566,7 +566,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				OTHER_SWIFT_FLAGS = "-DJARVIS_ENTITLEMENT_PROBE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.kingsrook.jarvis.EntitlementProbeTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.koftwentytwo.jarvis.EntitlementProbeTests;
 				PRODUCT_NAME = JarvisEntitlementProbeTests;
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -589,7 +589,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.kingsrook.jarvis.AppTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.koftwentytwo.jarvis.AppTests;
 				PRODUCT_NAME = JarvisAppTests;
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -683,7 +683,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.kingsrook.jarvis.AppTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.koftwentytwo.jarvis.AppTests;
 				PRODUCT_NAME = JarvisAppTests;
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -708,7 +708,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				OTHER_SWIFT_FLAGS = "-DJARVIS_ENTITLEMENT_PROBE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.kingsrook.jarvis.EntitlementProbeTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.koftwentytwo.jarvis.EntitlementProbeTests;
 				PRODUCT_NAME = JarvisEntitlementProbeTests;
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -731,7 +731,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				OTHER_CODE_SIGN_FLAGS = "--options=runtime --timestamp";
-				PRODUCT_BUNDLE_IDENTIFIER = com.kingsrook.jarvis;
+				PRODUCT_BUNDLE_IDENTIFIER = com.koftwentytwo.jarvis;
 				PRODUCT_NAME = Jarvis;
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;

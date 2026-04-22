@@ -87,6 +87,7 @@ progress:
 | `speech-recognition-assets` entitlement + Info.plist key day one (verify load-bearing at scaffold) | RESEARCH-DELTAS | Locked |
 | Audit loop paused at R4; findings absorbed into build phases, not a rev-4 gate | PROJECT.md | Locked |
 | 8-phase structure (dependency-DAG-derived, not linear) | SUMMARY | Locked |
+| Bundle ID `com.koftwentytwo.jarvis` (owner: KofTwentyTwo) — renamed from `com.kingsrook.jarvis` on 2026-04-22 during P1 Wave 4 checkpoint; App ID not yet registered at developer.apple.com | Session 2026-04-22 | Locked |
 
 ### Open TODOs
 
@@ -145,7 +146,7 @@ Plans 02 and 03 can run in parallel (Wave 2). VALIDATION.md carries per-task Nyq
 **Load-bearing deviations from original research:**
 
 - **RESEARCH §Open Q #8:** `verify-entitlements.sh` must run in a **pre-codesign** phase (not post-codesign) or the `JarvisEntitlementsVerified=YES` write invalidates the signature. Planner MUST order build phases: compile → `verify-entitlements.sh --pre-codesign` → `codesign.sh` → `verify-entitlements.sh --post-codesign`.
-- **RESEARCH §Open Q #2:** Enabling `com.apple.developer.speech-recognition-assets` capability on the Developer portal App ID (`com.kingsrook.jarvis`) is a **manual human step** in developer.apple.com — not scriptable. Planner must include a task with `autonomous: false`.
+- **RESEARCH §Open Q #2:** Enabling `com.apple.developer.speech-recognition-assets` capability on the Developer portal App ID (`com.koftwentytwo.jarvis`) is a **manual human step** in developer.apple.com — not scriptable. Planner must include a task with `autonomous: false`.
 - **RESEARCH Q1:** Keychain → raw `Security.framework` (not `KeychainAccess` SPM). ~60 LOC wrapper in `packages/Keychain`.
 - **RESEARCH Q3:** swift-log → `MultiplexLogHandler([FileLogHandler, OSLogHandler])`; file rotation hand-rolled (~80 LOC) to match D-18 spec exactly.
 - **PATTERNS §S-3:** `redact()` lives in `FileLogHandler` only — NOT in `os.Logger` handler. Callers must redact before logging untrusted variables.

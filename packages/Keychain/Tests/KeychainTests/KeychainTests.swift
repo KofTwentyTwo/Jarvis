@@ -9,7 +9,7 @@ final class KeychainTests: XCTestCase {
         super.setUp()
         // Random account so parallel test runs and real user Keychain state don't collide.
         testItem = KeychainItem(
-            service: "com.kingsrook.jarvis.tests",
+            service: "com.koftwentytwo.jarvis.tests",
             account: "anthropic-test-\(UUID().uuidString)"
         )
     }
@@ -40,7 +40,7 @@ final class KeychainTests: XCTestCase {
     }
 
     func test_anthropicConstantMatchesD10() {
-        XCTAssertEqual(KeychainItem.anthropic.service, "com.kingsrook.jarvis")
+        XCTAssertEqual(KeychainItem.anthropic.service, "com.koftwentytwo.jarvis")
         XCTAssertEqual(KeychainItem.anthropic.account, "anthropic")
     }
 }

@@ -36,7 +36,7 @@ targets:
           - "Tests/**"
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.kingsrook.jarvis
+        PRODUCT_BUNDLE_IDENTIFIER: com.koftwentytwo.jarvis
         PRODUCT_NAME: Jarvis
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/Jarvis.entitlements
@@ -103,7 +103,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: JarvisAppTests
-        PRODUCT_BUNDLE_IDENTIFIER: com.kingsrook.jarvis.AppTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.koftwentytwo.jarvis.AppTests
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_VERSION: "6.0"
@@ -128,7 +128,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: JarvisEntitlementProbeTests
-        PRODUCT_BUNDLE_IDENTIFIER: com.kingsrook.jarvis.EntitlementProbeTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.koftwentytwo.jarvis.EntitlementProbeTests
         INFOPLIST_FILE: App/Tests/JarvisEntitlementProbeTests/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_STRICT_CONCURRENCY: complete

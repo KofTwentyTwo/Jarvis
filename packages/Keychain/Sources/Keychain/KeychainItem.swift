@@ -11,7 +11,7 @@ public struct KeychainItem: Sendable, Equatable {
 
 public extension KeychainItem {
     /// Anthropic API key storage location per SEC-01 / D-10.
-    /// kSecAttrService: "com.kingsrook.jarvis"
+    /// kSecAttrService: "com.koftwentytwo.jarvis"
     /// kSecAttrAccount: "anthropic"
-    static let anthropic = KeychainItem(service: "com.kingsrook.jarvis", account: "anthropic")
+    static let anthropic = KeychainItem(service: "com.koftwentytwo.jarvis", account: "anthropic")
 }

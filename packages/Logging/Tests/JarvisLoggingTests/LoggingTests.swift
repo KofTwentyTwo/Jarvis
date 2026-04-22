@@ -23,6 +23,6 @@ final class LoggingTests: XCTestCase {
     }
 
     func test_subsystemConstant() {
-        XCTAssertEqual(JarvisLogHandlerFactory.subsystem, "com.kingsrook.jarvis")
+        XCTAssertEqual(JarvisLogHandlerFactory.subsystem, "com.koftwentytwo.jarvis")
     }
 }
