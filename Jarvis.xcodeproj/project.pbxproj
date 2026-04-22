@@ -10,19 +10,55 @@
 		07E7F32B3857ED215DE59FBE /* Keychain in Frameworks */ = {isa = PBXBuildFile; productRef = 1440CCDB2CC412B099BD0310 /* Keychain */; };
 		18CDCC4155A2604BC4D67147 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 467AE2D19D58325D227E2F89 /* Assets.xcassets */; };
 		526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */; };
+		5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */; };
+		78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF7206DB98EC02734975536 /* HudState.swift */; };
 		8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1517F151F3BA96803143692 /* AppDelegate.swift */; };
+		9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */; };
+		A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */; };
+		A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */; };
+		C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */; };
 		DF6EC4DD8D8A029748F382AE /* Config in Frameworks */ = {isa = PBXBuildFile; productRef = 61127935D1430B78A6FEACB0 /* Config */; };
 		EB07CD704A3568F27DD4D901 /* Shell in Frameworks */ = {isa = PBXBuildFile; productRef = 6FAD561608B0D1C402015E0D /* Shell */; };
 		F8E9590D40A0B88DD4FD712D /* JarvisLogging in Frameworks */ = {isa = PBXBuildFile; productRef = ED53153FE6F73137C23AD43B /* JarvisLogging */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		D219C62B6F700143D5A8973F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 33E99CF1F5349721FD0BB40B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 461D90920FCD8CAF83348871;
+			remoteInfo = Jarvis;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		9A5E7F3F1A2B3C4D5E6F7081 /* CopyFiles Helpers */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "Contents/Helpers";
+			dstSubfolderSpec = 1;
+			files = (
+			);
+			name = "Copy Helpers";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		00C01D284ECCFC986C7F2E16 /* Keychain */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Keychain; path = packages/Keychain; sourceTree = SOURCE_ROOT; };
+		0CF7206DB98EC02734975536 /* HudState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudState.swift; sourceTree = "<group>"; };
+		2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconControllerTests.swift; sourceTree = "<group>"; };
 		2E9C7A0B14B3AE5C9100CACF /* Config */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Config; path = packages/Config; sourceTree = SOURCE_ROOT; };
 		3EEB80F86BC4DE366810AB99 /* Shell */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Shell; path = packages/Shell; sourceTree = SOURCE_ROOT; };
 		467AE2D19D58325D227E2F89 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandColors.swift; sourceTree = "<group>"; };
+		4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconController.swift; sourceTree = "<group>"; };
 		5DE981947E40847F9BAF5641 /* Logging */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Logging; path = packages/Logging; sourceTree = SOURCE_ROOT; };
+		604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAAnimationFactory.swift; sourceTree = "<group>"; };
+		6784683F2262D8AFA439668D /* JarvisAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisApp.swift; sourceTree = "<group>"; };
+		B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContextMenu.swift; sourceTree = "<group>"; };
 		C1517F151F3BA96803143692 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jarvis.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -41,19 +77,6 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		9A5E7F3F1A2B3C4D5E6F7081 /* CopyFiles Helpers */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "Contents/Helpers";
-			dstSubfolderSpec = 1;
-			files = (
-			);
-			name = "Copy Helpers";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXGroup section */
 		146263771AC556A87FAB63A6 /* App */ = {
 			isa = PBXGroup;
@@ -61,16 +84,56 @@
 				C1517F151F3BA96803143692 /* AppDelegate.swift */,
 				467AE2D19D58325D227E2F89 /* Assets.xcassets */,
 				90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */,
+				F76520C565169D7547EE9608 /* HUD */,
+				35E7CF3C8F80086AD447480E /* MenuBar */,
+				7B0D5E57F282044CD98E347B /* Tests */,
+				5CBAF02B001A7FF406642CCA /* Theme */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		35E7CF3C8F80086AD447480E /* MenuBar */ = {
+			isa = PBXGroup;
+			children = (
+				604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */,
+				B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */,
+				4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */,
+			);
+			path = MenuBar;
+			sourceTree = "<group>";
+		};
+		4523A7D183060E875587B2F1 /* AppTests */ = {
+			isa = PBXGroup;
+			children = (
+				2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */,
+			);
+			path = AppTests;
+			sourceTree = "<group>";
+		};
+		5CBAF02B001A7FF406642CCA /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */,
+				0CF7206DB98EC02734975536 /* HudState.swift */,
+			);
+			path = Theme;
 			sourceTree = "<group>";
 		};
 		7370B301BC3824D8E135198C /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */,
+				6784683F2262D8AFA439668D /* JarvisAppTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7B0D5E57F282044CD98E347B /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				4523A7D183060E875587B2F1 /* AppTests */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 		BC0DCAC9B7584481D8C65021 = {
@@ -91,6 +154,13 @@
 				3EEB80F86BC4DE366810AB99 /* Shell */,
 			);
 			path = Packages;
+			sourceTree = "<group>";
+		};
+		F76520C565169D7547EE9608 /* HUD */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = HUD;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -121,6 +191,24 @@
 			productReference = F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */;
 			productType = "com.apple.product-type.application";
 		};
+		93F20AEE91BB60C4ED0C0346 /* JarvisAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C56026A0C29F7E486D873FBB /* Build configuration list for PBXNativeTarget "JarvisAppTests" */;
+			buildPhases = (
+				A5FA109B8186C9417E8AF319 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				958F3CEE3C1DD3F6F86D3E63 /* PBXTargetDependency */,
+			);
+			name = JarvisAppTests;
+			packageProductDependencies = (
+			);
+			productName = JarvisAppTests;
+			productReference = 6784683F2262D8AFA439668D /* JarvisAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -131,6 +219,9 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					461D90920FCD8CAF83348871 = {
+						ProvisioningStyle = Manual;
+					};
+					93F20AEE91BB60C4ED0C0346 = {
 						ProvisioningStyle = Manual;
 					};
 				};
@@ -156,6 +247,7 @@
 			projectRoot = "";
 			targets = (
 				461D90920FCD8CAF83348871 /* Jarvis */,
+				93F20AEE91BB60C4ED0C0346 /* JarvisAppTests */,
 			);
 		};
 /* End PBXProject section */
@@ -194,27 +286,48 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		A5FA109B8186C9417E8AF319 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E0992BE4761F337F2AC5BF62 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */,
+				C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */,
+				A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */,
+				78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */,
 				526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */,
+				A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */,
+				9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		958F3CEE3C1DD3F6F86D3E63 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 461D90920FCD8CAF83348871 /* Jarvis */;
+			targetProxy = D219C62B6F700143D5A8973F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		06169DA02795A8ED87F6F021 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_ENTITLEMENTS = App/Jarvis.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -229,6 +342,29 @@
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
+		};
+		79CB820AD9DBDFAC3BAD9AB2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kingsrook.jarvis.AppTests;
+				PRODUCT_NAME = JarvisAppTests;
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Contents/MacOS/Jarvis";
+			};
+			name = Release;
 		};
 		8A75D86FEE135E74011AB6D2 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -296,6 +432,31 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A5A5079A306E1695C2FCBC38 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kingsrook.jarvis.AppTests;
+				PRODUCT_NAME = JarvisAppTests;
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Contents/MacOS/Jarvis";
 			};
 			name = Debug;
 		};
@@ -400,6 +561,15 @@
 			buildConfigurations = (
 				06169DA02795A8ED87F6F021 /* Debug */,
 				B81D099211BB3784F907E95C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C56026A0C29F7E486D873FBB /* Build configuration list for PBXNativeTarget "JarvisAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A5A5079A306E1695C2FCBC38 /* Debug */,
+				79CB820AD9DBDFAC3BAD9AB2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

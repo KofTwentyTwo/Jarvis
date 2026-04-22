@@ -33,6 +33,7 @@ targets:
         excludes:
           - "Info.plist"
           - "Jarvis.entitlements"
+          - "Tests/**"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.kingsrook.jarvis
@@ -61,9 +62,54 @@ targets:
         product: JarvisLogging
       - package: Shell
         product: Shell
+    copyFiles:
+      - destination: wrapper
+        subpath: Contents/Helpers
+        files: []
     postBuildScripts:
       - name: Create Contents/Helpers directory
         script: |
           mkdir -p "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers"
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
+  JarvisAppTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: App/Tests/AppTests
+    settings:
+      base:
+        PRODUCT_NAME: JarvisAppTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.kingsrook.jarvis.AppTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Contents/MacOS/Jarvis"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+      configs:
+        Debug:
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGNING_REQUIRED: NO
+    dependencies:
+      - target: Jarvis
+schemes:
+  Jarvis:
+    build:
+      targets:
+        Jarvis: all
+        JarvisAppTests: [test]
+    test:
+      targets:
+        - JarvisAppTests
+      gatherCoverageData: false
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
