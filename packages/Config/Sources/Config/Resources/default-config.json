@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "ollama": {
+    "baseURL": "http://127.0.0.1:11434"
+  },
+  "applescript": {
+    "confirmationRequired": true
+  },
+  "provider": "anthropic",
+  "tts": { "tier": "tier1" },
+  "stt": { "whisperKitFallback": false },
+  "featureFlags": {
+    "orpheusTTSEnabled": false,
+    "whisperKitSTTEnabled": false
+  },
+  "toolBlocklist": [],
+  "confirmationPolicy": { "timeoutSeconds": 60 },
+  "logging": { "fileLevel": "info", "osLogLevel": "info" }
+}

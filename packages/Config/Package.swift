@@ -18,6 +18,7 @@ let package = Package(
                 .product(name: "Keychain", package: "Keychain"),
                 .product(name: "JarvisLogging", package: "Logging"),
             ],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
