@@ -7,8 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF0892A5DFF2AD38A93834 /* BannerContent.swift */; };
 		07E7F32B3857ED215DE59FBE /* Keychain in Frameworks */ = {isa = PBXBuildFile; productRef = 1440CCDB2CC412B099BD0310 /* Keychain */; };
 		18CDCC4155A2604BC4D67147 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 467AE2D19D58325D227E2F89 /* Assets.xcassets */; };
+		461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */; };
 		526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */; };
 		5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */; };
 		78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF7206DB98EC02734975536 /* HudState.swift */; };
@@ -16,8 +18,14 @@
 		9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */; };
 		A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */; };
 		A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */; };
+		A9F18AF7B16BEA1776F76321 /* HUDBannerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */; };
+		B64A0CAA46B3C146B54F9F85 /* HUDBannerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */; };
+		BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */; };
 		C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */; };
+		CFBEF67D687A1227C9C2A6BD /* HUDBannerCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */; };
 		DF6EC4DD8D8A029748F382AE /* Config in Frameworks */ = {isa = PBXBuildFile; productRef = 61127935D1430B78A6FEACB0 /* Config */; };
+		E218ADC35078C6F26F0D0041 /* HUDBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */; };
+		E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */; };
 		EB07CD704A3568F27DD4D901 /* Shell in Frameworks */ = {isa = PBXBuildFile; productRef = 6FAD561608B0D1C402015E0D /* Shell */; };
 		F8E9590D40A0B88DD4FD712D /* JarvisLogging in Frameworks */ = {isa = PBXBuildFile; productRef = ED53153FE6F73137C23AD43B /* JarvisLogging */; };
 /* End PBXBuildFile section */
@@ -47,10 +55,14 @@
 
 /* Begin PBXFileReference section */
 		00C01D284ECCFC986C7F2E16 /* Keychain */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Keychain; path = packages/Keychain; sourceTree = SOURCE_ROOT; };
+		096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBanner.swift; sourceTree = "<group>"; };
 		0CF7206DB98EC02734975536 /* HudState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudState.swift; sourceTree = "<group>"; };
+		17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerPanel.swift; sourceTree = "<group>"; };
 		2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconControllerTests.swift; sourceTree = "<group>"; };
 		2E9C7A0B14B3AE5C9100CACF /* Config */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Config; path = packages/Config; sourceTree = SOURCE_ROOT; };
+		3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisHUDPanelTests.swift; sourceTree = "<group>"; };
 		3EEB80F86BC4DE366810AB99 /* Shell */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Shell; path = packages/Shell; sourceTree = SOURCE_ROOT; };
+		4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisHUDPanel.swift; sourceTree = "<group>"; };
 		467AE2D19D58325D227E2F89 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandColors.swift; sourceTree = "<group>"; };
 		4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconController.swift; sourceTree = "<group>"; };
@@ -58,6 +70,10 @@
 		604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAAnimationFactory.swift; sourceTree = "<group>"; };
 		6784683F2262D8AFA439668D /* JarvisAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisApp.swift; sourceTree = "<group>"; };
+		96BF0892A5DFF2AD38A93834 /* BannerContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerContent.swift; sourceTree = "<group>"; };
+		98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerCoordinatorTests.swift; sourceTree = "<group>"; };
+		A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateEntitlementTests.swift; sourceTree = "<group>"; };
+		AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerCoordinator.swift; sourceTree = "<group>"; };
 		B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContextMenu.swift; sourceTree = "<group>"; };
 		C1517F151F3BA96803143692 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jarvis.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -105,6 +121,9 @@
 		4523A7D183060E875587B2F1 /* AppTests */ = {
 			isa = PBXGroup;
 			children = (
+				A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */,
+				98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */,
+				3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */,
 				2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */,
 			);
 			path = AppTests;
@@ -159,6 +178,11 @@
 		F76520C565169D7547EE9608 /* HUD */ = {
 			isa = PBXGroup;
 			children = (
+				96BF0892A5DFF2AD38A93834 /* BannerContent.swift */,
+				096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */,
+				AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */,
+				17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */,
+				4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */,
 			);
 			path = HUD;
 			sourceTree = "<group>";
@@ -290,6 +314,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */,
+				CFBEF67D687A1227C9C2A6BD /* HUDBannerCoordinatorTests.swift in Sources */,
+				461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */,
 				5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -299,10 +326,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */,
+				0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */,
 				C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */,
 				A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */,
+				E218ADC35078C6F26F0D0041 /* HUDBanner.swift in Sources */,
+				B64A0CAA46B3C146B54F9F85 /* HUDBannerCoordinator.swift in Sources */,
+				A9F18AF7B16BEA1776F76321 /* HUDBannerPanel.swift in Sources */,
 				78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */,
 				526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */,
+				BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */,
 				A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */,
 				9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */,
 			);
