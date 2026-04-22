@@ -180,102 +180,102 @@ v1 target per user scope decision: **"Everything through 'usable Jarvis'"** — 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SHELL-01 | P1 | Pending |
-| SHELL-02 | P1 | Pending |
-| SHELL-03 | P1 | Pending |
-| SHELL-04 | P1 | Pending |
-| SHELL-05 | P1 | Pending |
-| SHELL-06 | P1 | Pending |
-| HUD-01 | P3 | Pending |
-| HUD-02 | P3 | Pending |
-| HUD-03 | P2 | Pending |
-| HUD-04 | P2 | Pending |
-| HUD-05 | P2 | Pending |
-| HUD-06 | P2 | Pending |
-| HUD-07 | P3 | Pending |
-| HUD-08 | P3 | Pending |
-| AGENT-01 | P4 | Pending |
-| AGENT-02 | P4 | Pending |
-| AGENT-03 | P4 | Pending |
-| AGENT-04 | P4 | Pending |
-| AGENT-05 | P1 | Pending |
-| AGENT-06 | P4 | Pending |
-| AGENT-07 | P4 | Pending |
-| AGENT-08 | P4 | Pending |
-| AGENT-09 | P4 | Pending |
-| AGENT-10 | P4 | Pending |
-| AGENT-11 | P5 | Pending |
-| MCP-01 | P5 | Pending |
-| MCP-02 | P5 | Pending |
-| MCP-03 | P5 | Pending |
-| MCP-04 | P5 | Pending |
-| MCP-05 | P1 | Pending |
-| MCP-06 | P1 | Pending |
-| MCP-07 | P5 | Pending |
-| MCP-08 | P5 | Pending |
-| MCP-09 | P5 | Pending |
-| VOICE-01 | P6 | Pending |
-| VOICE-02 | P6 | Pending |
-| VOICE-03 | P6 | Pending |
-| VOICE-04 | P6 | Pending |
-| VOICE-05 | P6 | Pending |
-| VOICE-06 | P6 | Pending |
-| VOICE-07 | P6 | Pending |
-| VOICE-08 | P6 | Pending |
-| VOICE-09 | P6 | Pending |
-| VOICE-10 | P6 | Pending |
-| VOICE-11 | P6 | Pending |
-| VOICE-12 | P6 | Pending |
-| VOICE-13 | P6 | Pending |
-| VOICE-14 | P6 | Pending |
-| TEXT-01 | P4 | Pending |
-| TEXT-02 | P3 | Pending |
-| TEXT-03 | P7 | Pending |
-| VISION-01 | P7 | Pending |
-| VISION-02 | P7 | Pending |
-| VISION-03 | P7 | Pending |
-| VISION-04 | P7 | Pending |
-| MEM-01 | P7 | Pending |
-| MEM-02 | P7 | Pending |
-| MEM-03 | P7 | Pending |
-| MEM-04 | P7 | Pending |
-| MEM-05 | P7 | Pending |
-| MEM-06 | P7 | Pending |
-| MEM-07 | P7 | Pending |
-| MEM-08 | P7 | Pending |
-| OBS-01 | P4 | Pending |
-| OBS-02 | P4 | Pending |
-| OBS-03 | P8 | Pending |
-| OBS-04 | P8 | Pending |
-| OBS-05 | P1 | Pending |
-| OBS-06 | P1 | Pending |
-| OBS-07 | P4 | Pending |
-| SEC-01 | P1 | Pending |
-| SEC-02 | P1 | Pending |
-| SEC-03 | P1 | Pending |
-| SEC-04 | P1 | Pending |
-| SEC-05 | P1 | Pending |
-| SEC-06 | P4 | Pending |
-| SEC-07 | P5 | Pending |
-| SEC-08 | P1 | Pending |
-| SEC-09 | P2 | Pending |
+| SHELL-01 | P1 Foundations | Pending |
+| SHELL-02 | P1 Foundations | Pending |
+| SHELL-03 | P1 Foundations | Pending |
+| SHELL-04 | P1 Foundations | Pending |
+| SHELL-05 | P1 Foundations | Pending |
+| SHELL-06 | P1 Foundations | Pending |
+| HUD-01 | P3 HUD | Pending |
+| HUD-02 | P3 HUD | Pending |
+| HUD-03 | P2 Bus | Pending |
+| HUD-04 | P2 Bus | Pending |
+| HUD-05 | P2 Bus | Pending |
+| HUD-06 | P2 Bus | Pending |
+| HUD-07 | P3 HUD | Pending |
+| HUD-08 | P3 HUD | Pending |
+| AGENT-01 | P4 Agent Core | Pending |
+| AGENT-02 | P4 Agent Core | Pending |
+| AGENT-03 | P4 Agent Core | Pending |
+| AGENT-04 | P4 Agent Core | Pending |
+| AGENT-05 | P1 Foundations | Pending |
+| AGENT-06 | P4 Agent Core | Pending |
+| AGENT-07 | P4 Agent Core | Pending |
+| AGENT-08 | P4 Agent Core | Pending |
+| AGENT-09 | P4 Agent Core | Pending |
+| AGENT-10 | P4 Agent Core | Pending |
+| AGENT-11 | P5 MCP | Pending |
+| MCP-01 | P5 MCP | Pending |
+| MCP-02 | P5 MCP | Pending |
+| MCP-03 | P5 MCP | Pending |
+| MCP-04 | P5 MCP | Pending |
+| MCP-05 | P1 Foundations | Pending |
+| MCP-06 | P1 Foundations | Pending |
+| MCP-07 | P5 MCP | Pending |
+| MCP-08 | P5 MCP | Pending |
+| MCP-09 | P5 MCP | Pending |
+| VOICE-01 | P6 Voice | Pending |
+| VOICE-02 | P6 Voice | Pending |
+| VOICE-03 | P6 Voice | Pending |
+| VOICE-04 | P6 Voice | Pending |
+| VOICE-05 | P6 Voice | Pending |
+| VOICE-06 | P6 Voice | Pending |
+| VOICE-07 | P6 Voice | Pending |
+| VOICE-08 | P6 Voice | Pending |
+| VOICE-09 | P6 Voice | Pending |
+| VOICE-10 | P6 Voice | Pending |
+| VOICE-11 | P6 Voice | Pending |
+| VOICE-12 | P6 Voice | Pending |
+| VOICE-13 | P6 Voice | Pending |
+| VOICE-14 | P6 Voice | Pending |
+| TEXT-01 | P4 Agent Core | Pending |
+| TEXT-02 | P3 HUD | Pending |
+| TEXT-03 | P7 Memory + Vision | Pending |
+| VISION-01 | P7 Memory + Vision | Pending |
+| VISION-02 | P7 Memory + Vision | Pending |
+| VISION-03 | P7 Memory + Vision | Pending |
+| VISION-04 | P7 Memory + Vision | Pending |
+| MEM-01 | P7 Memory + Vision | Pending |
+| MEM-02 | P7 Memory + Vision | Pending |
+| MEM-03 | P7 Memory + Vision | Pending |
+| MEM-04 | P7 Memory + Vision | Pending |
+| MEM-05 | P7 Memory + Vision | Pending |
+| MEM-06 | P7 Memory + Vision | Pending |
+| MEM-07 | P7 Memory + Vision | Pending |
+| MEM-08 | P7 Memory + Vision | Pending |
+| OBS-01 | P4 Agent Core | Pending |
+| OBS-02 | P4 Agent Core | Pending |
+| OBS-03 | P8 Hardening | Pending |
+| OBS-04 | P8 Hardening | Pending |
+| OBS-05 | P1 Foundations | Pending |
+| OBS-06 | P1 Foundations | Pending |
+| OBS-07 | P4 Agent Core | Pending |
+| SEC-01 | P1 Foundations | Pending |
+| SEC-02 | P1 Foundations | Pending |
+| SEC-03 | P1 Foundations | Pending |
+| SEC-04 | P1 Foundations | Pending |
+| SEC-05 | P1 Foundations | Pending |
+| SEC-06 | P4 Agent Core | Pending |
+| SEC-07 | P5 MCP | Pending |
+| SEC-08 | P1 Foundations | Pending |
+| SEC-09 | P2 Bus | Pending |
 
 **Coverage:**
 - v1 requirements: 78 total
 - Mapped to phases: 78
-- Unmapped: 0 ✓
+- Unmapped: 0
 
 **Phase distribution:**
-- P1 Foundations: 17 requirements
-- P2 Bus: 5 requirements
-- P3 HUD: 6 requirements
-- P4 Agent core: 14 requirements
-- P5 MCP: 10 requirements
-- P6 Voice: 14 requirements
-- P7 Memory + Vision: 10 requirements
-- P8 Hardening: 2 requirements
+- P1 Foundations: 17 requirements (SHELL-01..06, AGENT-05, MCP-05, MCP-06, OBS-05, OBS-06, SEC-01, SEC-02, SEC-03, SEC-04, SEC-05, SEC-08)
+- P2 Bus: 5 requirements (HUD-03, HUD-04, HUD-05, HUD-06, SEC-09)
+- P3 HUD: 6 requirements (HUD-01, HUD-02, HUD-07, HUD-08, TEXT-02) *(5 listed; TEXT-02 brings total to 6)*
+- P4 Agent Core: 14 requirements (AGENT-01..04, AGENT-06..10, TEXT-01, OBS-01, OBS-02, OBS-07, SEC-06)
+- P5 MCP: 10 requirements (AGENT-11, MCP-01..04, MCP-07..09, SEC-07)
+- P6 Voice: 14 requirements (VOICE-01..14)
+- P7 Memory + Vision: 13 requirements (TEXT-03, VISION-01..04, MEM-01..08)
+- P8 Hardening: 2 requirements (OBS-03, OBS-04)
 
 ---
 
 *Requirements defined: 2026-04-22*
-*Last updated: 2026-04-22 after initial definition*
+*Traceability updated with phase names: 2026-04-22 at ROADMAP completion.*
