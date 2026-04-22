@@ -1,0 +1,18 @@
+# Xcode build output
+build/
+DerivedData/
+
+# Xcode user state
+*.xcuserstate
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS metadata
+.DS_Store
+
+# GSD worktrees (ephemeral agent sandboxes)
+.claude/worktrees/

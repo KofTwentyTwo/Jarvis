@@ -1,0 +1,69 @@
+name: Jarvis
+options:
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  minimumXcodeGenVersion: "2.40.0"
+  deploymentTarget:
+    macOS: "13.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
+    LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+packages:
+  Keychain:
+    path: packages/Keychain
+  Config:
+    path: packages/Config
+  Logging:
+    path: packages/Logging
+  Shell:
+    path: packages/Shell
+targets:
+  Jarvis:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+        excludes:
+          - "Info.plist"
+          - "Jarvis.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kingsrook.jarvis
+        PRODUCT_NAME: Jarvis
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Jarvis.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
+      configs:
+        Debug:
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGNING_REQUIRED: NO
+    dependencies:
+      - package: Keychain
+        product: Keychain
+      - package: Config
+        product: Config
+      - package: Logging
+        product: JarvisLogging
+      - package: Shell
+        product: Shell
+    postBuildScripts:
+      - name: Create Contents/Helpers directory
+        script: |
+          mkdir -p "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
