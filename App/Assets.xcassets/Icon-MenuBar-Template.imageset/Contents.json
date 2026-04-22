@@ -1,7 +1,8 @@
 {
   "images" : [
     {
-      "idiom" : "mac"
+      "filename" : "Icon-MenuBar-Template.pdf",
+      "idiom" : "universal"
     }
   ],
   "info" : {
