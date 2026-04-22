@@ -10,21 +10,32 @@
 		0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF0892A5DFF2AD38A93834 /* BannerContent.swift */; };
 		07E7F32B3857ED215DE59FBE /* Keychain in Frameworks */ = {isa = PBXBuildFile; productRef = 1440CCDB2CC412B099BD0310 /* Keychain */; };
 		18CDCC4155A2604BC4D67147 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 467AE2D19D58325D227E2F89 /* Assets.xcassets */; };
+		29CF0F24C5D0DD0A8F1A0AEE /* WizardState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B2103B1A123E512CC56B63 /* WizardState.swift */; };
+		2BCA466CFD785F3BC989C35F /* WizardStageAPIKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */; };
 		461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */; };
+		50C095E6F675D26E9C399179 /* AnthropicKeyValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77C5BF4E4B659B0A3325E647 /* AnthropicKeyValidator.swift */; };
 		526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */; };
+		573540593E2D1EB1F0F6F31C /* WizardTCCStageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */; };
 		5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */; };
+		63C72C019170ED28C4900DB9 /* WizardStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */; };
+		66B4B219EF4EC3EBDE5D1A4B /* AppDelegateWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */; };
+		7270A6A54B0DC1510EB9C56A /* WizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33A1960A6404CD790036C46 /* WizardView.swift */; };
 		78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF7206DB98EC02734975536 /* HudState.swift */; };
+		7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */; };
 		8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1517F151F3BA96803143692 /* AppDelegate.swift */; };
 		9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */; };
+		9F451A31E6DF755ABC86885A /* WizardStageTCCView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43886353ECED823D4CB689D3 /* WizardStageTCCView.swift */; };
 		A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */; };
 		A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */; };
 		A9F18AF7B16BEA1776F76321 /* HUDBannerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */; };
 		B64A0CAA46B3C146B54F9F85 /* HUDBannerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */; };
 		BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */; };
 		C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */; };
+		CD22CB0656265A2623BA7FD0 /* AnthropicKeyValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39DD53A4E2CCED58C85B63FC /* AnthropicKeyValidatorTests.swift */; };
 		CFBEF67D687A1227C9C2A6BD /* HUDBannerCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */; };
 		DF6EC4DD8D8A029748F382AE /* Config in Frameworks */ = {isa = PBXBuildFile; productRef = 61127935D1430B78A6FEACB0 /* Config */; };
 		E218ADC35078C6F26F0D0041 /* HUDBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */; };
+		E49FEEFE453A055F65DA31FF /* WizardStageHotkeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */; };
 		E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */; };
 		EB07CD704A3568F27DD4D901 /* Shell in Frameworks */ = {isa = PBXBuildFile; productRef = 6FAD561608B0D1C402015E0D /* Shell */; };
 		F8E9590D40A0B88DD4FD712D /* JarvisLogging in Frameworks */ = {isa = PBXBuildFile; productRef = ED53153FE6F73137C23AD43B /* JarvisLogging */; };
@@ -55,13 +66,16 @@
 
 /* Begin PBXFileReference section */
 		00C01D284ECCFC986C7F2E16 /* Keychain */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Keychain; path = packages/Keychain; sourceTree = SOURCE_ROOT; };
+		024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStateTests.swift; sourceTree = "<group>"; };
 		096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBanner.swift; sourceTree = "<group>"; };
 		0CF7206DB98EC02734975536 /* HudState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudState.swift; sourceTree = "<group>"; };
 		17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerPanel.swift; sourceTree = "<group>"; };
 		2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconControllerTests.swift; sourceTree = "<group>"; };
 		2E9C7A0B14B3AE5C9100CACF /* Config */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Config; path = packages/Config; sourceTree = SOURCE_ROOT; };
 		3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisHUDPanelTests.swift; sourceTree = "<group>"; };
+		39DD53A4E2CCED58C85B63FC /* AnthropicKeyValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicKeyValidatorTests.swift; sourceTree = "<group>"; };
 		3EEB80F86BC4DE366810AB99 /* Shell */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Shell; path = packages/Shell; sourceTree = SOURCE_ROOT; };
+		43886353ECED823D4CB689D3 /* WizardStageTCCView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageTCCView.swift; sourceTree = "<group>"; };
 		4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisHUDPanel.swift; sourceTree = "<group>"; };
 		467AE2D19D58325D227E2F89 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandColors.swift; sourceTree = "<group>"; };
@@ -69,13 +83,21 @@
 		5DE981947E40847F9BAF5641 /* Logging */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Logging; path = packages/Logging; sourceTree = SOURCE_ROOT; };
 		604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAAnimationFactory.swift; sourceTree = "<group>"; };
 		6784683F2262D8AFA439668D /* JarvisAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageHotkeyView.swift; sourceTree = "<group>"; };
+		77C5BF4E4B659B0A3325E647 /* AnthropicKeyValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicKeyValidator.swift; sourceTree = "<group>"; };
+		8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardTCCStageTests.swift; sourceTree = "<group>"; };
+		909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateWiringTests.swift; sourceTree = "<group>"; };
 		90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisApp.swift; sourceTree = "<group>"; };
 		96BF0892A5DFF2AD38A93834 /* BannerContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerContent.swift; sourceTree = "<group>"; };
 		98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerCoordinatorTests.swift; sourceTree = "<group>"; };
 		A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateEntitlementTests.swift; sourceTree = "<group>"; };
+		A33A1960A6404CD790036C46 /* WizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardView.swift; sourceTree = "<group>"; };
 		AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerCoordinator.swift; sourceTree = "<group>"; };
 		B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContextMenu.swift; sourceTree = "<group>"; };
+		BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageAPIKeyView.swift; sourceTree = "<group>"; };
 		C1517F151F3BA96803143692 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWizardController.swift; sourceTree = "<group>"; };
+		E5B2103B1A123E512CC56B63 /* WizardState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardState.swift; sourceTree = "<group>"; };
 		F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jarvis.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -104,6 +126,7 @@
 				35E7CF3C8F80086AD447480E /* MenuBar */,
 				7B0D5E57F282044CD98E347B /* Tests */,
 				5CBAF02B001A7FF406642CCA /* Theme */,
+				922FCD26000A64044B1FF187 /* Wizard */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -121,10 +144,14 @@
 		4523A7D183060E875587B2F1 /* AppTests */ = {
 			isa = PBXGroup;
 			children = (
+				39DD53A4E2CCED58C85B63FC /* AnthropicKeyValidatorTests.swift */,
 				A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */,
+				909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */,
 				98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */,
 				3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */,
 				2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */,
+				024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */,
+				8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */,
 			);
 			path = AppTests;
 			sourceTree = "<group>";
@@ -153,6 +180,20 @@
 				4523A7D183060E875587B2F1 /* AppTests */,
 			);
 			path = Tests;
+			sourceTree = "<group>";
+		};
+		922FCD26000A64044B1FF187 /* Wizard */ = {
+			isa = PBXGroup;
+			children = (
+				77C5BF4E4B659B0A3325E647 /* AnthropicKeyValidator.swift */,
+				C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */,
+				BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */,
+				74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */,
+				43886353ECED823D4CB689D3 /* WizardStageTCCView.swift */,
+				E5B2103B1A123E512CC56B63 /* WizardState.swift */,
+				A33A1960A6404CD790036C46 /* WizardView.swift */,
+			);
+			path = Wizard;
 			sourceTree = "<group>";
 		};
 		BC0DCAC9B7584481D8C65021 = {
@@ -314,10 +355,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CD22CB0656265A2623BA7FD0 /* AnthropicKeyValidatorTests.swift in Sources */,
 				E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */,
+				66B4B219EF4EC3EBDE5D1A4B /* AppDelegateWiringTests.swift in Sources */,
 				CFBEF67D687A1227C9C2A6BD /* HUDBannerCoordinatorTests.swift in Sources */,
 				461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */,
 				5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */,
+				63C72C019170ED28C4900DB9 /* WizardStateTests.swift in Sources */,
+				573540593E2D1EB1F0F6F31C /* WizardTCCStageTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -325,6 +370,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				50C095E6F675D26E9C399179 /* AnthropicKeyValidator.swift in Sources */,
 				8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */,
 				0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */,
 				C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */,
@@ -337,6 +383,12 @@
 				BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */,
 				A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */,
 				9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */,
+				7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */,
+				2BCA466CFD785F3BC989C35F /* WizardStageAPIKeyView.swift in Sources */,
+				E49FEEFE453A055F65DA31FF /* WizardStageHotkeyView.swift in Sources */,
+				9F451A31E6DF755ABC86885A /* WizardStageTCCView.swift in Sources */,
+				29CF0F24C5D0DD0A8F1A0AEE /* WizardState.swift in Sources */,
+				7270A6A54B0DC1510EB9C56A /* WizardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
