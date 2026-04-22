@@ -48,7 +48,7 @@
 **Plans:** 5 plans
 
 Plans:
-- [ ] 01-01-scaffold-PLAN.md — Xcode project + four SPM package manifests + entitlements pair + Info.plist + Contents/Helpers directory skeleton (Wave 1)
+- [x] 01-01-scaffold-PLAN.md — Xcode project + four SPM package manifests + entitlements pair + Info.plist + Contents/Helpers directory skeleton (Wave 1)
 - [ ] 01-02-keychain-config-logging-PLAN.md — Keychain SystemKeychainStore + Config LaunchSnapshot/PerTurnSnapshot split (AGENT-05, SEC-05, SEC-08, OBS-05) + Logging four-channel multiplex + Redact 5 patterns (OBS-06) (Wave 2)
 - [ ] 01-03-app-shell-ui-PLAN.md — MenuBarIconController + JarvisHUDPanel + HUDBannerCoordinator + BrandColors + AppDelegate entitlement hard-block (Wave 2, parallel with 01-02)
 - [ ] 01-04-shell-wizard-wiring-PLAN.md — Shell package (HotkeyBinder, InputMonitoringProbe, LaunchAtLoginController, ShortcutRecorder) + first-launch Wizard + full AppDelegate wiring (Wave 3)
