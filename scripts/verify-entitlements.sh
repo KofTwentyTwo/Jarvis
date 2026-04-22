@@ -85,9 +85,11 @@ case "$MODE" in
     ;;
 
   --post-codesign)
-    # Read signed entitlements via `codesign -d --entitlements -`.
+    # Read signed entitlements via `codesign -d --entitlements - --xml`.
+    # The --xml flag forces the legacy XML plist output; without it macOS 26's codesign
+    # emits a `[Dict] [Key] ...` rich-text dump that the XML grep below does not match.
     echo "verify-entitlements.sh: --post-codesign"
-    EXTRACTED="$(/usr/bin/codesign -d --entitlements - "$APP" 2>&1 || true)"
+    EXTRACTED="$(/usr/bin/codesign -d --entitlements - --xml "$APP" 2>&1 || true)"
 
     # Strip XML comments to avoid self-invalidating grep (a prose <!-- com.apple.security.cs.allow-jit -->
     # comment would satisfy a naive grep even if the actual entitlement is absent).
@@ -118,7 +120,7 @@ case "$MODE" in
     if [ -d "$HELPERS_DIR" ]; then
       while IFS= read -r HELPER; do
         HELPER_NAME="$(basename "$HELPER" .app)"
-        HELPER_ENTS="$(/usr/bin/codesign -d --entitlements - "$HELPER" 2>&1 || true)"
+        HELPER_ENTS="$(/usr/bin/codesign -d --entitlements - --xml "$HELPER" 2>&1 || true)"
         HELPER_ENTS_STRIPPED="$(echo "$HELPER_ENTS" | /usr/bin/grep -v '^<!--')"
         if [ "$HELPER_NAME" = "mcp-applescript" ]; then
           if ! echo "$HELPER_ENTS_STRIPPED" | /usr/bin/grep -q "com.apple.security.automation.apple-events"; then

@@ -72,6 +72,29 @@ targets:
           mkdir -p "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers"
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
+      - name: Verify entitlements (pre-codesign)
+        script: |
+          "${SRCROOT}/scripts/verify-entitlements.sh" --pre-codesign
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+      - name: Codesign bundle (deepest-first)
+        script: |
+          # Fall back to CODE_SIGN_IDENTITY (then ad-hoc "-") when CODE_SIGNING_ALLOWED=NO,
+          # since Xcode does not set EXPANDED_CODE_SIGN_IDENTITY in that case.
+          export EXPANDED_CODE_SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY:--}}"
+          "${SRCROOT}/scripts/codesign.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+      - name: Verify entitlements (post-codesign)
+        script: |
+          "${SRCROOT}/scripts/verify-entitlements.sh" --post-codesign
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+      - name: Verify codesign settings (pbxproj lint)
+        script: |
+          "${SRCROOT}/scripts/verify-codesign-settings.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
   JarvisAppTests:
     type: bundle.unit-test
     platform: macOS

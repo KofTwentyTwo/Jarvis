@@ -51,19 +51,6 @@
 		};
 /* End PBXContainerItemProxy section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		9A5E7F3F1A2B3C4D5E6F7081 /* CopyFiles Helpers */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "Contents/Helpers";
-			dstSubfolderSpec = 1;
-			files = (
-			);
-			name = "Copy Helpers";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
 		00C01D284ECCFC986C7F2E16 /* Keychain */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Keychain; path = packages/Keychain; sourceTree = SOURCE_ROOT; };
 		024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStateTests.swift; sourceTree = "<group>"; };
@@ -238,8 +225,11 @@
 				E0992BE4761F337F2AC5BF62 /* Sources */,
 				C593366D9BBD0DC5F45EA023 /* Resources */,
 				886D43D159942AB5C149B33B /* Frameworks */,
-				9A5E7F3F1A2B3C4D5E6F7081 /* CopyFiles Helpers */,
 				DD1590A06D57152C1B673573 /* Create Contents/Helpers directory */,
+				318A7B75FBCC334BEF639033 /* Verify entitlements (pre-codesign) */,
+				6B8296F9F78BB0FC4B3EC838 /* Codesign bundle (deepest-first) */,
+				F902CE3B015FE94FD67700D8 /* Verify entitlements (post-codesign) */,
+				80CF8C4AEC506191702A625D /* Verify codesign settings (pbxproj lint) */,
 			);
 			buildRules = (
 			);
@@ -329,6 +319,63 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		318A7B75FBCC334BEF639033 /* Verify entitlements (pre-codesign) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Verify entitlements (pre-codesign)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/verify-entitlements.sh\" --pre-codesign\n";
+		};
+		6B8296F9F78BB0FC4B3EC838 /* Codesign bundle (deepest-first) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Codesign bundle (deepest-first)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Fall back to CODE_SIGN_IDENTITY (then ad-hoc \"-\") when CODE_SIGNING_ALLOWED=NO,\n# since Xcode does not set EXPANDED_CODE_SIGN_IDENTITY in that case.\nexport EXPANDED_CODE_SIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY:--}}\"\n\"${SRCROOT}/scripts/codesign.sh\"\n";
+		};
+		80CF8C4AEC506191702A625D /* Verify codesign settings (pbxproj lint) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Verify codesign settings (pbxproj lint)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/verify-codesign-settings.sh\"\n";
+		};
 		DD1590A06D57152C1B673573 /* Create Contents/Helpers directory */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -347,6 +394,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "mkdir -p \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers\"\n";
+		};
+		F902CE3B015FE94FD67700D8 /* Verify entitlements (post-codesign) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Verify entitlements (post-codesign)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/verify-entitlements.sh\" --post-codesign\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
