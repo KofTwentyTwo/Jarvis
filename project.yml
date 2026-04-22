@@ -118,6 +118,33 @@ targets:
           CODE_SIGNING_REQUIRED: NO
     dependencies:
       - target: Jarvis
+  JarvisEntitlementProbeTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: App/Tests/JarvisEntitlementProbeTests
+        excludes:
+          - "Info.plist"
+    settings:
+      base:
+        PRODUCT_NAME: JarvisEntitlementProbeTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.kingsrook.jarvis.EntitlementProbeTests
+        INFOPLIST_FILE: App/Tests/JarvisEntitlementProbeTests/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Contents/MacOS/Jarvis"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        OTHER_SWIFT_FLAGS: "-DJARVIS_ENTITLEMENT_PROBE"
+      configs:
+        Debug:
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGNING_REQUIRED: NO
+    dependencies:
+      - target: Jarvis
 schemes:
   Jarvis:
     build:
@@ -134,5 +161,22 @@ schemes:
       config: Release
     analyze:
       config: Debug
+    archive:
+      config: Release
+  EntitlementProbe:
+    build:
+      targets:
+        Jarvis: all
+        JarvisEntitlementProbeTests: [test]
+    test:
+      targets:
+        - JarvisEntitlementProbeTests
+      gatherCoverageData: false
+    run:
+      config: Release
+    profile:
+      config: Release
+    analyze:
+      config: Release
     archive:
       config: Release

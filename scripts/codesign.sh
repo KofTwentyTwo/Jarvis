@@ -40,6 +40,43 @@ if [ -d "$HELPERS_DIR" ]; then
   done < <(find "$HELPERS_DIR" -depth -name "*.app" -type d)
 fi
 
+# 1b. Sign nested XCTest plugin bundles under Contents/PlugIns/ DEEPEST-FIRST.
+#     XCTest bundles (e.g., JarvisEntitlementProbeTests.xctest) are signed without
+#     entitlements — they ride on the main app's entitlement set via the test host,
+#     and forcing entitlements on a .xctest breaks XCTest runtime loading. Signing
+#     is still mandatory because codesign refuses to sign a container whose nested
+#     bundles are unsigned.
+#
+#     Empty xctest directory shells appear in the bundle before Xcode has compiled
+#     the test binary (the Run Script phases on the Jarvis target can run before
+#     the dependent test target's compile step). Skip any xctest that lacks an
+#     Info.plist or a MacOS/<binary> — those are pre-compile artifacts and will be
+#     signed by a later build iteration once the binary is produced.
+PLUGINS_DIR="${APP}/Contents/PlugIns"
+if [ -d "$PLUGINS_DIR" ]; then
+  while IFS= read -r PLUGIN; do
+    PLUGIN_NAME="$(basename "$PLUGIN" .xctest)"
+    PLUGIN_INFO="$PLUGIN/Contents/Info.plist"
+    PLUGIN_BIN="$PLUGIN/Contents/MacOS/$PLUGIN_NAME"
+    if [ ! -f "$PLUGIN_INFO" ] || [ ! -f "$PLUGIN_BIN" ]; then
+      # Empty xctest directory shells can appear in BUILT_PRODUCTS_DIR before Xcode
+      # has compiled the test binary (build-for-testing materializes the destination
+      # path early so PBXCopyFilesBuildPhase has something to target). codesign on
+      # the parent bundle refuses to sign a container with an unsigned empty
+      # subdirectory. Remove the empty shell so the main-app sign succeeds; Xcode
+      # re-creates + populates it in a later build iteration and the test-target's
+      # own codesign step handles signing.
+      echo "codesign (plugin removed — empty shell, not yet compiled): $PLUGIN"
+      rm -rf "$PLUGIN"
+      continue
+    fi
+    echo "codesign (plugin): $PLUGIN"
+    # shellcheck disable=SC2086
+    /usr/bin/codesign --force --sign "$IDENTITY" $FLAGS \
+      "$PLUGIN"
+  done < <(find "$PLUGINS_DIR" -depth -name "*.xctest" -type d)
+fi
+
 # 2. Sign the main app LAST with its own entitlements.
 MAIN_ENT="${SRCROOT}/App/Jarvis.entitlements"
 if [ ! -f "$MAIN_ENT" ]; then
