@@ -45,7 +45,14 @@
   7. `LaunchSnapshot` vs `PerTurnSnapshot` config split exists (SEC-05); security-sensitive keys (`applescript.*`, tool blocklist, `ollama.base_url` host, confirmation policy) are launch-pinned and require restart to change; non-security keys apply at next `submit()`. Feature flags (OBS-05) live in one of the two snapshots, not both.
   8. Structured logs via `apple/swift-log 1.5.3+` are wired with four separate channels (agent / tools / UI / system) and a single `redact()` function covering API keys, `Authorization: Bearer`, `AKIA*`, `ghp_*` patterns (OBS-06).
 
-**Plans**: TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 01-01-scaffold-PLAN.md — Xcode project + four SPM package manifests + entitlements pair + Info.plist + Contents/Helpers directory skeleton (Wave 1)
+- [ ] 01-02-keychain-config-logging-PLAN.md — Keychain SystemKeychainStore + Config LaunchSnapshot/PerTurnSnapshot split (AGENT-05, SEC-05, SEC-08, OBS-05) + Logging four-channel multiplex + Redact 5 patterns (OBS-06) (Wave 2)
+- [ ] 01-03-app-shell-ui-PLAN.md — MenuBarIconController + JarvisHUDPanel + HUDBannerCoordinator + BrandColors + AppDelegate entitlement hard-block (Wave 2, parallel with 01-02)
+- [ ] 01-04-shell-wizard-wiring-PLAN.md — Shell package (HotkeyBinder, InputMonitoringProbe, LaunchAtLoginController, ShortcutRecorder) + first-launch Wizard + full AppDelegate wiring (Wave 3)
+- [ ] 01-05-codesign-entitlement-probe-PLAN.md — Build-time codesign + verify-entitlements pre/post-codesign + pbxproj linter + JarvisEntitlementProbeTests one-shot probe (MCP-05, MCP-06, SEC-03) (Wave 4)
 
 ### Phase 2: Bus
 

@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: milestone
 status: completed
-last_updated: "2026-04-22T11:54:59.129Z"
+last_updated: "2026-04-22T14:45:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
 ---
 
@@ -31,8 +31,8 @@ progress:
 ## Current Position
 
 **Phase:** 1 (Foundations)
-**Plan:** In-flight — mid `/gsd-plan-phase 1` workflow
-**Status:** CONTEXT + UI-SPEC + RESEARCH + VALIDATION + PATTERNS all committed; paused before `gsd-planner` spawn. Resume by re-running `/gsd-plan-phase 1` (no `--research` flag — research exists).
+**Plan:** Ready to execute — `/gsd-plan-phase 1` complete
+**Status:** 5 PLAN.md files authored, verified (2 revision iterations; all BLOCKERs resolved), and coverage-checked (17/17 REQ-IDs covered). Next: `/gsd-execute-phase 1`.
 
 **Progress:**
 
@@ -40,7 +40,7 @@ progress:
 [                    ] 0 / 8 phases complete
 ```
 
-- [ ] Phase 1: Foundations — planning in-flight (5/6 pre-plan artifacts complete; planner + checker pending)
+- [ ] Phase 1: Foundations — **planned** (5 plans across 4 waves, 17/17 REQ-IDs covered); ready to execute
 - [ ] Phase 2: Bus
 - [ ] Phase 3: HUD
 - [ ] Phase 4: Agent Core
@@ -117,16 +117,19 @@ None. Ready for `/gsd-plan-phase 1`.
 **Next action when work resumes (including cross-machine pickup):**
 
 1. `git pull` to get the current `develop` branch.
-2. Run `/gsd-plan-phase 1` (no flags). The workflow auto-detects existing artifacts:
-   - `01-CONTEXT.md` → loaded as user decisions
-   - `01-UI-SPEC.md` → UI gate passes (no regeneration)
-   - `01-RESEARCH.md` → research gate skips (no re-research without `--research`)
-   - `01-VALIDATION.md` → Nyquist gate passes (idempotent re-write)
-   - `01-PATTERNS.md` → pattern-mapper skips (use existing)
-   - Workflow resumes at **step 8: spawn `gsd-planner`** immediately.
-3. Planner will consume all 5 pre-plan artifacts and produce 3–5 PLAN.md files (standard granularity).
-4. Plan-checker iterates up to 3× if ISSUES FOUND, then Requirements Coverage Gate cross-checks all 17 REQ-IDs (SHELL-01..06, AGENT-05, MCP-05..06, OBS-05..06, SEC-01..05, SEC-08) are plan-assigned.
-5. After planning completes, next step is `/gsd-execute-phase 1`.
+2. Run `/gsd-execute-phase 1` to execute Wave 1 (scaffold) first, then Waves 2a+2b in parallel, then Wave 3, then Wave 4.
+
+**Phase 1 plans (all authored and verified):**
+
+| Plan | Wave | depends_on | REQ-IDs | Autonomous |
+|------|------|------------|---------|------------|
+| `01-01-scaffold` | 1 | [] | SHELL-04, SHELL-05, SEC-02, SEC-03, MCP-05 | no (App ID capability is manual) |
+| `01-02-keychain-config-logging` | 2 | [01] | SEC-01, AGENT-05, SEC-05, SEC-08, OBS-05, OBS-06 | yes |
+| `01-03-app-shell-ui` | 2 | [01] | SHELL-01, SHELL-03, SHELL-04 | yes |
+| `01-04-shell-wizard-wiring` | 3 | [01, 02, 03] | SHELL-01, SHELL-02, SHELL-03, SHELL-05, SHELL-06, SEC-04 | yes |
+| `01-05-codesign-entitlement-probe` | 4 | [01, 02, 03, 04] | MCP-05, MCP-06, SEC-02, SEC-03, SEC-08 | no (stripped-archive probe human-verify) |
+
+Plans 02 and 03 can run in parallel (Wave 2). VALIDATION.md carries per-task Nyquist rows for all 16 tasks.
 
 **Phase 1 pre-plan artifacts (all committed):**
 
@@ -147,7 +150,7 @@ None. Ready for `/gsd-plan-phase 1`.
 - **RESEARCH Q3:** swift-log → `MultiplexLogHandler([FileLogHandler, OSLogHandler])`; file rotation hand-rolled (~80 LOC) to match D-18 spec exactly.
 - **PATTERNS §S-3:** `redact()` lives in `FileLogHandler` only — NOT in `os.Logger` handler. Callers must redact before logging untrusted variables.
 
-**Last known-good checkpoint:** 2026-04-22 — Phase 1 planning artifacts 5/6 complete; commit `0efef01`.
+**Last known-good checkpoint:** 2026-04-22 — Phase 1 **planning complete** (5 PLAN.md + VALIDATION.md per-task map populated + ROADMAP Phase-1 Plans: list finalized). Ready for `/gsd-execute-phase 1`.
 
 **Context to re-load after compaction or cross-machine pickup:**
 
