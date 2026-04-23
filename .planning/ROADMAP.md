@@ -115,7 +115,14 @@ Plans:
   8. The user can type into the HUD chat panel and receive streamed tokens back with identical tool-call/HUD-state behavior to voice (TEXT-01); end-to-end round-trip works headless via a text fixture.
   9. Observability lands with the orchestrator, not after: DevOverlay toggle shows current state, last 5 tool calls (inputs + outputs), context token count, per-turn latency breakdown, cache creation vs read tokens (OBS-01). Every turn writes to a local SQLite replay file with nothing-masked bytes modulo row_id/session_id/turn_id/tool_use_id/message_id/ts/monotonic_ns/turn_nonce (OBS-02). Orphan-turn detection runs at startup via `meta.crash_count` + "last event ≠ turn_end" query and flags crashed turns with a recovery marker (OBS-07).
 
-**Plans**: TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 04-01-llm-provider-anthropic-PLAN.md — LLMProvider protocol + LLMEvent + BoundedAsyncChannel + AnthropicProvider URLSession+SSE decoder with 1h cache TTL header (Wave 1; AGENT-01, AGENT-02, AGENT-03, AGENT-07, AGENT-10)
+- [ ] 04-02-ollama-provider-PLAN.md — OllamaProvider /api/chat NDJSON (tool_calls-on-sight) + /v1/chat/completions SSE behind flag + drop-tools-array on .none (Wave 2; AGENT-04, AGENT-07)
+- [ ] 04-03-replay-log-PLAN.md — packages/Replay with hand-rolled SQLite WAL schema + ReplayLog batched writes + OrphanDetector + TokenDeltaDropOldestChannel (Wave 2, parallel with 04-02; OBS-02, OBS-07, AGENT-10)
+- [ ] 04-04-orchestrator-PLAN.md — AgentOrchestrator actor with submit/cancelAndSubmit + stream_truncated retry + cap-recovery + SEC-06 turnNonce injection defense (Wave 3; AGENT-06, AGENT-07, AGENT-08, AGENT-09, SEC-06)
+- [ ] 04-05-devoverlay-text-e2e-PLAN.md — DevOverlay SwiftUI surface + DevSnapshotEmitter + TEXT-01 headless end-to-end + AGENT-10 channel-topology load test (Wave 4; OBS-01, AGENT-10, TEXT-01)
 
 ### Phase 5: MCP
 
