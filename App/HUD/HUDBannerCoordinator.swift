@@ -15,6 +15,11 @@ public final class HUDBannerCoordinator {
     private var queue: [BannerContent] = []
     private var current: BannerContent?
     private var dismissedThisLaunch: Set<String> = []
+    /// WR-05: cancellable handle on the 300ms drain. When `clear()` is
+    /// called — or a higher-priority banner enqueues during the drain
+    /// window — we cancel this so the drained banner doesn't clobber the
+    /// new state.
+    private var drainWorkItem: DispatchWorkItem?
 
     public init(panel: HUDBannerPanel) {
         self.panel = panel
@@ -32,6 +37,11 @@ public final class HUDBannerCoordinator {
         if queue.contains(where: { $0.id == content.id }) { return }
 
         if current == nil {
+            // WR-05: if we arrived here because a drain timer is pending,
+            // cancel it — otherwise the drained banner will clobber this
+            // new enqueue after the 300ms gap fires.
+            drainWorkItem?.cancel()
+            drainWorkItem = nil
             showBanner(content)
             return
         }
@@ -53,20 +63,32 @@ public final class HUDBannerCoordinator {
         if let c = current { dismissedThisLaunch.insert(c.id) }
         current = nil
         panel.orderOut(nil)
-        if !queue.isEmpty {
-            let next = queue.removeFirst()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                guard let self else { return }
-                // Skip if the next banner was dismissed in the gap.
-                if self.dismissedThisLaunch.contains(next.id) { return }
-                self.showBanner(next)
-            }
+        // WR-05: a prior in-flight drain must be cancelled before we
+        // schedule a new one — otherwise two drains can race.
+        drainWorkItem?.cancel()
+        drainWorkItem = nil
+        guard !queue.isEmpty else { return }
+        let next = queue.removeFirst()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            // WR-05: re-check state at fire time. A higher-priority banner
+            // could have enqueued during the drain (and `enqueue` cancelled
+            // this work item, but belt-and-suspenders the check here too).
+            if self.current != nil { return }
+            if self.dismissedThisLaunch.contains(next.id) { return }
+            self.showBanner(next)
         }
+        drainWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: item)
     }
 
     /// Clear everything — used when the entire app is about to quit or when
     /// a test needs to reset the coordinator.
     public func clear() {
+        // WR-05: a pending drain must not fire after clear() — otherwise
+        // a banner pops up while the app is quitting.
+        drainWorkItem?.cancel()
+        drainWorkItem = nil
         queue.removeAll()
         current = nil
         panel.orderOut(nil)
