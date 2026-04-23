@@ -77,8 +77,39 @@ if [ -d "$PLUGINS_DIR" ]; then
   done < <(find "$PLUGINS_DIR" -depth -name "*.xctest" -type d)
 fi
 
-# 2. Sign the main app LAST with its own entitlements.
-MAIN_ENT="${SRCROOT}/App/Jarvis.entitlements"
+# 1c. Sign Xcode 26's "debug dylib" (Swift incremental-link artifact) under
+#     Contents/MacOS/*.debug.dylib — same identity as main, no entitlements.
+#     Known rough edge: on Debug config with ad-hoc signing, dyld can still
+#     reject the dylib for xctest bundle loading ("different Team IDs") due to
+#     an Xcode 26 quirk where the incremental-link artifact carries metadata
+#     that diverges from the outer bundle's re-sign. SPM package tests are
+#     unaffected; JarvisAppTests integration coverage is tracked in HUMAN-UAT.md.
+for DYLIB in "${APP}/Contents/MacOS/"*.debug.dylib; do
+  [ -f "$DYLIB" ] || continue
+  echo "codesign (debug dylib): $DYLIB"
+  # shellcheck disable=SC2086
+  /usr/bin/codesign --force --sign "$IDENTITY" $FLAGS "$DYLIB"
+done
+
+# 2. Sign the main app LAST with its own config-specific entitlements.
+#    Debug and Release have different entitlement sets (split 2026-04-23) —
+#    Debug omits `speech-recognition-assets` because AMFI rejects ad-hoc signed
+#    bundles carrying managed entitlements (RunningBoard error 5 on xctest launch).
+#    Falls back to the Xcode-provided CODE_SIGN_ENTITLEMENTS path (which resolves
+#    per-config via project.yml) before hard-coded paths.
+if [ -n "${CODE_SIGN_ENTITLEMENTS:-}" ] && [ -f "${SRCROOT}/${CODE_SIGN_ENTITLEMENTS}" ]; then
+  MAIN_ENT="${SRCROOT}/${CODE_SIGN_ENTITLEMENTS}"
+elif [ "${CONFIGURATION:-}" = "Debug" ] && [ -f "${SRCROOT}/App/Jarvis.Debug.entitlements" ]; then
+  MAIN_ENT="${SRCROOT}/App/Jarvis.Debug.entitlements"
+elif [ "${CONFIGURATION:-}" = "Release" ] && [ -f "${SRCROOT}/App/Jarvis.Release.entitlements" ]; then
+  MAIN_ENT="${SRCROOT}/App/Jarvis.Release.entitlements"
+elif [ -f "${SRCROOT}/App/Jarvis.entitlements" ]; then
+  MAIN_ENT="${SRCROOT}/App/Jarvis.entitlements"
+else
+  echo "error: no main app entitlements resolvable (CONFIGURATION=${CONFIGURATION:-}, CODE_SIGN_ENTITLEMENTS=${CODE_SIGN_ENTITLEMENTS:-})" >&2
+  exit 1
+fi
+echo "codesign.sh: main entitlements = $MAIN_ENT"
 if [ ! -f "$MAIN_ENT" ]; then
   echo "error: main app entitlements not found at $MAIN_ENT" >&2
   exit 1

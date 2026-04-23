@@ -315,15 +315,12 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					461D90920FCD8CAF83348871 = {
-						DevelopmentTeam = 7UC2HETAN9;
 						ProvisioningStyle = Manual;
 					};
 					93F20AEE91BB60C4ED0C0346 = {
-						DevelopmentTeam = 7UC2HETAN9;
 						ProvisioningStyle = Manual;
 					};
 					F7B9CBCDAE3BC101ECD8F687 = {
-						DevelopmentTeam = 7UC2HETAN9;
 						ProvisioningStyle = Manual;
 					};
 				};
@@ -537,17 +534,16 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_ENTITLEMENTS = App/Jarvis.entitlements;
+				CODE_SIGN_ENTITLEMENTS = App/Jarvis.Debug.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 7UC2HETAN9;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				OTHER_CODE_SIGN_FLAGS = "--options=runtime --timestamp";
+				OTHER_CODE_SIGN_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = com.koftwentytwo.jarvis;
 				PRODUCT_NAME = Jarvis;
 				SDKROOT = macosx;
@@ -643,7 +639,6 @@
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 7UC2HETAN9;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -732,7 +727,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_ENTITLEMENTS = App/Jarvis.entitlements;
+				CODE_SIGN_ENTITLEMENTS = App/Jarvis.Release.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;

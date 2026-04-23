@@ -24,20 +24,55 @@ set -euo pipefail
 
 MODE="${1:-}"
 APP="${BUILT_PRODUCTS_DIR:-}/${WRAPPER_NAME:-}"
-MAIN_ENT_SOURCE="${SRCROOT:-}/App/Jarvis.entitlements"
 INFO_PLIST="${APP}/Contents/Info.plist"
 
-# Required entitlements on the MAIN app.
-MAIN_REQUIRED=(
+# Debug vs Release entitlement split (added 2026-04-23 to fix AMFI rejection on ad-hoc
+# signed Debug bundles carrying the managed `speech-recognition-assets` entitlement —
+# RunningBoard error 5 / launchd spawn failure on `xcodebuild test`).
+#   Debug:   Jarvis.Debug.entitlements   — no speech-recognition-assets; includes get-task-allow (XCTest attach)
+#   Release: Jarvis.Release.entitlements — full managed entitlement set as shipping wants
+# Falls back to the historical Jarvis.entitlements path for harness calls outside a Xcode build context.
+CONFIGURATION="${CONFIGURATION:-}"
+if [ "$CONFIGURATION" = "Debug" ]; then
+  MAIN_ENT_SOURCE="${SRCROOT:-}/App/Jarvis.Debug.entitlements"
+elif [ "$CONFIGURATION" = "Release" ]; then
+  MAIN_ENT_SOURCE="${SRCROOT:-}/App/Jarvis.Release.entitlements"
+elif [ -f "${SRCROOT:-}/App/Jarvis.entitlements" ]; then
+  MAIN_ENT_SOURCE="${SRCROOT:-}/App/Jarvis.entitlements"
+else
+  MAIN_ENT_SOURCE="${SRCROOT:-}/App/Jarvis.Release.entitlements"
+fi
+
+# Required entitlements on the MAIN app (Release — shipping posture).
+# Debug intentionally excludes `speech-recognition-assets` because AMFI rejects
+# ad-hoc signed bundles carrying managed entitlements.
+MAIN_REQUIRED_RELEASE=(
   "com.apple.security.cs.allow-jit"
   "com.apple.developer.speech-recognition-assets"
   "com.apple.security.device.audio-input"
 )
+MAIN_REQUIRED_DEBUG=(
+  "com.apple.security.cs.allow-jit"
+  "com.apple.security.device.audio-input"
+  "com.apple.security.get-task-allow"
+)
+if [ "$CONFIGURATION" = "Debug" ]; then
+  MAIN_REQUIRED=("${MAIN_REQUIRED_DEBUG[@]}")
+else
+  MAIN_REQUIRED=("${MAIN_REQUIRED_RELEASE[@]}")
+fi
+
 # FORBIDDEN entitlements on the MAIN app (moved to helpers in P5; hardening regression).
-MAIN_FORBIDDEN=(
+# Debug MUST NOT carry `speech-recognition-assets` — that's a Release-only entitlement.
+MAIN_FORBIDDEN_BASE=(
   "com.apple.security.automation.apple-events"
   "com.apple.security.cs.allow-unsigned-executable-memory"
 )
+if [ "$CONFIGURATION" = "Debug" ]; then
+  MAIN_FORBIDDEN=("${MAIN_FORBIDDEN_BASE[@]}" "com.apple.developer.speech-recognition-assets")
+else
+  MAIN_FORBIDDEN=("${MAIN_FORBIDDEN_BASE[@]}" "com.apple.security.get-task-allow")
+fi
 
 check_source_entitlements() {
   local source="$1"

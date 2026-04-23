@@ -12,10 +12,19 @@ settings:
     ENABLE_HARDENED_RUNTIME: YES
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "-"
-    DEVELOPMENT_TEAM: 7UC2HETAN9
     OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
     LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
     MACOSX_DEPLOYMENT_TARGET: "13.0"
+  configs:
+    # DEVELOPMENT_TEAM intentionally unset for Debug.
+    # With ad-hoc signing (CODE_SIGN_IDENTITY="-") and DEVELOPMENT_TEAM set,
+    # Xcode generates incremental debug dylibs signed with the Team ID while
+    # the main executable remains adhoc — dyld refuses to load the mismatched
+    # dylib ("different Team IDs"), and xctest crashes during bootstrap.
+    Debug:
+      ONLY_ACTIVE_ARCH: YES
+    Release:
+      DEVELOPMENT_TEAM: 7UC2HETAN9
 packages:
   Keychain:
     path: packages/Keychain
@@ -34,18 +43,18 @@ targets:
         excludes:
           - "Info.plist"
           - "Jarvis.entitlements"
+          - "Jarvis.Debug.entitlements"
+          - "Jarvis.Release.entitlements"
           - "Tests/**"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.koftwentytwo.jarvis
         PRODUCT_NAME: Jarvis
         INFOPLIST_FILE: App/Info.plist
-        CODE_SIGN_ENTITLEMENTS: App/Jarvis.entitlements
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "-"
-        DEVELOPMENT_TEAM: 7UC2HETAN9
         OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_VERSION: "6.0"
@@ -55,9 +64,21 @@ targets:
         Debug:
           CODE_SIGNING_ALLOWED: NO
           CODE_SIGNING_REQUIRED: NO
+          CODE_SIGN_ENTITLEMENTS: App/Jarvis.Debug.entitlements
+          # Hardened Runtime OFF for Debug — HR's strict "non-platform Team IDs
+          # must match" rule rejects Xcode 26's debug dylib incremental-link
+          # artifact (Jarvis.debug.dylib) against our ad-hoc signed main
+          # executable, producing the abrt-during-bootstrap crash on xctest
+          # launch. HR is only meaningful for Release/distribution anyway.
+          ENABLE_HARDENED_RUNTIME: NO
+          # OTHER_CODE_SIGN_FLAGS must not carry `--options=runtime` on Debug —
+          # that flag enables HR regardless of ENABLE_HARDENED_RUNTIME. Strip it.
+          OTHER_CODE_SIGN_FLAGS: ""
         Release:
+          DEVELOPMENT_TEAM: 7UC2HETAN9
           CODE_SIGNING_ALLOWED: NO
           CODE_SIGNING_REQUIRED: NO
+          CODE_SIGN_ENTITLEMENTS: App/Jarvis.Release.entitlements
     dependencies:
       - package: Keychain
         product: Keychain
