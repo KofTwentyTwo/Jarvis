@@ -263,6 +263,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = B6D5E915E8E9BDF0BF748745 /* Build configuration list for PBXNativeTarget "Jarvis" */;
 			buildPhases = (
+				6A19A71D8F7B0FED56530812 /* Check bus-harness.html parity (canonical vs bundle) */,
+				A9F0578ECF5691986EE06B5B /* Check bus protocol version (Swift/TS parity) */,
+				16B4B1822351AC23B6276002 /* Check no evaluateJavaScript calls (HUD-04) */,
 				E0992BE4761F337F2AC5BF62 /* Sources */,
 				C593366D9BBD0DC5F45EA023 /* Resources */,
 				886D43D159942AB5C149B33B /* Frameworks */,
@@ -385,6 +388,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		16B4B1822351AC23B6276002 /* Check no evaluateJavaScript calls (HUD-04) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Check no evaluateJavaScript calls (HUD-04)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/check-no-evaluate-javascript.sh\"\n";
+		};
 		318A7B75FBCC334BEF639033 /* Verify entitlements (pre-codesign) */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -403,6 +425,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/scripts/verify-entitlements.sh\" --pre-codesign\n";
+		};
+		6A19A71D8F7B0FED56530812 /* Check bus-harness.html parity (canonical vs bundle) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/webview/bus-harness.html",
+				"$(SRCROOT)/App/Resources/webview/bus-harness.html",
+			);
+			name = "Check bus-harness.html parity (canonical vs bundle)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/check-bus-harness-parity.sh\"\n";
 		};
 		6B8296F9F78BB0FC4B3EC838 /* Codesign bundle (deepest-first) */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -441,6 +484,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/scripts/verify-codesign-settings.sh\"\n";
+		};
+		A9F0578ECF5691986EE06B5B /* Check bus protocol version (Swift/TS parity) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/packages/Bus/Sources/Bus/Protocol.swift",
+				"$(SRCROOT)/webview/packages/bus/src/protocol.ts",
+			);
+			name = "Check bus protocol version (Swift/TS parity)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/check-bus-protocol-version.sh\"\n";
 		};
 		DD1590A06D57152C1B673573 /* Create Contents/Helpers directory */ = {
 			isa = PBXShellScriptBuildPhase;

@@ -101,6 +101,31 @@ targets:
         product: Shell
       - package: Bus
         product: Bus
+    preBuildScripts:
+      # Three build-breaking pre-build phases — run BEFORE Compile Sources.
+      # Ordered fastest-failing first so common authoring errors surface
+      # before the slower lint walk of the Swift tree.
+      - name: Check bus-harness.html parity (canonical vs bundle)
+        script: |
+          "${SRCROOT}/scripts/check-bus-harness-parity.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(SRCROOT)/webview/bus-harness.html
+          - $(SRCROOT)/App/Resources/webview/bus-harness.html
+      - name: Check bus protocol version (Swift/TS parity)
+        script: |
+          "${SRCROOT}/scripts/check-bus-protocol-version.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(SRCROOT)/packages/Bus/Sources/Bus/Protocol.swift
+          - $(SRCROOT)/webview/packages/bus/src/protocol.ts
+      - name: Check no evaluateJavaScript calls (HUD-04)
+        script: |
+          "${SRCROOT}/scripts/check-no-evaluate-javascript.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
     copyFiles:
       - destination: wrapper
         subpath: Contents/Helpers
