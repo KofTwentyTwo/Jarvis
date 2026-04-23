@@ -5,16 +5,19 @@ import JarvisLogging
 
 /// Main-actor-bound bridge between Swift and the webview's JS layer.
 ///
-/// Responsibilities (P2-01 scope):
+/// Responsibilities:
 /// - Install a `WKScriptMessageHandlerWithReply` in an isolated content world
 ///   (`JarvisBusWorld`) so page scripts cannot observe or post to it.
+/// - Inject a `WKUserScript` at `.atDocumentStart` in the same world so
+///   `window.jarvisBus` exists before any page script runs (pitfall 3).
 /// - Decode inbound JSON into `BusInbound` and either (a) handle the handshake
 ///   ack inline or (b) route to the caller-supplied `onInbound` closure.
 /// - Surface every decode/handler path through the `replyHandler` so the JS
 ///   side gets a `resolve` or `reject` for every `postMessage` call.
 /// - Drive the two-way handshake state machine (HUD-05) with a 2s timeout.
-/// - Present a stubbed `send(_:)` outbound API; Plan 03 swaps the stub for a
-///   real `callAsyncJavaScript` wiring.
+/// - Drive outbound sends via `callAsyncJavaScript` with a primitive-string
+///   `payload` argument — NEVER via `evaluateJavaScript` and NEVER with the
+///   JSON concatenated into the function body (HUD-04 / T-02-13).
 ///
 /// This class is `@MainActor` because WebKit APIs demand main-thread calls
 /// and `WKScriptMessage.body` must be read on main. The
@@ -26,13 +29,25 @@ import JarvisLogging
 public final class WebviewBridge: NSObject {
     /// Closure used to display hard-block alerts on handshake failure.
     /// Injected so tests can verify the alert path without calling
-    /// `NSAlert.runModal` under XCTest. Production wiring (Plan 03) routes
+    /// `NSAlert.runModal` under XCTest. Production wiring (AppDelegate) routes
     /// this to `TCCAlertService.presentHardBlock` + `NSApp.terminate`.
     public typealias AlertPresenter = @MainActor (_ title: String, _ body: String) -> Void
 
+    /// Test seam for `WKWebView.callAsyncJavaScript(_:arguments:in:contentWorld:)`.
+    /// Production wiring uses `WKWebViewJSEvaluator`; tests use a recording
+    /// fake so they don't need to spin up a real WebKit process.
+    public protocol JSEvaluator: AnyObject {
+        @MainActor func callAsync(
+            functionBody: String,
+            arguments: [String: Any],
+            contentWorld: WKContentWorld
+        ) async throws -> Any?
+    }
+
     // MARK: - Configuration
 
-    private let webView: WKWebView
+    private let evaluator: JSEvaluator
+    private let userContentController: WKUserContentController
     private let messageHandlerName: String
     private let contentWorld: WKContentWorld
     private let alertPresenter: AlertPresenter
@@ -53,7 +68,7 @@ public final class WebviewBridge: NSObject {
     public var onInbound: (@MainActor (BusInbound) async throws -> BusReply?)?
 
     /// Fires exactly once when the handshake transitions `.sentHello` →
-    /// `.armed`. Plan 03 uses this to unblock outbound sends and kick off
+    /// `.armed`. AppDelegate uses this to unblock outbound sends and kick off
     /// `OutboundBatcher`.
     public var onHandshakeArmed: (@MainActor () -> Void)?
 
@@ -71,49 +86,111 @@ public final class WebviewBridge: NSObject {
         contentWorldName: String = "JarvisBusWorld",
         alertPresenter: @escaping AlertPresenter
     ) {
-        self.webView = webView
+        self.evaluator = WKWebViewJSEvaluator(webView: webView)
+        self.userContentController = webView.configuration.userContentController
         self.messageHandlerName = messageHandlerName
         self.contentWorld = WKContentWorld.world(name: contentWorldName)
         self.alertPresenter = alertPresenter
         super.init()
+        registerHandlerAndInjection()
+    }
 
-        webView.configuration.userContentController.addScriptMessageHandler(
+    /// Test-only seam — injects a fake evaluator and a caller-supplied
+    /// `WKUserContentController` so tests can introspect `userScripts` without
+    /// constructing a real `WKWebView`. Marked `internal` for `@testable
+    /// import Bus`; production code must use the public `init(webView:…)`.
+    internal init(
+        evaluator: JSEvaluator,
+        userContentController: WKUserContentController,
+        messageHandlerName: String = "jarvisBus",
+        contentWorldName: String = "JarvisBusWorld",
+        alertPresenter: @escaping AlertPresenter
+    ) {
+        self.evaluator = evaluator
+        self.userContentController = userContentController
+        self.messageHandlerName = messageHandlerName
+        self.contentWorld = WKContentWorld.world(name: contentWorldName)
+        self.alertPresenter = alertPresenter
+        super.init()
+        registerHandlerAndInjection()
+    }
+
+    private func registerHandlerAndInjection() {
+        userContentController.addScriptMessageHandler(
             self,
             contentWorld: self.contentWorld,
             name: self.messageHandlerName
         )
+        installInjectionScript()
+    }
+
+    private func installInjectionScript() {
+        guard let url = Bundle.module.url(forResource: "Injection", withExtension: "js"),
+              let source = try? String(contentsOf: url, encoding: .utf8) else {
+            logger.error("bus: Injection.js resource missing — bundle setup broken")
+            return
+        }
+        let script = WKUserScript(
+            source: source,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true,
+            in: contentWorld
+        )
+        userContentController.addUserScript(script)
     }
 
     // MARK: - Handshake surface
 
-    /// Plan 03 calls this after `WKNavigationDelegate.webView(_:didFinish:)`.
-    /// P2-01 scope: state-machine transition + timeout task. The actual
-    /// `callAsyncJavaScript` `{"type":"hello",…}` send is a Plan 03 concern
-    /// so this package does not need to know about navigation lifecycle.
+    /// Transitions to `.sentHello`, schedules the 2s timeout, and sends the
+    /// `hello` frame over the outbound path. Called by `AppDelegate` on
+    /// `WKNavigationDelegate.webView(_:didFinish:)`.
     public func startHandshake() {
         let deadline = Date().addingTimeInterval(2.0)
         handshakeState = .sentHello(deadline: deadline)
         scheduleTimeout()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await self.sendRaw(.hello(version: BUS_PROTOCOL_VERSION))
+            } catch {
+                self.logger.error("bus: failed to send hello: \(error)")
+                // Don't short-circuit — let the 2s timeout Task classify this.
+            }
+        }
     }
 
-    /// Stubbed outbound send. Plan 03 replaces the body with a real
-    /// `callAsyncJavaScript` wiring. Keeping the method here lets the Plan 03
-    /// test surface already assume the signature exists.
+    // MARK: - Outbound
+
+    /// Public outbound send — gates on `handshakeState == .armed`, then
+    /// delegates to `sendRaw`. Throws `BusError.bridgeNotReady` if called
+    /// before the handshake completes.
     public func send(_ message: BusOutbound) async throws {
         guard handshakeState == .armed else {
             throw BusError.bridgeNotReady
         }
-        // P2-01 stub — serialize to exercise the Codable path end-to-end so
-        // any breakage surfaces here rather than at P2-03 integration time.
-        _ = try encoder.encode(message)
-        // P2-03 replaces the line above with:
-        //     let json = String(decoding: try encoder.encode(message), as: UTF8.self)
-        //     _ = try await webView.callAsyncJavaScript(
-        //         "window.__jarvisBusOnOutbound(arguments[0]);",
-        //         arguments: ["payload": json],
-        //         in: nil,
-        //         contentWorld: contentWorld
-        //     )
+        try await sendRaw(message)
+    }
+
+    /// Raw outbound path — bypasses the armed-state gate. Used by:
+    /// 1. `startHandshake` (the hello message itself is what STARTS the
+    ///    handshake, so it must bypass the gate that `send(_:)` enforces).
+    /// 2. `OutboundBatcher` via the `Sink` conformance — the batcher already
+    ///    knows the bridge is armed (AppDelegate constructs the batcher on
+    ///    `onHandshakeArmed`).
+    public func sendRaw(_ message: BusOutbound) async throws {
+        let data = try encoder.encode(message)
+        let json = String(decoding: data, as: UTF8.self)
+        _ = try await evaluator.callAsync(
+            functionBody: """
+            if (!window.jarvisBus || !window.jarvisBus.receive) {
+                throw new Error('bus not mounted');
+            }
+            window.jarvisBus.receive(payload);
+            return true;
+            """,
+            arguments: ["payload": json],
+            contentWorld: contentWorld
+        )
     }
 
     // MARK: - Internal: inbound dispatch (testable seam)
@@ -122,7 +199,7 @@ public final class WebviewBridge: NSObject {
     /// handshake/bridge XCTest suites. Extracting this off the
     /// `WKScriptMessageHandlerWithReply` method keeps tests independent of
     /// the WKScriptMessage API (which is not constructible from user code).
-    func handleInboundString(_ raw: String?, replyHandler: @escaping (Any?, String?) -> Void) {
+    func handleInboundString(_ raw: String?, replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void) {
         guard let raw else {
             logger.error("bus: inbound body was not a String")
             replyHandler(nil, "bus: expected string payload")
@@ -227,5 +304,41 @@ extension WebviewBridge: WKScriptMessageHandlerWithReply {
             let body = message.body as? String
             self.handleInboundString(body, replyHandler: replyHandler)
         }
+    }
+}
+
+// MARK: - OutboundBatcher.Sink conformance
+
+extension WebviewBridge: OutboundBatcher.Sink {
+    // sendRaw is the public API above — this extension is just the
+    // protocol-conformance declaration.
+}
+
+// MARK: - JSEvaluator production adapter
+
+/// Production `JSEvaluator` that forwards to
+/// `WKWebView.callAsyncJavaScript(_:arguments:in:contentWorld:)`.
+///
+/// This is the ONLY call site of `callAsyncJavaScript` in the Bus package;
+/// `WebviewBridge.sendRaw` composes the function body + primitive-string
+/// `payload` argument and routes through this adapter. There are zero calls
+/// to `evaluateJavaScript` anywhere in the Bus package (HUD-04 invariant;
+/// `WebviewBridgeOutboundTests.test_noEvaluateJavaScriptCalls` enforces it).
+final class WKWebViewJSEvaluator: WebviewBridge.JSEvaluator {
+    private let webView: WKWebView
+    init(webView: WKWebView) { self.webView = webView }
+
+    @MainActor
+    func callAsync(
+        functionBody: String,
+        arguments: [String: Any],
+        contentWorld: WKContentWorld
+    ) async throws -> Any? {
+        try await webView.callAsyncJavaScript(
+            functionBody,
+            arguments: arguments,
+            in: nil,
+            contentWorld: contentWorld
+        )
     }
 }

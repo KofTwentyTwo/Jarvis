@@ -23,6 +23,9 @@ final class BatcherTests: XCTestCase {
 
     // A small drain-wait helper. The batcher window is 33ms; wait 80ms to let
     // the scheduled drain fire and propagate the main-actor hop.
+    // `@MainActor` because each test is main-actor-isolated and Swift 6 strict
+    // concurrency disallows sending `self` across a nonisolated boundary.
+    @MainActor
     private func waitForDrain() async {
         try? await Task.sleep(for: .milliseconds(80))
     }

@@ -69,7 +69,14 @@ final class WebviewBridgeOutboundTests: XCTestCase {
             "function body must invoke window.jarvisBus.receive(payload)"
         )
         let payload = call.arguments["payload"] as? String
-        XCTAssertEqual(payload, #"{"type":"hudState","state":"idle"}"#)
+        XCTAssertNotNil(payload, "payload must be a primitive string argument")
+        // JSONEncoder does not guarantee key order across platforms, so
+        // round-trip the payload through the decoder and compare the typed
+        // value instead of byte-comparing the string. The contract the JS
+        // side cares about is the decoded shape, not the key order.
+        let decoded = try BusCoder.makeDecoder()
+            .decode(BusOutbound.self, from: Data((payload ?? "").utf8))
+        XCTAssertEqual(decoded, .hudState(.idle))
         XCTAssertEqual(call.contentWorld, WKContentWorld.world(name: "JarvisBusWorld"))
     }
 
@@ -107,7 +114,11 @@ final class WebviewBridgeOutboundTests: XCTestCase {
 
         XCTAssertEqual(evaluator.calls.count, 1, "expected exactly one hello call")
         let payload = evaluator.calls.first?.arguments["payload"] as? String
-        XCTAssertEqual(payload, #"{"type":"hello","version":"\#(BUS_PROTOCOL_VERSION)"}"#)
+        XCTAssertNotNil(payload)
+        // Round-trip through the decoder — JSONEncoder does not pin key order.
+        let decoded = try BusCoder.makeDecoder()
+            .decode(BusOutbound.self, from: Data((payload ?? "").utf8))
+        XCTAssertEqual(decoded, .hello(version: BUS_PROTOCOL_VERSION))
     }
 
     // MARK: - WKUserScript injection
@@ -164,10 +175,23 @@ final class WebviewBridgeOutboundTests: XCTestCase {
 
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let source = try String(contentsOf: url, encoding: .utf8)
-            XCTAssertFalse(
-                source.contains("evaluateJavaScript"),
-                "Bus package must not call evaluateJavaScript — found in \(url.lastPathComponent)"
-            )
+            // Strip line comments so doc-comments that MENTION evaluateJavaScript
+            // (explaining the HUD-04 invariant) don't false-positive the check.
+            // The regex catches actual call sites like `.evaluateJavaScript(` or
+            // `webView.evaluateJavaScript(`.
+            let lines = source.split(separator: "\n", omittingEmptySubsequences: false)
+            for (lineNumber, rawLine) in lines.enumerated() {
+                let codeOnly: String
+                if let commentStart = rawLine.range(of: "//") {
+                    codeOnly = String(rawLine[..<commentStart.lowerBound])
+                } else {
+                    codeOnly = String(rawLine)
+                }
+                XCTAssertFalse(
+                    codeOnly.contains(".evaluateJavaScript("),
+                    "Bus package must not call evaluateJavaScript — found call site in \(url.lastPathComponent):\(lineNumber + 1)"
+                )
+            }
         }
     }
 }
