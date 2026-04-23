@@ -45,7 +45,15 @@ public final class JarvisHUDPanel: NSPanel {
         // on macOS 26 Tahoe. `WKWebView.isOpaque` is get-only in Swift, so we
         // rely on KVO-setting `drawsBackground` and the `underPageBackgroundColor`
         // clear to achieve the transparent backing the spec calls for.
-        self.webView.setValue(false, forKey: "drawsBackground")
+        //
+        // WR-10: wrap the KVC call in a `responds(to:)` probe so a future
+        // WebKit rename of `setDrawsBackground:` degrades to an opaque
+        // background rather than an `NSUndefinedKeyException` launch crash.
+        // The cost is one extra `objc_msgSend` per app launch.
+        let drawsBackgroundSelector = NSSelectorFromString("setDrawsBackground:")
+        if self.webView.responds(to: drawsBackgroundSelector) {
+            self.webView.setValue(false, forKey: "drawsBackground")
+        }
 
         let container = NSView()
         container.wantsLayer = true
