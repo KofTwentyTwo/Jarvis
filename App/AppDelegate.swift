@@ -98,18 +98,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 snapshots = try configWriter(configURL)
             }
         } catch let e as ConfigError {
-            systemLogger?.critical("Config malformed: \(String(describing: e))")
+            // WR-02: route error description through Redact.apply before
+            // logging — a malformed config that contains a secret (e.g. a
+            // user accidentally drops an API key into config.json) would
+            // otherwise land in ~/Library/Logs/Jarvis/ and os.Logger (where
+            // OSLogHandler skips redaction by design) as plaintext.
+            let description = Redact.apply(String(describing: e))
+            systemLogger?.critical("Config malformed: \(description)")
             TCCAlertService.presentHardBlock(
                 title: "Jarvis can't start",
-                informativeText: "Your config file couldn't be read. \(String(describing: e)). Details in ~/Library/Logs/Jarvis/system.log."
+                informativeText: "Your config file couldn't be read. \(description). Details in ~/Library/Logs/Jarvis/system.log."
             )
             NSApp.terminate(nil)
             return
         } catch {
-            systemLogger?.critical("Config load failed: \(error.localizedDescription)")
+            // WR-02: same redaction discipline for generic errors.
+            let description = Redact.apply(error.localizedDescription)
+            systemLogger?.critical("Config load failed: \(description)")
             TCCAlertService.presentHardBlock(
                 title: "Jarvis can't start",
-                informativeText: "Config load failed: \(error.localizedDescription)"
+                informativeText: "Config load failed: \(description)"
             )
             NSApp.terminate(nil)
             return
