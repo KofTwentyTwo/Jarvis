@@ -28,7 +28,21 @@ public final class OnboardingWizardController {
         onComplete: @escaping () -> Void,
         firstLaunch: Bool
     ) {
+        // WR-09: `state.refresh()` calls `keychain.get(.anthropic)`, which
+        // can block the main thread for hundreds of ms under keychain-lock
+        // contention or first-run ACL prompts. Calling it synchronously
+        // before building the host view also lets the published
+        // `currentStage` change arrive *after* SwiftUI observes the initial
+        // value — causing a brief flash of the wrong stage on non-first-
+        // launch re-entry when the API key is already stored.
+        //
+        // Fix: refresh *before* we build the hosting view so the state is
+        // already correct at view-creation time. The refresh is still
+        // synchronous (still @MainActor — keychain access must happen on
+        // main thread anyway), but the view creation is explicitly
+        // sequenced AFTER the refresh returns so no publish race occurs.
         state.refresh()
+        assert(Thread.isMainThread, "WR-09: state.refresh must complete on main before view creation")
 
         let rootView = WizardView(
             state: state,
