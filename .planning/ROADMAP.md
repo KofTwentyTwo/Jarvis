@@ -69,7 +69,13 @@ Plans:
   4. High-frequency events (`audioLevel`, `tokenDelta`) coalesce through an `OutboundBatcher` at ~30 Hz; state-transition events flush immediately and bypass the batcher (HUD-06). Coalescing is verified by unit test, not just visual inspection.
   5. Inbound messages use `WKScriptMessageHandlerWithReply` (HUD-03), not the legacy handler; replies carry either `Result.success(payload)` or `.failure(error)` — no silent swallowed exceptions.
 
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+- [x] 02-01-swift-bus-package-PLAN.md — Swift packages/Bus with hand-written Codable enums, WebviewBridge (WKScriptMessageHandlerWithReply + MainActor.assumeIsolated), Handshake state machine, 14 JSON fixtures (HUD-03, HUD-05, SEC-09) (Wave 1)
+- [x] 02-02-ts-bus-package-PLAN.md — TypeScript webview/packages/bus with decodeOutbound + never-sentinel exhaustiveness, window.jarvisBus glue, 14 fixtures byte-identical to Swift, pnpm workspace root (HUD-03, HUD-05, SEC-09) (Wave 1, parallel with 02-01)
+- [ ] 02-03-outbound-batcher-wiring-PLAN.md — OutboundBatcher actor (~30Hz coalescer), callAsyncJavaScript real wiring, WKUserScript document-start Injection.js, AppDelegate installBus() (HUD-03, HUD-04, HUD-05, HUD-06) (Wave 2)
+- [ ] 02-04-build-parity-lint-PLAN.md — Build-time safety nets: check-bus-protocol-version.sh + check-no-evaluate-javascript.sh + check-bus-harness-parity.sh + preBuildScripts wiring (HUD-04, SEC-09) (Wave 2, parallel with 02-03)
 
 ### Phase 3: HUD
 
