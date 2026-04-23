@@ -35,6 +35,13 @@ struct FileLogHandler: LogHandler {
         writer.append(redacted)
     }
 
+    /// WR-08: run retention GC outside the rotation path — call at
+    /// shutdown or on a periodic heartbeat so an idle app (no log writes
+    /// crossing midnight for >7 days) still cleans up stale files.
+    func runRetentionGC() {
+        writer.runRetentionGC()
+    }
+
     subscript(metadataKey key: String) -> Logger.Metadata.Value? {
         get { metadata[key] }
         set { metadata[key] = newValue }

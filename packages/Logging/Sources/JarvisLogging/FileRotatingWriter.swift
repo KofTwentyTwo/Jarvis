@@ -86,9 +86,36 @@ final class FileRotatingWriter: @unchecked Sendable {
         queue.sync { droppedLinesThisWindow }
     }
 
+    /// WR-08: run retention GC on demand, independent of the rotation path.
+    /// Call at process shutdown or on a periodic heartbeat so an app that
+    /// sits idle for >7 days without a day-crossing log line still deletes
+    /// stale files.
+    func runRetentionGC() {
+        queue.async { [self] in
+            gcOldFiles(now: dateProvider.now())
+        }
+    }
+
     private func rotateIfNeeded() {
         let today = dateFormatter.string(from: dateProvider.now())
         if today == currentDayString { return }
+
+        // WR-08: defensive check against large clock-skew. If the user's
+        // clock jumped more than ±2 days from the previous window, log a
+        // one-line warning alongside the normal rotation — the file log
+        // still rotates because `today` changed, but ops now see that the
+        // rotation happened for a non-standard reason.
+        if let prev = currentDayString,
+           let prevDate = dateFormatter.date(from: prev),
+           let nowDate = dateFormatter.date(from: today) {
+            let dayDelta = Calendar(identifier: .gregorian)
+                .dateComponents([.day], from: prevDate, to: nowDate).day ?? 0
+            if abs(dayDelta) > 2 {
+                faultLogger.notice(
+                    "file log rotating after \(dayDelta, privacy: .public)-day clock skew for base=\(self.baseName, privacy: .public)"
+                )
+            }
+        }
 
         // WR-01: at a rotation boundary, emit the drop count for the
         // just-closed window (if non-zero) so ops can see data loss even
