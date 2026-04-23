@@ -27,9 +27,15 @@ struct OSLogHandler: LogHandler {
         case .error: .error
         case .critical: .fault
         }
-        // NOTE: no redaction here — os.Logger handles %{private}@ at system layer.
-        // Discipline: callers must redact untrusted input BEFORE passing to Logger.
-        logger.log(level: osLevel, "\(message, privacy: .public)")
+        // WR-08 / IN-02: do NOT mark the message body `.public` — that
+        // defeats os.Logger's default `%{private}@` masking for interpolated
+        // values. Message text may contain untrusted input (file paths,
+        // error descriptions, user-supplied strings) that the caller hasn't
+        // run through `Redact.apply` — os.Logger's private-by-default
+        // provides defense in depth. Log level is emitted via the `osLevel`
+        // API, not the message body, so this does not lose severity signal
+        // in Console.app.
+        logger.log(level: osLevel, "\(message, privacy: .private(mask: .hash))")
     }
 
     subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
