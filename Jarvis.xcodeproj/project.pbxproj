@@ -15,6 +15,7 @@
 		2BCA466CFD785F3BC989C35F /* WizardStageAPIKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */; };
 		461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */; };
 		50C095E6F675D26E9C399179 /* AnthropicKeyValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77C5BF4E4B659B0A3325E647 /* AnthropicKeyValidator.swift */; };
+		5230995216EF1EE333B51529 /* HudStateCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE712EB628AF5CD6E935E8AF /* HudStateCoordinator.swift */; };
 		526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */; };
 		573540593E2D1EB1F0F6F31C /* WizardTCCStageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */; };
 		5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */; };
@@ -25,6 +26,8 @@
 		78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF7206DB98EC02734975536 /* HudState.swift */; };
 		7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */; };
 		8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1517F151F3BA96803143692 /* AppDelegate.swift */; };
+		896984D88C412595C0F6F97E /* HudStateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511D7B2406F485ED0D4B9E0D /* HudStateIntent.swift */; };
+		8E4590089A7955545E2146D3 /* HudStateCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */; };
 		93FDBFFCCEFC0848F1C5E630 /* AppDelegateBusWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6BA7673B5FD73B588D9084 /* AppDelegateBusWiringTests.swift */; };
 		9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */; };
 		9A06E835DE29158C0EC43DE3 /* webview in Resources */ = {isa = PBXBuildFile; fileRef = 8C8267C7BE6D4B16FEE6004E /* webview */; };
@@ -82,12 +85,14 @@
 		4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandColors.swift; sourceTree = "<group>"; };
 		4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconController.swift; sourceTree = "<group>"; };
 		510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateEnumTests.swift; sourceTree = "<group>"; };
+		511D7B2406F485ED0D4B9E0D /* HudStateIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateIntent.swift; sourceTree = "<group>"; };
 		5DE981947E40847F9BAF5641 /* Logging */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Logging; path = packages/Logging; sourceTree = SOURCE_ROOT; };
 		604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAAnimationFactory.swift; sourceTree = "<group>"; };
 		639B5F162E847B0CFC679E30 /* Bus */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Bus; path = packages/Bus; sourceTree = SOURCE_ROOT; };
 		6784683F2262D8AFA439668D /* JarvisAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageHotkeyView.swift; sourceTree = "<group>"; };
 		77C5BF4E4B659B0A3325E647 /* AnthropicKeyValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicKeyValidator.swift; sourceTree = "<group>"; };
+		8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinatorTests.swift; sourceTree = "<group>"; };
 		8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardTCCStageTests.swift; sourceTree = "<group>"; };
 		8C8267C7BE6D4B16FEE6004E /* webview */ = {isa = PBXFileReference; lastKnownFileType = folder; name = webview; path = App/Resources/webview; sourceTree = SOURCE_ROOT; };
 		909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateWiringTests.swift; sourceTree = "<group>"; };
@@ -103,6 +108,7 @@
 		BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageAPIKeyView.swift; sourceTree = "<group>"; };
 		C1517F151F3BA96803143692 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWizardController.swift; sourceTree = "<group>"; };
+		DE712EB628AF5CD6E935E8AF /* HudStateCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinator.swift; sourceTree = "<group>"; };
 		E5B2103B1A123E512CC56B63 /* WizardState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardState.swift; sourceTree = "<group>"; };
 		F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jarvis.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FFBE24D9C8E23A56E1C1EF57 /* JarvisEntitlementProbeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisEntitlementProbeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -158,6 +164,7 @@
 				A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */,
 				909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */,
 				98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */,
+				8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */,
 				510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */,
 				3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */,
 				2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */,
@@ -254,6 +261,8 @@
 				096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */,
 				AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */,
 				17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */,
+				DE712EB628AF5CD6E935E8AF /* HudStateCoordinator.swift */,
+				511D7B2406F485ED0D4B9E0D /* HudStateIntent.swift */,
 				4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */,
 			);
 			path = HUD;
@@ -567,6 +576,7 @@
 				E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */,
 				66B4B219EF4EC3EBDE5D1A4B /* AppDelegateWiringTests.swift in Sources */,
 				CFBEF67D687A1227C9C2A6BD /* HUDBannerCoordinatorTests.swift in Sources */,
+				8E4590089A7955545E2146D3 /* HudStateCoordinatorTests.swift in Sources */,
 				BBD8BBC82E0D3C57E0DB4ED0 /* HudStateEnumTests.swift in Sources */,
 				461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */,
 				5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */,
@@ -589,6 +599,8 @@
 				B64A0CAA46B3C146B54F9F85 /* HUDBannerCoordinator.swift in Sources */,
 				A9F18AF7B16BEA1776F76321 /* HUDBannerPanel.swift in Sources */,
 				78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */,
+				5230995216EF1EE333B51529 /* HudStateCoordinator.swift in Sources */,
+				896984D88C412595C0F6F97E /* HudStateIntent.swift in Sources */,
 				526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */,
 				BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */,
 				A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */,
