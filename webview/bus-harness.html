@@ -2,34 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Jarvis Bus Harness</title>
-  <style>
-    body {
-      background: transparent;
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      color: #888;
-    }
-    .status {
-      position: fixed;
-      bottom: 8px;
-      left: 8px;
-      font-size: 10px;
-      opacity: 0.4;
-    }
-  </style>
 </head>
 <body>
-  <!-- P2-02 scope: static harness. P3 replaces this file with the
-       real React + R3F entrypoint. Plan 03's post-build step copies
-       webview/packages/bus/dist/ and this file into the app bundle. -->
-  <div class="status" id="status">jarvis-bus-harness</div>
-  <script type="module">
-    import { installJarvisBus, BUS_PROTOCOL_VERSION } from "./packages/bus/dist/index.js";
-    installJarvisBus();
-    const statusEl = document.getElementById("status");
-    if (statusEl) statusEl.textContent = `jarvis-bus-harness v${BUS_PROTOCOL_VERSION}`;
+  <div style="color:#888;font-size:10px;opacity:0.4;position:fixed;bottom:8px;left:8px;">
+    jarvis-bus-harness v2.0.0
+  </div>
+  <!-- The document-start WKUserScript from packages/Bus/Sources/Bus/Resources/Injection.js
+       already installed window.jarvisBus before this script runs. This
+       inline script is a marker — no imports required for P2. P3 replaces
+       this file with the full React bundle entrypoint. -->
+  <script>
+    if (!window.jarvisBus) {
+      console.error("[bus-harness] window.jarvisBus missing — injection failed");
+    } else {
+      console.log("[bus-harness] armed at v" + window.jarvisBus.protocolVersion);
+    }
   </script>
 </body>
 </html>
