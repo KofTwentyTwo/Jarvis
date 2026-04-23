@@ -89,7 +89,18 @@ case "$MODE" in
     # The --xml flag forces the legacy XML plist output; without it macOS 26's codesign
     # emits a `[Dict] [Key] ...` rich-text dump that the XML grep below does not match.
     echo "verify-entitlements.sh: --post-codesign"
-    EXTRACTED="$(/usr/bin/codesign -d --entitlements - --xml "$APP" 2>&1 || true)"
+    # WR-12: previously this line was `codesign … 2>&1 || true`, which merged
+    # stderr into stdout AND swallowed the exit code. A codesign failure
+    # (binary not signed, corrupted bundle, etc.) would produce error text
+    # that the greps might coincidentally pass. Split streams and check
+    # the exit status explicitly.
+    if ! EXTRACTED="$(/usr/bin/codesign -d --entitlements - --xml "$APP" 2>/tmp/codesign-main.err)"; then
+      echo "error: codesign -d failed on $APP" >&2
+      cat /tmp/codesign-main.err >&2 || true
+      rm -f /tmp/codesign-main.err
+      exit 1
+    fi
+    rm -f /tmp/codesign-main.err
 
     # Strip XML comments to avoid self-invalidating grep (a prose <!-- com.apple.security.cs.allow-jit -->
     # comment would satisfy a naive grep even if the actual entitlement is absent).
@@ -116,11 +127,24 @@ case "$MODE" in
     fi
 
     # Per-helper entitlement checks: only mcp-applescript may carry automation.apple-events.
+    # WR-12: `-depth` (bottom-up) was inherited from the codesign script where
+    # deepest-first matters for signing. Verification order doesn't matter;
+    # drop `-depth` for readability.
     HELPERS_DIR="${APP}/Contents/Helpers"
     if [ -d "$HELPERS_DIR" ]; then
       while IFS= read -r HELPER; do
         HELPER_NAME="$(basename "$HELPER" .app)"
-        HELPER_ENTS="$(/usr/bin/codesign -d --entitlements - --xml "$HELPER" 2>&1 || true)"
+        # WR-12: check codesign's exit code explicitly — an unsigned or
+        # corrupted helper previously emitted error text into HELPER_ENTS
+        # that the grep could coincidentally pass, letting an unsigned helper
+        # ship.
+        if ! HELPER_ENTS="$(/usr/bin/codesign -d --entitlements - --xml "$HELPER" 2>/tmp/codesign-helper.err)"; then
+          echo "error: codesign -d failed on helper $HELPER_NAME" >&2
+          cat /tmp/codesign-helper.err >&2 || true
+          rm -f /tmp/codesign-helper.err
+          exit 1
+        fi
+        rm -f /tmp/codesign-helper.err
         HELPER_ENTS_STRIPPED="$(echo "$HELPER_ENTS" | /usr/bin/grep -v '^<!--')"
         if [ "$HELPER_NAME" = "mcp-applescript" ]; then
           if ! echo "$HELPER_ENTS_STRIPPED" | /usr/bin/grep -q "com.apple.security.automation.apple-events"; then
@@ -133,7 +157,7 @@ case "$MODE" in
             exit 1
           fi
         fi
-      done < <(find "$HELPERS_DIR" -depth -name "*.app" -type d)
+      done < <(find "$HELPERS_DIR" -name "*.app" -type d)
     fi
 
     echo "post-codesign: entitlement verification passed"
