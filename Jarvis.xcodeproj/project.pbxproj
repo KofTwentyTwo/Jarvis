@@ -29,6 +29,7 @@
 		A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */; };
 		A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */; };
 		A9F18AF7B16BEA1776F76321 /* HUDBannerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */; };
+		AC359FF68F49110FF9B6E6E5 /* WizardStageAPIKeyViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */; };
 		B64A0CAA46B3C146B54F9F85 /* HUDBannerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */; };
 		BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */; };
 		C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */; };
@@ -88,6 +89,7 @@
 		98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerCoordinatorTests.swift; sourceTree = "<group>"; };
 		A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateEntitlementTests.swift; sourceTree = "<group>"; };
 		A33A1960A6404CD790036C46 /* WizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardView.swift; sourceTree = "<group>"; };
+		A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageAPIKeyViewTests.swift; sourceTree = "<group>"; };
 		AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerCoordinator.swift; sourceTree = "<group>"; };
 		B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContextMenu.swift; sourceTree = "<group>"; };
 		BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageAPIKeyView.swift; sourceTree = "<group>"; };
@@ -147,6 +149,7 @@
 				98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */,
 				3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */,
 				2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */,
+				A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */,
 				024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */,
 				8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */,
 			);
@@ -480,6 +483,7 @@
 				CFBEF67D687A1227C9C2A6BD /* HUDBannerCoordinatorTests.swift in Sources */,
 				461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */,
 				5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */,
+				AC359FF68F49110FF9B6E6E5 /* WizardStageAPIKeyViewTests.swift in Sources */,
 				63C72C019170ED28C4900DB9 /* WizardStateTests.swift in Sources */,
 				573540593E2D1EB1F0F6F31C /* WizardTCCStageTests.swift in Sources */,
 			);
