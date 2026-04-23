@@ -23,11 +23,40 @@ extension URLSession: URLRequestClient {}
 ///
 /// The key travels in a header, not a query string (T-04-01). HTTPS is
 /// enforced by the fixed URL.
+///
+/// WR-07: the default session is `URLSessionConfiguration.ephemeral` with
+/// `connectionProxyDictionary = [:]` (refuses system proxy) and
+/// `tlsMinimumSupportedProtocolVersion = .TLSv13`. Without this, the
+/// `x-api-key` header would be shipped through a corporate MITM proxy that
+/// happens to intercept `api.anthropic.com`, leaking the key on the first
+/// validation attempt. Ephemeral also avoids cross-contamination with the
+/// app's shared cookie/cache jar.
 public struct AnthropicKeyValidator: Sendable {
     public let client: any URLRequestClient
 
-    public init(client: any URLRequestClient = URLSession.shared) {
-        self.client = client
+    public init(client: (any URLRequestClient)? = nil) {
+        self.client = client ?? AnthropicKeyValidator.makeHardenedSession()
+    }
+
+    /// WR-07: dedicated URLSession for key validation. Declines system
+    /// proxies, pins TLSv1.3 minimum, and uses an ephemeral configuration
+    /// so nothing is cached on disk.
+    private static func makeHardenedSession() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
+        // Disable any configured system or user proxy. An empty dictionary
+        // explicitly overrides the default resolver lookup.
+        config.connectionProxyDictionary = [:]
+        config.tlsMinimumSupportedProtocolVersion = .TLSv13
+        // Fail fast on flaky networks — the validator should not block the
+        // wizard for minutes.
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        // Don't allow cookies or credential storage for this one-shot call.
+        config.httpCookieAcceptPolicy = .never
+        config.httpShouldSetCookies = false
+        config.urlCache = nil
+        config.urlCredentialStorage = nil
+        return URLSession(configuration: config)
     }
 
     public func validate(key: String) async -> AnthropicKeyValidationResult {
