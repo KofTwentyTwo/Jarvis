@@ -71,6 +71,16 @@ public struct NSEventMonitorStore: HotkeyMonitorStore {
 /// thread, and this whole type touches AppKit.
 @MainActor
 public final class HotkeyBinder {
+    /// CR-03 (SHELL-06): sink interface the binder calls when the global
+    /// monitor silently fails to install (OS returns nil from
+    /// `addGlobalMonitorForEvents` even when `inputMonitoringGranted = true`,
+    /// e.g. the user revoked Input Monitoring between launches). Abstracted
+    /// so Shell doesn't need to import HUDBannerCoordinator directly — App
+    /// wires a concrete sink that enqueues `BannerContent.hotkeyBindFailed`.
+    public protocol BannerSink: Sendable {
+        func enqueueHotkeyBindFailed()
+    }
+
     private let store: any HotkeyMonitorStore
     private var globalToken: Any?
     private var localToken: Any?
@@ -88,16 +98,33 @@ public final class HotkeyBinder {
     /// Bind a shortcut. `inputMonitoringGranted` controls whether the global
     /// monitor is installed. On denial we still install the local monitor so
     /// the hotkey works while Jarvis is frontmost (degraded mode).
+    ///
+    /// CR-03 (SHELL-06): `NSEvent.addGlobalMonitorForEvents` silently returns
+    /// `nil` when the OS refuses Input Monitoring (e.g. user revoked the
+    /// permission between launches, or the codesign identity changed and
+    /// macOS auto-revoked). When `inputMonitoringGranted == true` but the
+    /// underlying call returns nil, we STILL mark the binder degraded and —
+    /// if a sink is supplied — enqueue `BannerContent.hotkeyBindFailed` so
+    /// the user sees the degraded-hotkey banner. The local monitor is still
+    /// installed so the hotkey works while Jarvis is frontmost.
     public func bind(
         _ shortcut: KeyboardShortcut,
         inputMonitoringGranted: Bool,
+        bindFailedSink: (any BannerSink)? = nil,
         onPress: @escaping @Sendable () -> Void
     ) {
         unbind()
         boundShortcut = shortcut
         if inputMonitoringGranted {
             globalToken = store.installGlobalMonitor(shortcut, onPress)
-            isDegraded = false
+            if globalToken == nil {
+                // OS silently refused. This is the SHELL-06 footgun —
+                // do NOT pretend the bind succeeded.
+                isDegraded = true
+                bindFailedSink?.enqueueHotkeyBindFailed()
+            } else {
+                isDegraded = false
+            }
         } else {
             isDegraded = true
         }

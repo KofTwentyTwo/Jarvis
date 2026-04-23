@@ -230,6 +230,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// CR-03 (SHELL-06) / WR-06: `HotkeyBinder.BannerSink` adapter so Shell
+    /// can report a silent nil-token bind failure to the HUD. Separate from
+    /// `AdHocBannerSink` because the two sinks implement different Shell
+    /// protocols — same wiring pattern, different enqueued banner.
+    private final class HotkeyBindFailedSink: HotkeyBinder.BannerSink, @unchecked Sendable {
+        weak var coordinator: HUDBannerCoordinator?
+        init(_ c: HUDBannerCoordinator?) { self.coordinator = c }
+        func enqueueHotkeyBindFailed() {
+            Task { @MainActor [weak self] in
+                self?.coordinator?.enqueue(.hotkeyBindFailed)
+            }
+        }
+    }
+
     private func openWizard(firstLaunch: Bool) {
         guard let controller = wizardController else { return }
         let validator = AnthropicKeyValidator()
@@ -250,9 +264,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func bindHotkeyFromWizard() {
         guard let state = wizardState, let shortcut = state.hotkey else { return }
+        // WR-06 / CR-03: wire the hotkey-bind-failed sink so that a silent
+        // nil-token return from `addGlobalMonitorForEvents` actually surfaces
+        // `BannerContent.hotkeyBindFailed` to the user. Before this, the
+        // preset existed but was never enqueued from production code.
+        let sink = HotkeyBindFailedSink(bannerCoordinator)
         hotkeyBinder?.bind(
             shortcut,
-            inputMonitoringGranted: state.inputMonitoringGranted
+            inputMonitoringGranted: state.inputMonitoringGranted,
+            bindFailedSink: sink
         ) { [weak self] in
             Task { @MainActor [weak self] in self?.toggleHUD() }
         }
