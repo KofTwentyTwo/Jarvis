@@ -16,6 +16,7 @@ let package = Package(
             dependencies: [
                 .product(name: "JarvisLogging", package: "Logging"),
             ],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)],
             linkerSettings: [
                 .linkedFramework("WebKit"),
