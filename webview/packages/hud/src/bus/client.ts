@@ -4,7 +4,7 @@ import { useJarvisStore } from '../store'
 /**
  * Install the window.jarvisBus bridge and register an exhaustive outbound
  * dispatcher. Every BusOutbound case has a switch arm; the default branch
- * uses `const _exhaustive: never = msg` (NO `as never` cast) — adding a new
+ * uses `const _exhaustive: never = msg` with NO unsafe cast — adding a new
  * case to BusOutbound without a handler here fails `tsc --strict`.
  *
  * Plan 03-02 scaffolds this dispatcher. Plans 03-03 and 03-04 replace the
