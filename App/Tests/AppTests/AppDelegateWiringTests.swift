@@ -102,23 +102,63 @@ final class AppDelegateWiringTests: XCTestCase {
         cleanUp(delegate)
     }
 
-    func test_stateDumpDoesNotIncludeAPIKey() {
-        // Design invariant: `copyStateDump()` writes only boolean presence to
-        // the clipboard. The API key value is never stored on `self` or
-        // written anywhere except Keychain. This is enforced at source level
-        // by the grep gate in acceptance criteria (see plan); this test
-        // asserts the positive path launches without errors so the design
-        // invariant at least compiles.
+    /// IN-07 (T-04-02 / SEC-01): `copyStateDump()` writes only boolean
+    /// presence indicators to the clipboard — never the API key itself.
+    /// Previously this test was an `XCTAssertTrue(true)` tautology that
+    /// couldn't fail on a real regression. Now we use a FakeKeychain that
+    /// returns a recognizable plaintext value ("sk-ant-test-plaintext"),
+    /// invoke `copyStateDump` via the private selector, and assert the
+    /// pasteboard contents DO NOT contain that plaintext.
+    func test_stateDumpDoesNotIncludeAPIKey() throws {
+        let recognizablePlaintext = "sk-ant-test-do-not-leak"
+        struct RecognizableKeychain: KeychainStore {
+            let value: String
+            func set(_ value: String, for item: KeychainItem) throws {}
+            func get(_ item: KeychainItem) throws -> String { value }
+            func delete(_ item: KeychainItem) throws {}
+        }
+
         let delegate = AppDelegate()
         delegate.entitlementProbe = EntitlementYes()
         delegate.configLoader = { _ in self.makeSnapshots() }
         delegate.configWriter = { _ in self.makeSnapshots() }
-        delegate.keychainStore = FakeKeychain(apiKeyStored: true)
+        delegate.keychainStore = RecognizableKeychain(value: recognizablePlaintext)
         delegate.hidProbe = FakeHIDProbe(granted: true)
         delegate.loggingBootstrap = {}
 
+        // Clear pasteboard first so a prior test's contents can't contaminate
+        // the assertion.
+        NSPasteboard.general.clearContents()
+
         delegate.applicationWillFinishLaunching(Notification(name: .init("t")))
-        XCTAssertTrue(true)
+
+        // `copyStateDump` is private; invoke via perform(...) for test access.
+        let selector = Selector(("copyStateDump"))
+        if delegate.responds(to: selector) {
+            delegate.perform(selector)
+        } else {
+            XCTFail("AppDelegate must expose copyStateDump for SEC-01 verification")
+            cleanUp(delegate)
+            return
+        }
+
+        let pasteboardContents = NSPasteboard.general.string(forType: .string) ?? ""
+        XCTAssertFalse(
+            pasteboardContents.contains(recognizablePlaintext),
+            "SEC-01/T-04-02: state dump must never include the raw API key. "
+            + "Found leaked value in pasteboard: \(pasteboardContents.prefix(200))"
+        )
+        XCTAssertFalse(
+            pasteboardContents.contains("sk-ant-"),
+            "SEC-01: state dump must not contain any `sk-ant-` prefix"
+        )
+        // Sanity: the dump should exist (non-empty JSON) and carry the
+        // boolean indicator we expect. This confirms the test exercised the
+        // happy path rather than failing silently.
+        XCTAssertTrue(
+            pasteboardContents.contains("\"apiKeyStored\""),
+            "State dump must include the apiKeyStored boolean"
+        )
         cleanUp(delegate)
     }
 }
