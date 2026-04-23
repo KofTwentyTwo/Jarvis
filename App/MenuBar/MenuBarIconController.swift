@@ -56,6 +56,11 @@ public final class MenuBarIconController {
             if let a = CAAnimationFactory.makeShimmer() { layer.add(a, forKey: "state.shimmer") }
         case .awaitingConfirmation:
             if let a = CAAnimationFactory.makeGlow() { layer.add(a, forKey: "state.glow") }
+        case .reconfiguring, .booting:
+            // TODO(Phase 3/4): dedicated animations; these two share .idle's
+            // profile per HUD-08 "reconfiguring literally lowest" precedence
+            // (RESEARCH Open Q #4). No animation added.
+            break
         }
 
         currentState = newState

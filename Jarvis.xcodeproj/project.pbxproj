@@ -34,6 +34,7 @@
 		A9F18AF7B16BEA1776F76321 /* HUDBannerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */; };
 		AC359FF68F49110FF9B6E6E5 /* WizardStageAPIKeyViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */; };
 		B64A0CAA46B3C146B54F9F85 /* HUDBannerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */; };
+		BBD8BBC82E0D3C57E0DB4ED0 /* HudStateEnumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */; };
 		BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */; };
 		C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */; };
 		CD22CB0656265A2623BA7FD0 /* AnthropicKeyValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39DD53A4E2CCED58C85B63FC /* AnthropicKeyValidatorTests.swift */; };
@@ -80,6 +81,7 @@
 		467AE2D19D58325D227E2F89 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandColors.swift; sourceTree = "<group>"; };
 		4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconController.swift; sourceTree = "<group>"; };
+		510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateEnumTests.swift; sourceTree = "<group>"; };
 		5DE981947E40847F9BAF5641 /* Logging */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Logging; path = packages/Logging; sourceTree = SOURCE_ROOT; };
 		604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAAnimationFactory.swift; sourceTree = "<group>"; };
 		639B5F162E847B0CFC679E30 /* Bus */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Bus; path = packages/Bus; sourceTree = SOURCE_ROOT; };
@@ -156,6 +158,7 @@
 				A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */,
 				909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */,
 				98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */,
+				510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */,
 				3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */,
 				2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */,
 				A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */,
@@ -564,6 +567,7 @@
 				E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */,
 				66B4B219EF4EC3EBDE5D1A4B /* AppDelegateWiringTests.swift in Sources */,
 				CFBEF67D687A1227C9C2A6BD /* HUDBannerCoordinatorTests.swift in Sources */,
+				BBD8BBC82E0D3C57E0DB4ED0 /* HudStateEnumTests.swift in Sources */,
 				461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */,
 				5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */,
 				AC359FF68F49110FF9B6E6E5 /* WizardStageAPIKeyViewTests.swift in Sources */,
