@@ -39,6 +39,36 @@ final class FileLogHandlerTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(files.count, 2, "Should have rotated to a new file")
     }
 
+    /// WR-01 (OBS-06): when the log directory becomes unwritable
+    /// (simulated here by pointing the writer at a path that is a regular
+    /// file, so FileManager.createDirectory silently keeps going and the
+    /// FileHandle open fails), append() must increment the dropped-lines
+    /// counter instead of silently swallowing the line.
+    func test_dropsLinesWhenHandleUnavailable() throws {
+        // Create a path where `directory` is actually a regular file —
+        // subsequent `createFile(atPath:)` inside `directory` will refuse
+        // because the directory can't be created on top of a file.
+        let fileAsDir = tempDir.appendingPathComponent("not-a-dir")
+        try "sentinel".data(using: .utf8)!.write(to: fileAsDir)
+
+        let dp = TestDateProvider(startingAt: Date(timeIntervalSince1970: 1_800_000_000))
+        let writer = FileRotatingWriter(
+            directory: fileAsDir, // a regular file, not a directory
+            baseName: "drop-test",
+            retentionDays: 7,
+            dateProvider: dp
+        )
+        writer.append("line1\n")
+        writer.append("line2\n")
+        writer.append("line3\n")
+
+        // Wait for serial queue to drain.
+        XCTAssertEqual(
+            writer.droppedLinesSnapshot(), 3,
+            "WR-01: unwritable directory must drop lines and count them"
+        )
+    }
+
     func test_deletesBeyondSeven() throws {
         // Seed 10 files with past dates, then write one log line → GC should leave ≤7.
         let now = Date(timeIntervalSince1970: 1_800_000_000)

@@ -1,8 +1,15 @@
 import Foundation
+import os
 
 /// Serial writer with lazy rotation at local-calendar day boundary.
 /// Per D-18: rotate daily at local midnight; retain last 7 days.
 /// Per RESEARCH Q3 line 491: lazy on first post-midnight write (no timer thread).
+///
+/// WR-01 (OBS-06): every write is fallible (disk full, FD evicted,
+/// permission revoked mid-session). Rather than silently drop with `try?`,
+/// the writer counts dropped lines per rotation window and emits the count
+/// to `os.Logger` at each rotation boundary, so failures are observable
+/// even when the file log is unavailable.
 final class FileRotatingWriter: @unchecked Sendable {
     private let directory: URL
     private let baseName: String
@@ -11,6 +18,21 @@ final class FileRotatingWriter: @unchecked Sendable {
     private let queue: DispatchQueue
     private var currentDayString: String?
     private var currentHandle: FileHandle?
+
+    /// WR-01: tracks lines dropped since the last rotation (serial queue —
+    /// only touched from `queue.async` blocks). Emitted via `os.Logger` and
+    /// reset to zero on each rotation so the signal doesn't grow unbounded.
+    private var droppedLinesThisWindow: UInt64 = 0
+    /// Guard against spamming os.Logger: emit the open-failure fault at
+    /// most once per rotation window.
+    private var warnedAboutOpenFailureThisWindow: Bool = false
+    /// os.Logger for out-of-band fault reporting when the file log itself
+    /// is the thing that's broken. Uses subsystem/category matching
+    /// `OSLogHandler` so Console.app filters line up.
+    private let faultLogger = os.Logger(
+        subsystem: "com.koftwentytwo.jarvis",
+        category: "logging.file"
+    )
 
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -34,14 +56,51 @@ final class FileRotatingWriter: @unchecked Sendable {
         queue.async {
             self.rotateIfNeeded()
             guard let handle = self.currentHandle,
-                  let data = line.data(using: .utf8) else { return }
-            try? handle.write(contentsOf: data)
+                  let data = line.data(using: .utf8) else {
+                self.droppedLinesThisWindow &+= 1
+                if !self.warnedAboutOpenFailureThisWindow {
+                    self.faultLogger.fault(
+                        "file log handle unavailable; dropping line for base=\(self.baseName, privacy: .public)"
+                    )
+                    self.warnedAboutOpenFailureThisWindow = true
+                }
+                return
+            }
+            do {
+                try handle.write(contentsOf: data)
+            } catch {
+                self.droppedLinesThisWindow &+= 1
+                if !self.warnedAboutOpenFailureThisWindow {
+                    self.faultLogger.fault(
+                        "file log write failed; dropping line for base=\(self.baseName, privacy: .public)"
+                    )
+                    self.warnedAboutOpenFailureThisWindow = true
+                }
+            }
         }
+    }
+
+    /// Test-only accessor for the dropped-lines counter. Dispatches through
+    /// the serial queue to avoid a TSan race on the test side.
+    internal func droppedLinesSnapshot() -> UInt64 {
+        queue.sync { droppedLinesThisWindow }
     }
 
     private func rotateIfNeeded() {
         let today = dateFormatter.string(from: dateProvider.now())
         if today == currentDayString { return }
+
+        // WR-01: at a rotation boundary, emit the drop count for the
+        // just-closed window (if non-zero) so ops can see data loss even
+        // when the file log itself was the failure source.
+        if droppedLinesThisWindow > 0 {
+            faultLogger.error(
+                "file log rotated with \(self.droppedLinesThisWindow, privacy: .public) dropped line(s) for base=\(self.baseName, privacy: .public)"
+            )
+            droppedLinesThisWindow = 0
+        }
+        warnedAboutOpenFailureThisWindow = false
+
         try? currentHandle?.close()
         currentHandle = nil
 
