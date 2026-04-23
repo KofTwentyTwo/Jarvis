@@ -5,4 +5,5 @@ public enum JarvisLogChannel: String, Sendable, CaseIterable {
     case tools
     case ui
     case system
+    case bus
 }

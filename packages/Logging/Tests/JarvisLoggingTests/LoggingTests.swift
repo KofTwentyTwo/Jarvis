@@ -3,8 +3,10 @@ import Logging
 @testable import JarvisLogging
 
 final class LoggingTests: XCTestCase {
-    func test_fourChannelsAreDefined() {
-        let expected: Set<String> = ["agent", "tools", "ui", "system"]
+    func test_fiveChannelsAreDefined() {
+        // `bus` was added in Phase 2 for bus-specific logging (RESEARCH §OBS-06
+        // open question #7). Keep this set in sync with `JarvisLogChannel`.
+        let expected: Set<String> = ["agent", "tools", "ui", "system", "bus"]
         let actual = Set(JarvisLogChannel.allCases.map(\.rawValue))
         XCTAssertEqual(actual, expected)
     }
