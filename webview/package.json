@@ -1,0 +1,17 @@
+{
+  "name": "jarvis-webview-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.30.2",
+  "engines": { "node": ">=20.0.0" },
+  "scripts": {
+    "test": "pnpm -r test",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^20.0.0"
+  }
+}
