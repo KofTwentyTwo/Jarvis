@@ -34,6 +34,8 @@ packages:
     path: packages/Logging
   Shell:
     path: packages/Shell
+  Bus:
+    path: packages/Bus
 targets:
   Jarvis:
     type: application
@@ -46,6 +48,15 @@ targets:
           - "Jarvis.Debug.entitlements"
           - "Jarvis.Release.entitlements"
           - "Tests/**"
+          - "Resources/**"
+      # Blue-folder reference. The folder's NAME becomes the subdirectory
+      # inside Contents/Resources/ in the built bundle (xcodegen preserves
+      # the last path segment). Pointing this at `App/Resources/webview`
+      # makes the bundle path `Contents/Resources/webview/…`, matching
+      # `Bundle.main.url(forResource:withExtension:subdirectory:"webview")`.
+      - path: App/Resources/webview
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.koftwentytwo.jarvis
@@ -88,6 +99,8 @@ targets:
         product: JarvisLogging
       - package: Shell
         product: Shell
+      - package: Bus
+        product: Bus
     copyFiles:
       - destination: wrapper
         subpath: Contents/Helpers

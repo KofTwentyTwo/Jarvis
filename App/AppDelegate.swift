@@ -1,8 +1,10 @@
 import AppKit
+import Bus
 import Config
 import Keychain
 import JarvisLogging
 import Shell
+import WebKit
 import Logging   // swift-log — `Logger` here is `Logging.Logger`
 
 /// Abstract the Info.plist `JarvisEntitlementsVerified` read so tests can inject
@@ -55,6 +57,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var keychainStore: any KeychainStore = SystemKeychainStore()
     var hidProbe: any HIDAccessProbe = SystemHIDAccessProbe()
 
+    /// Called when the bus handshake resolves in a mismatch or timeout.
+    /// Production default terminates the app after `TCCAlertService` shows
+    /// the hard-block modal. Tests inject a recording closure instead.
+    var onHandshakeMismatch: @MainActor () -> Void = { NSApp.terminate(nil) }
+
+    /// Fires after `WebviewBridge.onHandshakeArmed`. Default is a no-op;
+    /// tests set this to observe armed transitions.
+    var onBusArmed: (@MainActor () -> Void)?
+
     // MARK: - Installed components
 
     var statusItem: NSStatusItem?
@@ -65,8 +76,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var hotkeyBinder: HotkeyBinder?
     var wizardController: OnboardingWizardController?
     var wizardState: WizardState?
+    var webviewBridge: WebviewBridge?
 
     private var systemLogger: Logger?
+    private var bridgeNavigationDelegate: BridgeNavigationDelegate?
 
     // MARK: - Launch chain
 
@@ -128,6 +141,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installMenuBar()
         installHUDPanel()
         installBannerPanel()
+
+        // 4.5 Bus wiring — construct the bridge around the HUD's WKWebView,
+        // install the WKUserScript (at document-start in JarvisBusWorld), and
+        // load bus-harness.html so the handshake kicks off. Plan 02-03.
+        installBus()
 
         // 5. Keychain fetch — missing key → banner (priority 1).
         let apiKeyStored: Bool
@@ -221,7 +239,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func toggleHUD() {
         guard let panel = hudPanel else { return }
+        // Gate on handshake armed — don't summon an unresponsive HUD.
+        // `.armed` means the bus is usable; any other state (idle, sentHello,
+        // mismatched, timedOut) gets the "hud-not-ready" banner instead of
+        // popping an empty window.
+        if let bridge = webviewBridge, bridge.handshakeState != .armed {
+            bannerCoordinator?.enqueue(BannerContent(
+                id: "hud-not-ready",
+                priority: 2,
+                title: "HUD not ready",
+                body: "The bus handshake is still completing. Try again in a moment.",
+                action: nil
+            ))
+            return
+        }
         if panel.isSummoned { panel.dismiss() } else { panel.summon() }
+    }
+
+    /// @testable seam — XCTest calls this to drive the private
+    /// `toggleHUD()` without reaching for `perform(Selector(...))`. Production
+    /// code path is through the menu-bar left-click action and hotkey binder.
+    func exposedToggleHUD() { toggleHUD() }
+
+    // MARK: - Bus wiring (Plan 02-03)
+
+    /// Constructs the `WebviewBridge` around `hudPanel.webView`, wires the
+    /// handshake callbacks (armed → `onBusArmed`; mismatch/timeout →
+    /// `TCCAlertService.presentHardBlock` + `onHandshakeMismatch`), installs
+    /// the `WKNavigationDelegate` so the handshake fires on `didFinish`, and
+    /// loads `bus-harness.html` from the app bundle. Called once during
+    /// `applicationWillFinishLaunching` after `installHUDPanel()`.
+    private func installBus() {
+        guard let panel = hudPanel else {
+            systemLogger?.error("installBus called before hudPanel exists")
+            return
+        }
+
+        // Navigation delegate: fires handshake on first didFinish.
+        let navDelegate = BridgeNavigationDelegate { [weak self] in
+            self?.webviewBridge?.startHandshake()
+        }
+        bridgeNavigationDelegate = navDelegate
+        panel.webView.navigationDelegate = navDelegate
+
+        let bridge = WebviewBridge(
+            webView: panel.webView,
+            alertPresenter: { [weak self] title, body in
+                TCCAlertService.presentHardBlock(title: title, informativeText: body)
+                self?.onHandshakeMismatch()
+            }
+        )
+        bridge.onHandshakeArmed = { [weak self] in
+            self?.systemLogger?.info("bus handshake armed — HUD ready")
+            self?.onBusArmed?()
+        }
+        // Plan 02-03 does not wire onInbound — Phase 3 attaches the
+        // HudStateCoordinator to the bridge.
+        webviewBridge = bridge
+
+        // Load the harness. Missing harness is a hard-block — without it the
+        // HUD cannot render anything and there's no recovery path.
+        guard let harnessURL = Bundle.main.url(
+            forResource: "bus-harness",
+            withExtension: "html",
+            subdirectory: "webview"
+        ) else {
+            // Under XCTest the bus-harness might be absent from the test
+            // bundle host — skip the loadFileURL step so tests can assert
+            // bridge construction without tripping the hard-block modal.
+            if AppDelegate.isRunningAsTestHost {
+                systemLogger?.warning("bus-harness.html not in test bundle — skipping loadFileURL (XCTest)")
+                return
+            }
+            systemLogger?.critical("bus-harness.html missing from bundle — cannot start HUD")
+            TCCAlertService.presentHardBlock(
+                title: "Jarvis can't start",
+                informativeText: "Bundle is missing bus-harness.html. Rebuild Jarvis from source."
+            )
+            NSApp.terminate(nil)
+            return
+        }
+        let resourcesDir = harnessURL.deletingLastPathComponent()
+        panel.webView.loadFileURL(harnessURL, allowingReadAccessTo: resourcesDir)
     }
 
     // MARK: - Wizard
@@ -339,5 +438,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("config.json")
+    }
+}
+
+// MARK: - Bridge navigation delegate
+
+/// Minimal `WKNavigationDelegate` that fires a single @MainActor closure
+/// when the first navigation completes. Used by `installBus()` to trigger
+/// `WebviewBridge.startHandshake()` once `bus-harness.html` has loaded.
+///
+/// The WKNavigationDelegate protocol method is `nonisolated`; we hop back to
+/// the main actor via `MainActor.assumeIsolated` — the same Swift 6 pattern
+/// `WebviewBridge` uses for `WKScriptMessageHandlerWithReply`.
+@MainActor
+private final class BridgeNavigationDelegate: NSObject, WKNavigationDelegate {
+    let onDidFinish: @MainActor () -> Void
+    init(onDidFinish: @escaping @MainActor () -> Void) {
+        self.onDidFinish = onDidFinish
+    }
+    nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        MainActor.assumeIsolated { onDidFinish() }
     }
 }

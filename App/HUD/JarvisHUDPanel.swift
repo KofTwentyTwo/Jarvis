@@ -18,7 +18,10 @@ import WebKit
 ///   (UI-SPEC line 590).
 @MainActor
 public final class JarvisHUDPanel: NSPanel {
-    private var webView: WKWebView!
+    /// Public so `AppDelegate` can hand this to `WebviewBridge(webView:)` without
+    /// inverting the dependency graph (App → Bus, not Bus → App). Per RESEARCH
+    /// open question #4 + Plan 02-03 `must_haves`.
+    public var webView: WKWebView!
     private let hudSize = NSSize(width: 720, height: 720)
 
     public init() {
