@@ -1,0 +1,39 @@
+:root {
+  --arc-reactor-glow: #1E88E5;
+  --bg: transparent;
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.64);
+  --card-bg: rgba(20, 24, 30, 0.72);
+  --card-border: rgba(255, 255, 255, 0.08);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+body[data-reduce-transparency="true"] {
+  background: #101418;
+}
+
+.jarvis-hud {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.jarvis-hud__ring {
+  flex: 0 0 60vh;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
