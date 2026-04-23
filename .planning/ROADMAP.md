@@ -92,7 +92,14 @@ Plans:
   4. Tool calls surface simultaneously as (a) ring-state shift AND (b) expandable chat-panel cards with the full lifecycle: pending → running → awaiting-approval → completed/failed (HUD-07). Hidden internal events that never reach the HUD are a test failure.
   5. Streaming tokens render into the chat panel token-by-token with tool-call cards inlined in chronological order (TEXT-02); a synthetic test stream produces byte-identical rendered output to a pre-recorded fixture.
 
-**Plans**: TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 03-01-hud-state-coordinator-PLAN.md — Swift HudStateCoordinator @MainActor + precedence resolver + 3 for-await subscribers + single-writer lint (HUD-08) (Wave 1)
+- [ ] 03-02-webview-r3f-scaffold-PLAN.md — webview/packages/hud with React 19.2+R3F 9.6+drei 10.7.6+three r184+Zustand 5+Vite 8; useJarvisStore + bus dispatcher (HUD-01) (Wave 1, parallel with 03-01)
+- [ ] 03-03-particle-ring-shader-PLAN.md — RingMesh.tsx + GLSL shaders + 7-state uniforms + Reduce Motion fallbacks (HUD-02) (Wave 2)
+- [ ] 03-04-chat-panel-streaming-PLAN.md — Chat panel components + tool-call lifecycle cards + streaming token rendering + 20-msg replay fixture (HUD-07, TEXT-02) (Wave 2, parallel with 03-03)
+- [ ] 03-05-bundle-integration-PLAN.md — build-webview.sh + AppDelegate wiring + index.html load + single-writer lint activation + end-to-end smoke (HUD-01, HUD-08) (Wave 3)
 
 **UI hint**: yes
 
