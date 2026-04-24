@@ -3,10 +3,12 @@ import Logging
 @testable import JarvisLogging
 
 final class LoggingTests: XCTestCase {
-    func test_fiveChannelsAreDefined() {
-        // `bus` was added in Phase 2 for bus-specific logging (RESEARCH §OBS-06
-        // open question #7). Keep this set in sync with `JarvisLogChannel`.
-        let expected: Set<String> = ["agent", "tools", "ui", "system", "bus"]
+    func test_sevenChannelsAreDefined() {
+        // `bus` was added in Phase 2 (RESEARCH §OBS-06 open question #7).
+        // `replay` + `devoverlay` were added in Plan 04-03 for the on-disk
+        // replay log + DevOverlay surfaces (Plan 04-05). Keep this set in
+        // sync with `JarvisLogChannel`.
+        let expected: Set<String> = ["agent", "tools", "ui", "system", "bus", "replay", "devoverlay"]
         let actual = Set(JarvisLogChannel.allCases.map(\.rawValue))
         XCTAssertEqual(actual, expected)
     }
