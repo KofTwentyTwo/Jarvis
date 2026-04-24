@@ -8,13 +8,18 @@
 #
 # Allowlist:
 #   - packages/Bus/Sources/Bus/BusOutbound.swift   (DEFINES the case)
-#   - App/HUD/HudStateCoordinator.swift            (sole constructor)
 #   - packages/Bus/Sources/Bus/Protocol.swift      (case ref in fixtures)
+#   - App/HUD/HudStateCoordinator.swift            (sole logical writer)
+#   - App/HUD/HudStateBridge.swift                 (App→Bus rawValue bridge)
+#   - App/AppDelegate.swift                        (wiring-layer emit closure)
 #   - any file under /Tests/                       (drives the coordinator directly)
 #
-# TODO(Plan 03-05): wire this script as a pre-build phase in project.yml
-# once AppDelegate actually constructs the coordinator + bridge closure.
-# Activating it earlier would be a no-op (no caller exists yet).
+# Why AppDelegate is on the allowlist (Plan 03-05): `installBus()` constructs
+# the coordinator with an emit closure that builds `.hudState(busHudState(from:))`
+# and hands it to `WebviewBridge.send(_:)`. This is the single wiring site;
+# Phase 4 + later plans drive the coordinator via its three input AsyncStreams
+# (agent / voice / confirmation) and must NOT add new `.hudState(...)` call
+# sites anywhere else. If they do, this lint fires.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,6 +28,8 @@ cd "$REPO_ROOT"
 HITS=$(grep -rn '\.hudState(' App/ packages/ --include='*.swift' 2>/dev/null \
     | grep -v '/Tests/' \
     | grep -v 'App/HUD/HudStateCoordinator.swift' \
+    | grep -v 'App/HUD/HudStateBridge.swift' \
+    | grep -v 'App/AppDelegate.swift' \
     | grep -v 'packages/Bus/Sources/Bus/BusOutbound.swift' \
     | grep -v 'packages/Bus/Sources/Bus/Protocol.swift' \
     | grep -v '^[^:]*:[[:space:]]*//' || true)

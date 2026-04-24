@@ -78,6 +78,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var wizardState: WizardState?
     var webviewBridge: WebviewBridge?
 
+    /// HUD-08 single-writer coordinator (Plan 03-01 author; Plan 03-05 wiring).
+    /// Emit closure bridges App.HudState → Bus.HudState and calls
+    /// `webviewBridge.send(.hudState(...))` on MainActor. `markReady()` fires
+    /// from `onHandshakeArmed` so the HUD promotes `.booting` → `.idle` as
+    /// soon as the webview handshake completes.
+    var hudStateCoordinator: HudStateCoordinator?
+
+    /// Dormant producer-stream continuations held by the delegate so the
+    /// coordinator's three for-await Tasks don't drain immediately. Swift 6
+    /// terminates `for await` when the matching continuation deinits; keeping
+    /// them alive on the delegate preserves the subscriber tasks until
+    /// Phase 4 (agent) / Phase 5 (confirmation) / Phase 6 (voice) replace
+    /// them with real producers.
+    var dormantAgentContinuation: AsyncStream<AgentHudIntent>.Continuation?
+    var dormantVoiceContinuation: AsyncStream<VoiceHudIntent>.Continuation?
+    var dormantConfirmContinuation: AsyncStream<ConfirmHudIntent>.Continuation?
+
+    /// Plan 03-05 test seam. Default production value is `"index"` (the R3F
+    /// bundle entry). `installBus()` assigns this once when it resolves the
+    /// Bundle.main URL. Tests assert the post-install value to confirm the
+    /// handler loaded the R3F bundle, not 02-03's `bus-harness.html`.
+    var webviewEntryFilename: String = "index"
+
     private var systemLogger: Logger?
     private var bridgeNavigationDelegate: BridgeNavigationDelegate?
 
@@ -143,8 +166,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installBannerPanel()
 
         // 4.5 Bus wiring — construct the bridge around the HUD's WKWebView,
-        // install the WKUserScript (at document-start in JarvisBusWorld), and
-        // load bus-harness.html so the handshake kicks off. Plan 02-03.
+        // install the WKUserScript (at document-start in JarvisBusWorld),
+        // construct + start the HUD-08 single-writer HudStateCoordinator, and
+        // load the R3F bundle's index.html so the handshake kicks off.
+        // Plan 02-03 (bridge) + Plan 03-05 (coordinator + index.html load).
         installBus()
 
         // 5. Keychain fetch — missing key → banner (priority 1).
@@ -264,11 +289,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Bus wiring (Plan 02-03)
 
     /// Constructs the `WebviewBridge` around `hudPanel.webView`, wires the
-    /// handshake callbacks (armed → `onBusArmed`; mismatch/timeout →
-    /// `TCCAlertService.presentHardBlock` + `onHandshakeMismatch`), installs
-    /// the `WKNavigationDelegate` so the handshake fires on `didFinish`, and
-    /// loads `bus-harness.html` from the app bundle. Called once during
-    /// `applicationWillFinishLaunching` after `installHUDPanel()`.
+    /// handshake callbacks (armed → `coordinator.markReady()` + `onBusArmed`;
+    /// mismatch/timeout → `TCCAlertService.presentHardBlock` +
+    /// `onHandshakeMismatch`), installs the `WKNavigationDelegate` so the
+    /// handshake fires on `didFinish`, constructs + starts the HUD-08
+    /// `HudStateCoordinator` with three dormant producer streams (Phase 4/5/6
+    /// replace them), and loads the R3F bundle's `index.html` from the app
+    /// bundle. Called once during `applicationWillFinishLaunching` after
+    /// `installHUDPanel()`.
+    ///
+    /// Plan 03-05 replaces 02-03's `bus-harness.html` load target with
+    /// `index.html` (same `webview/` subdirectory, different entry). The
+    /// bus-harness stays in the bundle for the 02-04 parity script and as a
+    /// dev-debugging fallback.
     private func installBus() {
         guard let panel = hudPanel else {
             systemLogger?.error("installBus called before hudPanel exists")
@@ -289,38 +322,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.onHandshakeMismatch()
             }
         )
-        bridge.onHandshakeArmed = { [weak self] in
-            self?.systemLogger?.info("bus handshake armed — HUD ready")
-            self?.onBusArmed?()
-        }
-        // Plan 02-03 does not wire onInbound — Phase 3 attaches the
-        // HudStateCoordinator to the bridge.
         webviewBridge = bridge
 
-        // Load the harness. Missing harness is a hard-block — without it the
-        // HUD cannot render anything and there's no recovery path.
-        guard let harnessURL = Bundle.main.url(
-            forResource: "bus-harness",
+        // HUD-08 coordinator: single Swift-side writer of HudState. The emit
+        // closure bridges App.HudState → Bus.HudState (rawValue round-trip)
+        // and dispatches to the webview bridge on the MainActor. `[weak
+        // bridge]` avoids a retain cycle with `self` via the bridge.
+        let coordinator = HudStateCoordinator(emit: { [weak bridge] appState in
+            guard let bridge else { return }
+            Task { @MainActor in
+                try? await bridge.send(.hudState(busHudState(from: appState)))
+            }
+        })
+
+        // Dormant producer streams. Phase 4 replaces `agentStream` with the
+        // orchestrator's intent emitter; Phase 5 replaces `confirmStream`
+        // with the ConfirmationBroker; Phase 6 replaces `voiceStream` with
+        // the VoiceController. The continuations are retained on self so the
+        // coordinator's subscriber tasks stay live (see property docs).
+        let (agentStream, agentCont) = AsyncStream<AgentHudIntent>.makeStream()
+        let (voiceStream, voiceCont) = AsyncStream<VoiceHudIntent>.makeStream()
+        let (confirmStream, confirmCont) = AsyncStream<ConfirmHudIntent>.makeStream()
+        dormantAgentContinuation = agentCont
+        dormantVoiceContinuation = voiceCont
+        dormantConfirmContinuation = confirmCont
+        coordinator.start(agent: agentStream, voice: voiceStream, confirmation: confirmStream)
+        hudStateCoordinator = coordinator
+
+        bridge.onHandshakeArmed = { [weak self] in
+            self?.systemLogger?.info("bus handshake armed — HUD ready")
+            // Promote the HUD off `.booting` as soon as the webview is
+            // responsive. Without markReady(), the coordinator stays pinned
+            // at `.booting` by the RESEARCH Open Q #4 boot gate.
+            self?.hudStateCoordinator?.markReady()
+            self?.onBusArmed?()
+        }
+
+        // Load the R3F bundle. Missing index.html is a hard-block — without
+        // it the HUD cannot render anything and there's no recovery path.
+        webviewEntryFilename = "index"
+        guard let entryURL = Bundle.main.url(
+            forResource: webviewEntryFilename,
             withExtension: "html",
             subdirectory: "webview"
         ) else {
-            // Under XCTest the bus-harness might be absent from the test
-            // bundle host — skip the loadFileURL step so tests can assert
-            // bridge construction without tripping the hard-block modal.
+            // Under XCTest the bundled resources may be absent from the test
+            // host — skip the loadFileURL step so tests can assert bridge +
+            // coordinator construction without tripping the hard-block modal
+            // (02-03 deviation #5 pattern, preserved).
             if AppDelegate.isRunningAsTestHost {
-                systemLogger?.warning("bus-harness.html not in test bundle — skipping loadFileURL (XCTest)")
+                systemLogger?.warning(
+                    "\(webviewEntryFilename).html not in test bundle — skipping loadFileURL (XCTest)"
+                )
                 return
             }
-            systemLogger?.critical("bus-harness.html missing from bundle — cannot start HUD")
+            systemLogger?.critical(
+                "\(webviewEntryFilename).html missing from bundle — cannot start HUD"
+            )
             TCCAlertService.presentHardBlock(
                 title: "Jarvis can't start",
-                informativeText: "Bundle is missing bus-harness.html. Rebuild Jarvis from source."
+                informativeText:
+                    "Bundle is missing \(webviewEntryFilename).html. Rebuild Jarvis from source."
             )
             NSApp.terminate(nil)
             return
         }
-        let resourcesDir = harnessURL.deletingLastPathComponent()
-        panel.webView.loadFileURL(harnessURL, allowingReadAccessTo: resourcesDir)
+        let resourcesDir = entryURL.deletingLastPathComponent()
+        panel.webView.loadFileURL(entryURL, allowingReadAccessTo: resourcesDir)
     }
 
     // MARK: - Wizard
