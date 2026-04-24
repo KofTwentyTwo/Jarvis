@@ -1,0 +1,130 @@
+/* Reduce Motion fallback affordances for each HudState.
+ * CSS animations use the stock `prefers-reduced-motion` @media as
+ * defense-in-depth — even if the bus `a11y` message is delayed, macOS's
+ * OS-level Reduce Motion setting still wins via WKWebView's CSS support. */
+
+:root {
+  --arc-reactor-glow: #1e88e5;
+  --hud-fallback-amber: #f59e0b;
+}
+
+.hud-fallback__three-dots {
+  width: 48px;
+  height: 12px;
+  display: flex;
+  gap: 8px;
+  margin: 16px auto;
+  justify-content: center;
+}
+
+.hud-fallback__three-dots::before,
+.hud-fallback__three-dots::after,
+.hud-fallback__three-dots > span {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--arc-reactor-glow);
+  border-radius: 50%;
+  opacity: 0.3;
+  animation: hud-dot-pulse 1.5s ease-in-out infinite;
+  display: block;
+}
+
+.hud-fallback__three-dots::after {
+  animation-delay: 0.5s;
+}
+
+.hud-fallback__three-dots > span {
+  animation-delay: 0.25s;
+}
+
+.hud-fallback__three-dots--warm::before,
+.hud-fallback__three-dots--warm::after,
+.hud-fallback__three-dots--warm > span {
+  background: var(--hud-fallback-amber);
+}
+
+@keyframes hud-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.hud-fallback__pulse-dot {
+  width: 16px;
+  height: 16px;
+  margin: 16px auto;
+  background: var(--arc-reactor-glow);
+  border-radius: 50%;
+  animation: hud-pulse-blink 1.25s ease-in-out infinite;
+}
+
+@keyframes hud-pulse-blink {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+}
+
+.hud-fallback__speaking-pulse {
+  width: 100%;
+  height: 8px;
+  margin: 16px 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--arc-reactor-glow),
+    transparent
+  );
+  opacity: 0.5;
+  animation: hud-speak-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes hud-speak-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.hud-fallback__corner-dot {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 12px;
+  height: 12px;
+  background: var(--hud-fallback-amber);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--hud-fallback-amber);
+}
+
+.hud-fallback__single-dot {
+  width: 8px;
+  height: 8px;
+  margin: 16px auto;
+  background: var(--arc-reactor-glow);
+  border-radius: 50%;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-fallback__three-dots > *,
+  .hud-fallback__three-dots::before,
+  .hud-fallback__three-dots::after,
+  .hud-fallback__pulse-dot,
+  .hud-fallback__speaking-pulse {
+    animation: none !important;
+  }
+}

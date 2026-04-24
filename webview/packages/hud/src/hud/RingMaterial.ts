@@ -31,6 +31,13 @@ export const RingMaterial = shaderMaterial(
   fragmentShader,
 )
 
+/**
+ * Instance type of the shaderMaterial — a THREE.ShaderMaterial with the
+ * uniform fields declared above hoisted as typed properties. Used as the
+ * ref type inside RingMesh so `matRef.current.uTime = ...` is type-safe.
+ */
+export type RingMaterialImpl = InstanceType<typeof RingMaterial>
+
 extend({ RingMaterial })
 
 declare module '@react-three/fiber' {
