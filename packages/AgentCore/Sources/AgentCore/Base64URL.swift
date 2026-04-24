@@ -3,12 +3,11 @@ import Foundation
 /// Base64URL encoding helper.
 ///
 /// Standard base64 alphabet with `+→-`, `/→_`, and trailing `=` stripped.
-/// Used in Plan 04-04 for `turnNonce` envelope wrapping (SEC-06). Lives
-/// here so AgentCore doesn't need a separate utility module; marked
-/// `internal` so it's only visible inside `AnthropicProvider` (tests
-/// reach in via `@testable import`).
+/// Used in Plan 04-04 for `turnNonce` envelope wrapping (SEC-06). Lives in
+/// AgentCore so both `TurnNonce` (here) and `AnthropicProvider` (cache key
+/// hashing) share one encoder. Promoted from internal to public on 04-04.
 extension Data {
-    func base64URLEncodedString() -> String {
+    public func base64URLEncodedString() -> String {
         var s = self.base64EncodedString()
         s = s.replacingOccurrences(of: "+", with: "-")
         s = s.replacingOccurrences(of: "/", with: "_")
