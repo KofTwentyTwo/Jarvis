@@ -126,6 +126,16 @@ targets:
           "${SRCROOT}/scripts/check-no-evaluate-javascript.sh"
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
+      - name: Check single-writer HUD state (HUD-08)
+        script: |
+          "${SRCROOT}/scripts/check-single-writer-hudstate.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+      - name: Build webview bundle
+        script: |
+          "${SRCROOT}/scripts/build-webview.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
     copyFiles:
       - destination: wrapper
         subpath: Contents/Helpers

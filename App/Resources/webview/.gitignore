@@ -1,0 +1,8 @@
+# Hashed asset chunks are regenerated on every build by
+# scripts/build-webview.sh. Only index.html (and bus-harness.html, which is
+# separately pinned by check-bus-harness-parity.sh) is source-committed.
+#
+# Rationale: committing 1+ MB of three.js / R3F / React chunks would churn
+# the repo on every dependency bump. The pre-build script rebuilds them from
+# webview/packages/hud/ on each xcodebuild invocation.
+assets/
