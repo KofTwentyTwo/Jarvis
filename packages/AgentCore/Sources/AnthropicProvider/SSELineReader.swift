@@ -20,12 +20,15 @@ struct SSEFrame: Sendable, Equatable {
 /// (so the SSE decoder can still see the in-flight tool-use buffer for
 /// `partialToolUseAtDisconnect` semantics).
 struct SSELineReader<Bytes: AsyncSequence & Sendable>: Sendable
-where Bytes.Element == UInt8, Bytes.AsyncIterator: Sendable {
+where Bytes.Element == UInt8 {
     let bytes: Bytes
 
     /// Yield frames as they're assembled. Throws if the underlying byte
     /// sequence throws.
     func frames() -> AsyncThrowingStream<SSEFrame, Error> {
+        // The iterator is created and consumed inside the launched Task —
+        // no cross-actor sharing — so we don't need `Bytes.AsyncIterator: Sendable`.
+        // `@unchecked Sendable` would be wrong here; we just don't constrain it.
         AsyncThrowingStream<SSEFrame, Error> { continuation in
             let task = Task {
                 do {
