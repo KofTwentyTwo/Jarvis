@@ -15,6 +15,10 @@ public enum OrchestratorEvent: Sendable {
     case tokenDelta(turnId: TurnID, text: String)
     case thinkingDelta(turnId: TurnID, text: String)
     case toolCardUpdate(ToolCardUpdate)
+    /// Per-turn token/cache accounting. Added in Plan 04-05 so the DevOverlay
+    /// (OBS-01) can display running token counts + cache hit ratio without
+    /// reading the replay log. Carries `TurnUsage` verbatim from the provider.
+    case usage(turnId: TurnID, usage: TurnUsage)
     case turnEnd(turnId: TurnID, stopReason: StopReason)
     case error(turnId: TurnID, error: LLMProviderError)
 }

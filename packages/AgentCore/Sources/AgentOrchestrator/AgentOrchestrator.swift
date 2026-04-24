@@ -318,6 +318,11 @@ public actor AgentOrchestrator {
                         if let bytes = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]) {
                             await replayLog.record(.usage(bytes), for: currentTurnId)
                         }
+                        // Plan 04-05: surface usage to DevOverlay via
+                        // OrchestratorEvent so token counts + cache hit ratio
+                        // can be rendered without reading replay. TurnUsage
+                        // has no nonce field — SEC-06 invariant preserved.
+                        await events.send(.usage(turnId: currentTurnId, usage: u))
 
                     case .stopReason(let reason):
                         await replayLog.record(.stopReason(stopReasonString(reason)), for: currentTurnId)
