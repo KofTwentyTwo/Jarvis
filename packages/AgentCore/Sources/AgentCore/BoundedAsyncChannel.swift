@@ -24,8 +24,12 @@ public actor BoundedAsyncChannel<Element: Sendable> {
         case dropNewest
     }
 
-    public let capacity: Int
-    public let policy: Policy
+    // `nonisolated` so topology tests (Plan 04-05 AGENT-10 four-seam
+    // verification) can introspect channel configuration without hopping into
+    // the actor's isolation domain. Both are let-constants set at init — no
+    // mutation to guard.
+    public nonisolated let capacity: Int
+    public nonisolated let policy: Policy
 
     private var buffer: [Element] = []
     private var pendingSends: [CheckedContinuation<Void, Never>] = []
