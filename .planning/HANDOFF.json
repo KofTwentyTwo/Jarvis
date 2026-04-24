@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-24T13:41:38Z",
+  "timestamp": "2026-04-24T14:45:00Z",
   "context": "phase",
   "phase": "03",
   "phase_name": "hud",
@@ -8,7 +8,7 @@
   "plan": null,
   "task": null,
   "total_tasks": null,
-  "status": "wave_1_complete_wave_2_pending",
+  "status": "wave_2_complete_wave_3_pending",
   "completed_phases": [
     {"phase": "01", "name": "foundations", "status": "code_complete_with_human_uat", "verification": "human_needed", "human_items": 4, "plans_done": "5/5"},
     {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"}
@@ -17,13 +17,18 @@
     "phase": "03",
     "name": "hud",
     "wave_1_complete": true,
-    "plans_completed": ["03-01", "03-02"],
-    "plans_remaining": ["03-03", "03-04", "03-05"],
+    "wave_2_complete": true,
+    "wave_3_complete": false,
+    "plans_completed": ["03-01", "03-02", "03-03", "03-04"],
+    "plans_remaining": ["03-05"],
     "wave_layout": {
       "wave_1": ["03-01 HudStateCoordinator (Swift)", "03-02 webview R3F scaffold"],
       "wave_2": ["03-03 particle ring GLSL shader", "03-04 chat panel + streaming tokens"],
       "wave_3": ["03-05 bundle integration + end-to-end smoke"]
-    }
+    },
+    "wave_2_deviations": [
+      "Executed 03-03 and 03-04 sequentially (not parallel) because 03-04's App.tsx imports 03-03's LoadingFallbacks.tsx — the plans share webview/packages/hud/src/App.tsx modification and 03-04 references 03-03 outputs. depends_on frontmatter didn't capture this source-level cross-reference. No impact on correctness; total wall-clock ~30 min."
+    ]
   },
   "downstream_planned": [
     {"phase": "04", "name": "agent-core", "plans": 5, "waves": 4, "status": "planned_not_executed"}
@@ -62,17 +67,28 @@
     {"decision": "Hand-written Codable for discriminated unions (no SE-0295 synthesis)", "rationale": "SE-0295 produces wrong wire shape — {\"hudState\":{…}} vs TS-expected {\"type\":\"hudState\",…}", "phase": "02"},
     {"decision": "MainActor.assumeIsolated workaround for WKScriptMessageHandlerWithReply", "rationale": "Apple Forum 751086 / FB13774556 — load-bearing Swift 6 pattern", "phase": "02"},
     {"decision": "OutboundBatcher as actor + Task.sleep(.milliseconds(33))", "rationale": "Beats CADisplayLink (ProMotion issues), DispatchSourceTimer (retention), AsyncThrottleSequence (no clean bypass)", "phase": "02"},
+    {"decision": "drei shaderMaterial + Vite ?raw import for GLSL sources", "rationale": "One shader, 7 states via uniforms — one draw call, no material swaps. ?raw survives into built bundle (grep uColorGlow confirms).", "phase": "03", "plan": "03-03"},
+    {"decision": "useJarvisStore.getState() inside useFrame (not hook)", "rationale": "Pitfall 1 — hook re-subscription per frame kills 60 FPS. Lint grep enforces.", "phase": "03", "plan": "03-03"},
+    {"decision": "Two-path Reduce Motion defense: shader uReduceMotion + CSS @media (prefers-reduced-motion)", "rationale": "Bus a11y message may be delayed on first launch; CSS still catches. Defense-in-depth.", "phase": "03", "plan": "03-03"},
+    {"decision": "Client-side synthesis of text-part id 'turn:{id}:assistant[:n]'", "rationale": "Phase 2 BusOutbound doesn't carry text-part id; synthesize rather than extend schema (breaking). Phase 4 orchestrator will emit richer events.", "phase": "03", "plan": "03-04"},
+    {"decision": "awaitingApproval sentinel hides args in ToolCallCard even though Phase 5 MCP-04 is authoritative", "rationale": "Defense-in-depth for Pitfall 9 — webview seatbelt so a permissive renderer can't undo Swift-side substitution.", "phase": "03", "plan": "03-04"},
+    {"decision": "Non-tokenDelta event on active turn closes active text-part", "rationale": "Chronological interleaving: tool-call between tokens must produce separate text-parts, not concatenation. Test Ch1 enforces.", "phase": "03", "plan": "03-04"},
     {"decision": "Hand-rolled URLSession+SSE+NDJSON for both LLM providers", "rationale": "Anthropic SDK enum lag (D1) structural not transient — no dep", "phase": "04_planned"},
     {"decision": "Replay log hand-rolled SQLite WAL (not SQLite.swift)", "rationale": "Need load_extension for sqlite-vec in Phase 7", "phase": "04_planned"}
   ],
   "uncommitted_files": [],
-  "tree_tip": "8b9dc6d",
+  "tree_tip": "424f698",
   "tests_passing": {
     "spm_packages": {"Keychain": 6, "Config": 16, "Logging": 14, "Shell": "20+1skipped", "Bus": 47, "total": 103},
     "app_xctest": "25 compile-clean, runtime blocked by upstream (see blocker 2)",
-    "webview_vitest": {"bus": 28, "hud": 12, "total": 40},
+    "webview_vitest": {"bus": 28, "hud": 79, "total": 107},
     "self_tests": {"entitlements_fault_injection": "3/3", "bus_protocol_version": "PASS", "no_evaluateJavaScript": "PASS", "bus_harness_parity": "PASS", "hudstate_single_writer": "PASS"}
   },
-  "next_action": "Run: /gsd-execute-phase 3 --wave 2 (executes 03-03 particle ring shader + 03-04 chat panel streaming in parallel; worktree isolation; expected ~30-50 min wall-clock)",
-  "context_notes": "Autonomous run while user was driving. All 8 research docs banked. Phase 1+2 closed cleanly. Phase 3 Wave 1 merged. Phase 4 has 5 plans ready. The Xcode 26 xctest harness bug is a multi-hour rabbit hole — DO NOT re-attempt fixing it. The entitlement split + dev team split + codesign.sh re-sign all tried during P1 post-review. Empirical dead end until Apple/Xcode ship a fix. SPM tests cover all code correctness; xctest is a harness issue only. Tree is clean on develop at 8b9dc6d. No worktrees active."
+  "bundle_status": {
+    "webview_hud_main_chunk_kb": 1084.48,
+    "webview_hud_main_chunk_gzip_kb": 298.42,
+    "note": "Main chunk 8% over 1 MB soft ceiling; R3F + three.js ~60% of size. Dynamic-import split flagged for Phase 8 hardening."
+  },
+  "next_action": "Run: /gsd-execute-phase 3 --wave 3 (executes 03-05 bundle integration — scripts/build-webview.sh, AppDelegate wiring, WebviewBundleLoadTests; single plan, sequential; expected ~30-45 min wall-clock). After 03-05 merges, run /gsd-code-review 3 → /gsd-code-review-fix 3 if findings → /gsd-verify-phase 3 → close phase.",
+  "context_notes": "Wave 2 complete. 03-03 (particle ring shader) + 03-04 (chat panel + streaming) merged cleanly as sequential executions (not parallel — 03-04 imports 03-03's LoadingFallbacks). 79 vitest tests on @jarvis/hud (up from 40 at wave 1 close). Zero Swift changes, zero @jarvis/bus TS package changes. STATE.md and ROADMAP.md byte-identical to wave-1 close — orchestrator snapshotted pre-merge, confirmed post-merge. Tree clean on develop at 424f698, no worktrees active. The Xcode 26 xctest harness bug is a multi-hour rabbit hole — DO NOT re-attempt fixing. Phase 4 has 5 plans ready to execute after Phase 3 closes."
 }
