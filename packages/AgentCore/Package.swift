@@ -57,6 +57,7 @@ let package = Package(
         .testTarget(
             name: "OllamaProviderTests",
             dependencies: ["OllamaProvider", "AgentCore"],
+            resources: [.process("Fixtures")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
     ]
