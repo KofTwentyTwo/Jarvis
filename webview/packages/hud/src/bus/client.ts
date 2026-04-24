@@ -1,5 +1,6 @@
 import { installJarvisBus, type BusOutbound } from '@jarvis/bus'
 import { useJarvisStore } from '../store'
+import type { ChatEvent } from '../store/types'
 
 /**
  * Install the window.jarvisBus bridge and register an exhaustive outbound
@@ -7,10 +8,44 @@ import { useJarvisStore } from '../store'
  * uses `const _exhaustive: never = msg` with NO unsafe cast — adding a new
  * case to BusOutbound without a handler here fails `tsc --strict`.
  *
- * Plan 03-02 scaffolds this dispatcher. Plans 03-03 and 03-04 replace the
- * no-op arms (tokenDelta, toolCallStart/End, turnStarted/Ended, audioLevel)
- * with real store mutations without changing the switch's shape.
+ * Plan 03-02 scaffolded this file. Plan 03-04 wires tokenDelta / turnStarted
+ * / turnEnded / toolCallStart / toolCallEnd into real store mutations.
  */
+
+/**
+ * Parse Swift's `argsPreview` string. If it's valid JSON we surface the
+ * parsed object to the card (which will JSON.stringify it for display).
+ * Otherwise we pass the raw string through — cards fall back to a plain
+ * pre-text renderer.
+ */
+function parseArgs(raw: string): unknown {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return raw
+  }
+}
+
+/**
+ * Deterministic text-part id scheme: `turn:{turnId}:assistant` for the
+ * first part of a turn; `turn:{turnId}:assistant:{n+1}` for subsequent
+ * parts after a tool-call interruption (plan chronology rule Ch1).
+ *
+ * Counting is based on how many text-parts already exist for this turn so
+ * replays converge to the same id (idempotency test I1).
+ */
+function nextTextPartId(
+  turnId: string,
+  chatEvents: readonly ChatEvent[],
+): string {
+  const existing = chatEvents.filter(
+    (e) => e.kind === 'text' && e.turnId === turnId,
+  ).length
+  return existing === 0
+    ? `turn:${turnId}:assistant`
+    : `turn:${turnId}:assistant:${existing + 1}`
+}
+
 export function attachBus(): void {
   installJarvisBus({
     onDecodeError: (e, raw) => {
@@ -19,30 +54,81 @@ export function attachBus(): void {
     },
   })
   window.jarvisBus.onOutbound((msg: BusOutbound) => {
+    const store = useJarvisStore.getState()
     switch (msg.type) {
       case 'hello':
         // Handled by the bridge's auto-ack prior to handler registration.
         break
       case 'hudState':
-        useJarvisStore.getState().setHudState(msg.state)
-        break
-      case 'tokenDelta':
-        // Plan 03-04 wires appendTokenToLastText.
-        break
-      case 'audioLevel':
-        // Plan 03-03 may wire an audio-reactive uniform; ignore for now.
-        break
-      case 'toolCallStart':
-        // Plan 03-04 wires upsertToolCall.
-        break
-      case 'toolCallEnd':
-        // Plan 03-04 wires upsertToolCall.
+        store.setHudState(msg.state)
         break
       case 'turnStarted':
-        // Plan 03-04 may push a delimiter event.
+        store.beginTurn(msg.id)
         break
       case 'turnEnded':
-        // Plan 03-04.
+        store.endTurn()
+        break
+      case 'tokenDelta': {
+        const turnId = store.currentTurnId
+        if (!turnId) {
+          // No active turn — ignore but surface to ops.
+          // eslint-disable-next-line no-console
+          console.warn('[bus] tokenDelta without active turn:', msg.text)
+          break
+        }
+        let id = store.activeTextPartId
+        if (!id) {
+          id = nextTextPartId(turnId, store.chatEvents)
+          store.pushEvent({
+            kind: 'text',
+            id,
+            text: '',
+            role: 'assistant',
+            turnId,
+          })
+          useJarvisStore.setState({ activeTextPartId: id })
+        }
+        store.appendTokenToLastText(id, msg.text)
+        break
+      }
+      case 'toolCallStart': {
+        const turnId = store.currentTurnId ?? 'untracked'
+        const isApproval = msg.argsPreview === '{"awaitingApproval":true}'
+        store.upsertToolCall(msg.id, {
+          name: msg.name,
+          args: parseArgs(msg.argsPreview),
+          status: isApproval ? 'awaiting-approval' : 'running',
+          turnId,
+        })
+        // Any non-tokenDelta event on the active turn closes the open
+        // text-part so the next tokenDelta opens a chronologically correct
+        // new part (plan Ch1 rule).
+        useJarvisStore.setState({ activeTextPartId: null })
+        break
+      }
+      case 'toolCallEnd': {
+        const existing = store.chatEvents.find(
+          (e) => e.kind === 'tool-call' && e.id === msg.id,
+        )
+        if (!existing || existing.kind !== 'tool-call') {
+          // eslint-disable-next-line no-console
+          console.warn('[bus] toolCallEnd for unknown id:', msg.id)
+          break
+        }
+        store.upsertToolCall(msg.id, {
+          status: msg.ok ? 'completed' : 'failed',
+          // Use undefined to clear the opposite field; the store action
+          // only assigns defined patch fields, so pass explicit values.
+          ...(msg.ok
+            ? { result: msg.previewOrError }
+            : { error: msg.previewOrError }),
+        })
+        useJarvisStore.setState({ activeTextPartId: null })
+        break
+      }
+      case 'audioLevel':
+        // Plan 03-03's ring shader uses a synthetic sine; Phase 6 binds this
+        // to the real mic RMS. Intentional no-op for P3.
         break
       default: {
         const _exhaustive: never = msg

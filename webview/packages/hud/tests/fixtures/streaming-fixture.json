@@ -1,0 +1,22 @@
+[
+  {"type":"turnStarted","id":"550e8400-e29b-41d4-a716-446655440001"},
+  {"type":"tokenDelta","text":"Hello"},
+  {"type":"tokenDelta","text":", "},
+  {"type":"tokenDelta","text":"let "},
+  {"type":"tokenDelta","text":"me "},
+  {"type":"tokenDelta","text":"check "},
+  {"type":"tokenDelta","text":"the "},
+  {"type":"tokenDelta","text":"time "},
+  {"type":"tokenDelta","text":"for "},
+  {"type":"tokenDelta","text":"you"},
+  {"type":"tokenDelta","text":". "},
+  {"type":"tokenDelta","text":"One"},
+  {"type":"tokenDelta","text":" moment"},
+  {"type":"toolCallStart","id":"6ba7b810-9dad-11d1-80b4-00c04fd430c8","name":"get_time","argsPreview":"{}"},
+  {"type":"toolCallEnd","id":"6ba7b810-9dad-11d1-80b4-00c04fd430c8","ok":true,"previewOrError":"2026-04-22T12:00:00Z"},
+  {"type":"tokenDelta","text":"It's "},
+  {"type":"tokenDelta","text":"noon"},
+  {"type":"tokenDelta","text":" on "},
+  {"type":"tokenDelta","text":"Wednesday"},
+  {"type":"turnEnded","id":"550e8400-e29b-41d4-a716-446655440001","terminator":"completed"}
+]

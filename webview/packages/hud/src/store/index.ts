@@ -12,6 +12,20 @@ import type {
 export interface JarvisState {
   hudState: HudState
   chatEvents: ChatEvent[]
+  /**
+   * Plan 03-04: tracks the Swift-reported turn id between turnStarted and
+   * turnEnded. Null when no turn is active. The bus dispatcher uses this to
+   * tag synthesized text-parts with their owning turn and to guard
+   * tokenDelta messages that arrive outside a turn.
+   */
+  currentTurnId: string | null
+  /**
+   * Plan 03-04: id of the currently-open assistant text-part, or null if no
+   * text-part is open on the current turn. A non-tokenDelta event (tool-call
+   * start/end) nulls this so the next tokenDelta opens a fresh, chronologically
+   * correct text-part after the interruption.
+   */
+  activeTextPartId: string | null
   a11y: A11y
   theme: Theme
   connection: Connection
@@ -29,6 +43,8 @@ export interface JarvisState {
       turnId?: string
     },
   ) => void
+  beginTurn: (id: string) => void
+  endTurn: () => void
   setA11y: (patch: Partial<A11y>) => void
   setTheme: (patch: Partial<Theme>) => void
   setConnection: (c: Connection) => void
@@ -38,6 +54,8 @@ export const useJarvisStore = create<JarvisState>()(
   subscribeWithSelector((set) => ({
     hudState: 'booting',
     chatEvents: [],
+    currentTurnId: null,
+    activeTextPartId: null,
     a11y: { reduceMotion: false, reduceTransparency: false },
     theme: { arcReactorGlow: '#1E88E5' },
     connection: 'booting',
@@ -92,6 +110,10 @@ export const useJarvisStore = create<JarvisState>()(
         }
         return { chatEvents: next }
       }),
+
+    beginTurn: (id) => set({ currentTurnId: id, activeTextPartId: null }),
+
+    endTurn: () => set({ currentTurnId: null, activeTextPartId: null }),
 
     setA11y: (patch) =>
       set((state) => ({ a11y: { ...state.a11y, ...patch } })),
