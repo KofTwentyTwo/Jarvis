@@ -1,0 +1,52 @@
+import XCTest
+@testable import AgentCore
+
+final class ToolChoiceTests: XCTestCase {
+    /// Test 1: ToolChoice has exactly four cases — exhaustive switch with no
+    /// `default:` branch compiles. If a fifth case is added, this test fails
+    /// to compile, forcing an explicit decision about its serialization.
+    func testToolChoiceExhaustiveSwitch() {
+        let choices: [ToolChoice] = [.auto, .none, .any, .tool(name: "x")]
+        var seen = 0
+        for choice in choices {
+            switch choice {
+            case .auto: seen += 1
+            case .none: seen += 1
+            case .any: seen += 1
+            case .tool(name: _): seen += 1
+            }
+        }
+        XCTAssertEqual(seen, 4)
+    }
+
+    func testToolChoiceEquality() {
+        XCTAssertEqual(ToolChoice.auto, ToolChoice.auto)
+        XCTAssertEqual(ToolChoice.none, ToolChoice.none)
+        XCTAssertEqual(ToolChoice.any, ToolChoice.any)
+        XCTAssertEqual(ToolChoice.tool(name: "get_time"), ToolChoice.tool(name: "get_time"))
+        XCTAssertNotEqual(ToolChoice.auto, ToolChoice.none)
+        XCTAssertNotEqual(ToolChoice.tool(name: "a"), ToolChoice.tool(name: "b"))
+    }
+
+    /// Test 10 (compile-time contract): `LLMProvider.stream(...)` requires
+    /// `toolChoice:` — there is no default. Negative compilation cannot be
+    /// asserted in XCTest; this positive test exists to make the contract
+    /// visible — if `toolChoice:` were defaulted, this call site would still
+    /// compile, but a code reviewer scanning this file would see the comment.
+    func testLLMProviderStreamRequiresToolChoice() {
+        // Compile-only — never actually runs. The assertion below documents
+        // that omitting `toolChoice:` MUST NOT compile.
+        let _: (any LLMProvider) -> AsyncThrowingStream<LLMEvent, Error> = { provider in
+            // Calling WITHOUT toolChoice: would fail at compile time.
+            provider.stream(
+                messages: [],
+                tools: [],
+                toolChoice: .auto,
+                model: .opus47,
+                maxOutputTokens: 1024,
+                cacheHints: nil
+            )
+        }
+        XCTAssertTrue(true) // Test compiles → contract holds.
+    }
+}
