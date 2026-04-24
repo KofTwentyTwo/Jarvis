@@ -1,43 +1,40 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-24T16:05:00Z",
+  "timestamp": "2026-04-24T17:55:00Z",
   "context": "phase",
-  "phase": "03",
-  "phase_name": "hud",
-  "phase_dir": ".planning/phases/03-hud",
+  "phase": "04",
+  "phase_name": "agent-core",
+  "phase_dir": ".planning/phases/04-agent-core",
   "plan": null,
   "task": null,
   "total_tasks": null,
-  "status": "wave_3_complete_phase_verify_pending",
+  "status": "phase_4_waves_1_and_2_complete_wave_3_pending",
   "completed_phases": [
     {"phase": "01", "name": "foundations", "status": "code_complete_with_human_uat", "verification": "human_needed", "human_items": 4, "plans_done": "5/5"},
-    {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"}
+    {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"},
+    {"phase": "03", "name": "hud", "status": "verified_human_needed_uat_only", "verification": "passed_with_manual_uat_pending", "human_items": 1, "plans_done": "5/5"}
   ],
   "current_phase_progress": {
-    "phase": "03",
-    "name": "hud",
+    "phase": "04",
+    "name": "agent-core",
     "wave_1_complete": true,
     "wave_2_complete": true,
-    "wave_3_complete": true,
-    "all_plans_complete": true,
-    "code_review_passed": false,
-    "phase_verified": false,
-    "plans_completed": ["03-01", "03-02", "03-03", "03-04", "03-05"],
-    "plans_remaining": [],
+    "wave_3_complete": false,
+    "wave_4_complete": false,
+    "plans_completed": ["04-01", "04-02", "04-03"],
+    "plans_remaining": ["04-04", "04-05"],
     "wave_layout": {
-      "wave_1": ["03-01 HudStateCoordinator (Swift)", "03-02 webview R3F scaffold"],
-      "wave_2": ["03-03 particle ring GLSL shader", "03-04 chat panel + streaming tokens"],
-      "wave_3": ["03-05 bundle integration + end-to-end smoke"]
+      "wave_1": ["04-01 LLMProvider protocol + AnthropicProvider"],
+      "wave_2": ["04-02 OllamaProvider", "04-03 Replay log"],
+      "wave_3": ["04-04 AgentOrchestrator"],
+      "wave_4": ["04-05 DevOverlay + TEXT-01 E2E"]
     },
     "wave_2_deviations": [
-      "Executed 03-03 and 03-04 sequentially (not parallel) because 03-04's App.tsx imports 03-03's LoadingFallbacks.tsx — the plans share webview/packages/hud/src/App.tsx modification and 03-04 references 03-03 outputs. depends_on frontmatter didn't capture this source-level cross-reference. No impact on correctness; total wall-clock ~30 min."
+      "04-02 (OllamaProvider) and 04-03 (Replay log) executed in parallel worktrees — disjoint scope (packages/AgentCore/Sources/OllamaProvider/* vs packages/Replay/* + packages/Logging/Sources/JarvisLogging/JarvisLogChannel.swift). Neither auto-FF'd this time. Orchestrator FF-merged 04-02 then cherry-picked 04-03's 4 commits onto develop to keep linear history. No conflicts."
     ],
-    "wave_3_deviations": [],
-    "requirements_closed": ["HUD-01", "HUD-02", "HUD-07", "HUD-08", "TEXT-02"]
+    "auto_merge_observation": "Wave 1 (Phase 3 03-05) and the Phase 4 04-01 single-plan worktrees auto-FF-merged on Agent-tool exit. Wave 2 of Phase 4 (parallel 04-02 + 04-03) did NOT auto-merge — both worktree branches stayed at their executor-final SHA. Either the auto-FF heuristic gates on single-worktree-active, or it's non-deterministic. Either way the orchestrator's manual merge logic handled it cleanly."
   },
-  "downstream_planned": [
-    {"phase": "04", "name": "agent-core", "plans": 5, "waves": 4, "status": "planned_not_executed"}
-  ],
+  "downstream_planned": [],
   "downstream_research_only": [
     {"phase": "05", "name": "mcp", "research_lines": 1069},
     {"phase": "06", "name": "voice", "research_lines": 740},
@@ -48,65 +45,53 @@
     {
       "description": "Apple Developer Portal does not yet expose com.apple.developer.speech-recognition-assets capability",
       "type": "external",
-      "workaround": "Entitlement is present in signed Release bundle; empirical probe test verifies runtime behavior",
       "from_phase": "01"
     },
     {
-      "description": "Xcode 26 xctest harness Team ID bug on ad-hoc signed Debug builds — xcodebuild test -scheme Jarvis fails with Runningboard error 5 / Launchd spawn failed",
+      "description": "Xcode 26 xctest harness Team ID bug on ad-hoc signed Debug builds",
       "type": "external",
-      "workaround": "SPM package tests + structural/file-read XCTest cases cover all code paths. 03-05 adds scripts/smoke-test-hud.sh which validates the built .app bundle shape as the runtime smoke substitute. Do NOT attempt to fix — multiple workarounds tried (HR off, runtime flag strip, dylib strip, dev team move) all hit the same dyld Team-ID check on Jarvis.debug.dylib. Upstream Apple / Xcode 26.4 — wait for Xcode 26.5.",
+      "workaround": "SPM tests via `swift test --package-path` work fine (now 213 passing). The xctest harness is the broken thing — DO NOT re-attempt fixing.",
       "from_phase": "01",
       "diagnosis_doc": ".planning/debug/xctest-launch-runningboard-error-5.md"
     }
   ],
   "human_actions_pending": [
-    {"action": "Enable SpeechAnalyzer Asset Download capability on App ID com.koftwentytwo.jarvis at developer.apple.com when Apple exposes it", "context": "Phase 01 UAT item 2", "blocking": false},
-    {"action": "Cold-launch Release archive on pristine Apple Silicon Mac to validate SC-1", "context": "Phase 01 UAT item 3, no blocker for Phase 2+", "blocking": false},
-    {"action": "When Xcode 26.5 ships, retry JarvisAppTests xctest launch — currently blocked by dyld Team-ID rejection of debug.dylib", "context": "Phase 01 UAT item 4 / Phase 03-01 + 03-05 noted same", "blocking": false},
-    {"action": "Manual HUD UAT — cold-launch Jarvis.app from DerivedData, summon via menu-bar, observe ring .booting → .idle transition in ~/Library/Logs/Jarvis/system.log (see 03-05 SUMMARY §Manual UAT Checklist)", "context": "Phase 3 runtime validation substitute for xctest launch", "blocking": false},
-    {"action": "Register run_applescript helper in Phase 5 App ID (separate from main)", "context": "Future Phase 5 blocker — not current", "blocking": false}
+    {"action": "Manual HUD UAT — cold-launch Jarvis.app from DerivedData, summon via menu-bar, observe ring .booting → .idle. Will exercise the H-02 attach-to-existing-window.jarvisBus path.", "context": "Phase 3 verification flagged human_needed for this UAT only. Not blocking Phase 4.", "blocking": false},
+    {"action": "Cold-launch Release archive on pristine Apple Silicon Mac to validate SC-1", "context": "Phase 01 UAT item 3", "blocking": false},
+    {"action": "When Xcode 26.5 ships, retry JarvisAppTests xctest launch", "context": "Phase 01 UAT item 4", "blocking": false},
+    {"action": "Enable SpeechAnalyzer Asset Download capability when Apple exposes it", "context": "Phase 01 UAT item 2", "blocking": false},
+    {"action": "Register run_applescript helper in Phase 5 App ID", "context": "Future Phase 5 blocker", "blocking": false}
   ],
   "decisions": [
-    {"decision": "Bundle ID com.koftwentytwo.jarvis (owner: KofTwentyTwo)", "rationale": "Owner change from com.kingsrook.jarvis during P1 Wave 4 checkpoint", "commit": "206b4aa"},
-    {"decision": "Developer ID Application cert MMLT Holdings LLC (7UC2HETAN9) installed", "rationale": "Required for Release archive signing", "phase": "01"},
-    {"decision": "Entitlements split Debug vs Release — Debug omits speech-recognition-assets", "rationale": "AMFI rejects ad-hoc signed Debug bundles carrying managed entitlements", "commit": "0517926"},
-    {"decision": "Hand-written Codable for discriminated unions (no SE-0295 synthesis)", "rationale": "SE-0295 produces wrong wire shape — {\"hudState\":{…}} vs TS-expected {\"type\":\"hudState\",…}", "phase": "02"},
-    {"decision": "MainActor.assumeIsolated workaround for WKScriptMessageHandlerWithReply", "rationale": "Apple Forum 751086 / FB13774556 — load-bearing Swift 6 pattern", "phase": "02"},
-    {"decision": "OutboundBatcher as actor + Task.sleep(.milliseconds(33))", "rationale": "Beats CADisplayLink (ProMotion issues), DispatchSourceTimer (retention), AsyncThrottleSequence (no clean bypass)", "phase": "02"},
-    {"decision": "drei shaderMaterial + Vite ?raw import for GLSL sources", "rationale": "One shader, 7 states via uniforms — one draw call, no material swaps. ?raw survives into built bundle.", "phase": "03", "plan": "03-03"},
-    {"decision": "useJarvisStore.getState() inside useFrame (not hook)", "rationale": "Pitfall 1 — hook re-subscription per frame kills 60 FPS. Lint grep enforces.", "phase": "03", "plan": "03-03"},
-    {"decision": "Two-path Reduce Motion defense: shader uReduceMotion + CSS @media (prefers-reduced-motion)", "rationale": "Bus a11y message may be delayed on first launch; CSS still catches. Defense-in-depth.", "phase": "03", "plan": "03-03"},
-    {"decision": "Client-side synthesis of text-part id 'turn:{id}:assistant[:n]'", "rationale": "Phase 2 BusOutbound doesn't carry text-part id; synthesize rather than extend schema (breaking). Phase 4 orchestrator will emit richer events.", "phase": "03", "plan": "03-04"},
-    {"decision": "awaitingApproval sentinel hides args in ToolCallCard even though Phase 5 MCP-04 is authoritative", "rationale": "Defense-in-depth for Pitfall 9 — webview seatbelt so a permissive renderer can't undo Swift-side substitution.", "phase": "03", "plan": "03-04"},
-    {"decision": "Non-tokenDelta event on active turn closes active text-part", "rationale": "Chronological interleaving: tool-call between tokens must produce separate text-parts, not concatenation. Test Ch1 enforces.", "phase": "03", "plan": "03-04"},
-    {"decision": "Commit App/Resources/webview/index.html, gitignore App/Resources/webview/assets/", "rationale": "Stable entry-point is source-of-truth-committed; hashed assets regenerate on every build via scripts/build-webview.sh. Reduces commit noise + keeps repo lean.", "phase": "03", "plan": "03-05"},
-    {"decision": "Pre-build script ordering: build-webview.sh → check-single-writer-hudstate.sh → verify-entitlements --pre-codesign → codesign.sh → verify-entitlements --post-codesign", "rationale": "Webview bundle must exist before codesign; single-writer lint runs pre-entitlement to fail fast on the canonical R1 H-A3 anti-pattern; entitlement verify bookends the signature.", "phase": "03", "plan": "03-05"},
-    {"decision": "Three dormant AsyncStream continuations retained by AppDelegate (agent/voice/confirmation)", "rationale": "Swift 6 continuation-drop would terminate the coordinator's three for-await Tasks. Retention keeps the coordinator alive. Phase 4 (agent) + Phase 5 (confirmation) + Phase 6 (voice) replace these with real producer streams.", "phase": "03", "plan": "03-05"},
-    {"decision": "3-file single-writer allowlist: HudStateCoordinator.swift + HudStateBridge.swift + AppDelegate.swift", "rationale": "AppDelegate is the wiring layer and must construct .hudState(...) via the emit closure. Phase 4+ should add no new sites. Lint still catches voice/agent/anyone-else constructing .hudState directly.", "phase": "03", "plan": "03-05"},
-    {"decision": "webviewEntryFilename internal property as test seam on AppDelegate", "rationale": "Less invasive than subclassing JarvisHUDPanel to observe the loaded URL. Property is set to 'index' in installBus(); test W6 asserts equality.", "phase": "03", "plan": "03-05"},
-    {"decision": "Hand-rolled URLSession+SSE+NDJSON for both LLM providers", "rationale": "Anthropic SDK enum lag (D1) structural not transient — no dep", "phase": "04_planned"},
-    {"decision": "Replay log hand-rolled SQLite WAL (not SQLite.swift)", "rationale": "Need load_extension for sqlite-vec in Phase 7", "phase": "04_planned"}
+    {"decision": "Hand-rolled URLSession+SSE+NDJSON for both LLM providers", "rationale": "Anthropic SDK enum lag (D1) structural; Ollama transport gotcha (tool_calls on PRECEDING chunk) requires custom parser", "phase": "04", "plan": "04-01+04-02"},
+    {"decision": "ModelID surface: Anthropic claude-opus-4-7 + Ollama qwen2.5-coder:32b only", "rationale": "RESEARCH-DELTAS D3 — Qwen3/3.5/Gemma4 tool-calling broken upstream (Ollama issues #14493, #14601, #14745, #15315)", "phase": "04", "plan": "04-02"},
+    {"decision": "ToolChoice.none → Anthropic {type:none}, Ollama omits tools array entirely", "rationale": "Cap-recovery 'one more call' must produce zero .toolUseRequested. AGENT-07 enforced.", "phase": "04", "plan": "04-01+04-02"},
+    {"decision": "Hand-rolled libsqlite3 for Replay package (no SQLite.swift dep)", "rationale": "Phase 7 needs load_extension for sqlite-vec; SQLite.swift hides that surface", "phase": "04", "plan": "04-03"},
+    {"decision": "TokenDeltaDropOldestChannel<Tag> per-element drop policy: drops oldest matching dropTag, suspends on others", "rationale": "AGENT-10 invariant — high-frequency tokenDelta must not block toolCall delivery. Load test 10000+1000 @ cap=2048 → exactly 1000 toolCall delivered, ≤2048 tokenDelta retained.", "phase": "04", "plan": "04-03"},
+    {"decision": "WAL+synchronous=NORMAL+busy_timeout=3000+foreign_keys=ON pragmas; PRAGMA wal_checkpoint(TRUNCATE) on turn_end", "rationale": "Crash-tolerant durability without per-event fsync penalty; turn-boundary-only checkpoint matches OBS-02 batching semantics", "phase": "04", "plan": "04-03"},
+    {"decision": "Phase 3 H-02 fix: attach to existing window.jarvisBus (Option B, minimal edit)", "rationale": "WKContentWorld isolation — Injection.js installs in JarvisBusWorld, default-world send() can't reach webkit.messageHandlers. Option B avoids touching Swift.", "phase": "03", "plan": "03-review-fix"}
   ],
   "uncommitted_files": [],
-  "tree_tip": "4643e14",
+  "tree_tip": "6d42fde",
   "tests_passing": {
-    "spm_packages": {"Keychain": 6, "Config": 16, "Logging": 14, "Shell": "20+1skipped", "Bus": 47, "total": 103},
-    "app_xctest": "compile-clean across all test files including new WebviewBundleLoadTests + HudStateCoordinatorBusWiringTests; runtime blocked by upstream (see blocker 2)",
-    "webview_vitest": {"bus": 28, "hud": 79, "total": 107},
+    "spm_packages": {
+      "Keychain": 6,
+      "Config": 16,
+      "Logging": 17,
+      "Shell": "20+1skipped",
+      "Bus": 47,
+      "AgentCore": 81,
+      "Replay": 25,
+      "total": 213
+    },
+    "app_xctest": "compile-clean; runtime blocked by upstream Xcode 26 harness",
+    "webview_vitest": {"bus": 33, "hud": 80, "total": 113},
     "self_tests": {"entitlements_fault_injection": "3/3", "bus_protocol_version": "PASS", "no_evaluateJavaScript": "PASS", "bus_harness_parity": "PASS", "hudstate_single_writer": "PASS"},
     "build_smoke": {
-      "xcodebuild_build_debug": "BUILD SUCCEEDED",
-      "scripts_build_webview_sh": "exit 0",
-      "scripts_check_single_writer_hudstate_sh": "exit 0",
+      "xcodebuild_build_debug": "BUILD SUCCEEDED (last verified at 0ce60f2)",
       "scripts_smoke_test_hud_sh": "PASS"
     }
   },
-  "bundle_status": {
-    "webview_hud_main_chunk_kb": 1084.48,
-    "webview_hud_main_chunk_gzip_kb": 298.42,
-    "committed_index_html_bytes": 649,
-    "note": "Main chunk 8% over 1 MB soft ceiling; R3F + three.js ~60% of size. Dynamic-import split flagged for Phase 8 hardening. assets/ gitignored; regenerated by scripts/build-webview.sh as the first preBuildScript."
-  },
-  "next_action": "Run: /gsd-code-review 3 → /gsd-code-review-fix 3 if findings → /gsd-verify-phase 3. Phase 3 is code-complete (5/5 plans merged, all 5 REQ-IDs with code+test+structural coverage). Phase 4 (Agent Core) has 5 plans ready to execute after Phase 3 closes.",
-  "context_notes": "Wave 3 complete. 03-05 (bundle integration) merged via Agent-tool worktree auto-FF (unlike waves 1/2 which required manual orchestrator merge). 4 commits: a9a1b86 build-webview.sh + project.yml, cabc272 AppDelegate + HudStateCoordinator wiring + W1-W6/B1-B3 tests, b7255c5 smoke-test-hud.sh, 4643e14 SUMMARY. xcodebuild build Debug → BUILD SUCCEEDED. smoke-test-hud.sh PASS. bus-harness.html preserved for 02-04 parity script. Single-writer lint allowlist is now 3 files {Coordinator, Bridge, AppDelegate}. STATE.md and ROADMAP.md byte-identical to pre-phase-3 snapshots — orchestrator snapshotted each wave. Tree clean on develop at 4643e14. The Xcode 26 xctest harness bug remains upstream-blocked — DO NOT re-attempt fixing. Phase 3 ready for /gsd-code-review 3 → /gsd-verify-phase 3 → close."
+  "next_action": "Run /gsd-execute-phase 4 --wave 3 (executes 04-04 AgentOrchestrator — single plan, depends on 04-01 + 04-02 + 04-03 all merged). After 04-04 merges: /gsd-execute-phase 4 --wave 4 (04-05 DevOverlay + TEXT-01 E2E). Then /gsd-code-review 4 → /gsd-verify-phase 4 → close Phase 4. Then /gsd-execute-phase 5 begins MCP work.",
+  "context_notes": "Phase 4 Waves 1+2 complete. AgentCore (81/81), AnthropicProvider (28/28 in fixture replay), OllamaProvider (33/33), Replay (25/25), Logging (17/17 with new replay+devoverlay channels), Bus (47/47, no regression). All hand-rolled per CLAUDE.md (no Anthropic SDK, no SQLite.swift). Tree clean on develop at 6d42fde. STATE/ROADMAP byte-identical pre/post each wave. The Xcode 26 xctest harness bug is upstream-blocked — DO NOT re-attempt fixing. SPM swift test runner works fine (it doesn't go through the broken xctest harness). 213 total SPM tests now. Auto-merge from worktrees was non-deterministic across waves — orchestrator manually FF-merges + cherry-picks when needed."
 }
