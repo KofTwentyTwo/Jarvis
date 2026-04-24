@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ChatEvent } from '../store/types'
+import { isApprovalPlaceholder } from './approvalSentinel'
 
 type ToolCallEvent = Extract<ChatEvent, { kind: 'tool-call' }>
 
@@ -10,21 +11,6 @@ const STATUS_LABELS = {
   completed: 'Done',
   failed: 'Failed',
 } as const
-
-/**
- * `args` from Swift may be the literal sentinel `{ awaitingApproval: true }`
- * — Phase 5 MCP-04 substitutes it server-side before any pre-approval args
- * ever reach the webview. This helper is defense-in-depth: even if Phase 5
- * regresses, this card refuses to render non-sentinel args pre-approval.
- */
-function isApprovalPlaceholder(args: unknown): boolean {
-  return (
-    typeof args === 'object' &&
-    args !== null &&
-    'awaitingApproval' in (args as Record<string, unknown>) &&
-    (args as Record<string, unknown>)['awaitingApproval'] === true
-  )
-}
 
 export function ToolCallCard({ event }: { event: ToolCallEvent }) {
   const [expanded, setExpanded] = useState(false)

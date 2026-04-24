@@ -134,6 +134,28 @@ describe('bus dispatcher streaming (D1-D8)', () => {
     }
   })
 
+  it('D5b: toolCallStart sentinel detection is whitespace-insensitive (H-01)', () => {
+    // Prior to H-01 the dispatcher used literal-byte equality
+    // (`msg.argsPreview === '{"awaitingApproval":true}'`). A Swift-side
+    // encoder with pretty-printing or field spacing silently regressed
+    // the status label. Unified parsed-object check fixes this.
+    send({ type: 'turnStarted', id: 't1' })
+    send({
+      type: 'toolCallStart',
+      id: 'tc-ws',
+      name: 'run_applescript',
+      argsPreview: '{"awaitingApproval": true}', // note: space after colon
+    })
+    const tc = useJarvisStore
+      .getState()
+      .chatEvents.find((e) => e.kind === 'tool-call')
+    expect(tc).toBeDefined()
+    if (tc?.kind === 'tool-call') {
+      expect(tc.status).toBe('awaiting-approval')
+      expect(tc.args).toEqual({ awaitingApproval: true })
+    }
+  })
+
   it('D6: toolCallStart without sentinel sets status running', () => {
     send({ type: 'turnStarted', id: 't1' })
     send({

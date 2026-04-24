@@ -1,6 +1,7 @@
 import { installJarvisBus, type BusOutbound } from '@jarvis/bus'
 import { useJarvisStore } from '../store'
 import type { ChatEvent } from '../store/types'
+import { isApprovalPlaceholder } from '../chat/approvalSentinel'
 
 /**
  * Install the window.jarvisBus bridge and register an exhaustive outbound
@@ -93,10 +94,15 @@ export function attachBus(): void {
       }
       case 'toolCallStart': {
         const turnId = store.currentTurnId ?? 'untracked'
-        const isApproval = msg.argsPreview === '{"awaitingApproval":true}'
+        // Unified with ToolCallCard's defense-in-depth guard: parse the JSON
+        // first and test via `isApprovalPlaceholder` so whitespace or field
+        // ordering drift from Swift (e.g. pretty-printed output) can't
+        // silently defeat the status label.
+        const parsedArgs = parseArgs(msg.argsPreview)
+        const isApproval = isApprovalPlaceholder(parsedArgs)
         store.upsertToolCall(msg.id, {
           name: msg.name,
-          args: parseArgs(msg.argsPreview),
+          args: parsedArgs,
           status: isApproval ? 'awaiting-approval' : 'running',
           turnId,
         })
