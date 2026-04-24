@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-24T17:55:00Z",
+  "timestamp": "2026-04-24T18:30:00Z",
   "context": "phase",
   "phase": "04",
   "phase_name": "agent-core",
@@ -8,7 +8,7 @@
   "plan": null,
   "task": null,
   "total_tasks": null,
-  "status": "phase_4_waves_1_and_2_complete_wave_3_pending",
+  "status": "phase_4_code_complete_review_pending",
   "completed_phases": [
     {"phase": "01", "name": "foundations", "status": "code_complete_with_human_uat", "verification": "human_needed", "human_items": 4, "plans_done": "5/5"},
     {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"},
@@ -19,10 +19,14 @@
     "name": "agent-core",
     "wave_1_complete": true,
     "wave_2_complete": true,
-    "wave_3_complete": false,
-    "wave_4_complete": false,
-    "plans_completed": ["04-01", "04-02", "04-03"],
-    "plans_remaining": ["04-04", "04-05"],
+    "wave_3_complete": true,
+    "wave_4_complete": true,
+    "all_plans_complete": true,
+    "code_review_passed": false,
+    "phase_verified": false,
+    "plans_completed": ["04-01", "04-02", "04-03", "04-04", "04-05"],
+    "plans_remaining": [],
+    "requirements_closed": ["AGENT-01", "AGENT-02", "AGENT-03", "AGENT-04", "AGENT-06", "AGENT-07", "AGENT-08", "AGENT-09", "AGENT-10", "OBS-01", "OBS-02", "OBS-07", "TEXT-01", "SEC-06"],
     "wave_layout": {
       "wave_1": ["04-01 LLMProvider protocol + AnthropicProvider"],
       "wave_2": ["04-02 OllamaProvider", "04-03 Replay log"],
@@ -72,7 +76,7 @@
     {"decision": "Phase 3 H-02 fix: attach to existing window.jarvisBus (Option B, minimal edit)", "rationale": "WKContentWorld isolation — Injection.js installs in JarvisBusWorld, default-world send() can't reach webkit.messageHandlers. Option B avoids touching Swift.", "phase": "03", "plan": "03-review-fix"}
   ],
   "uncommitted_files": [],
-  "tree_tip": "6d42fde",
+  "tree_tip": "5524989",
   "tests_passing": {
     "spm_packages": {
       "Keychain": 6,
@@ -80,9 +84,10 @@
       "Logging": 17,
       "Shell": "20+1skipped",
       "Bus": 47,
-      "AgentCore": 81,
+      "AgentCore": 131,
       "Replay": 25,
-      "total": 213
+      "DevOverlay": 14,
+      "total": 277
     },
     "app_xctest": "compile-clean; runtime blocked by upstream Xcode 26 harness",
     "webview_vitest": {"bus": 33, "hud": 80, "total": 113},
@@ -92,6 +97,6 @@
       "scripts_smoke_test_hud_sh": "PASS"
     }
   },
-  "next_action": "Run /gsd-execute-phase 4 --wave 3 (executes 04-04 AgentOrchestrator — single plan, depends on 04-01 + 04-02 + 04-03 all merged). After 04-04 merges: /gsd-execute-phase 4 --wave 4 (04-05 DevOverlay + TEXT-01 E2E). Then /gsd-code-review 4 → /gsd-verify-phase 4 → close Phase 4. Then /gsd-execute-phase 5 begins MCP work.",
-  "context_notes": "Phase 4 Waves 1+2 complete. AgentCore (81/81), AnthropicProvider (28/28 in fixture replay), OllamaProvider (33/33), Replay (25/25), Logging (17/17 with new replay+devoverlay channels), Bus (47/47, no regression). All hand-rolled per CLAUDE.md (no Anthropic SDK, no SQLite.swift). Tree clean on develop at 6d42fde. STATE/ROADMAP byte-identical pre/post each wave. The Xcode 26 xctest harness bug is upstream-blocked — DO NOT re-attempt fixing. SPM swift test runner works fine (it doesn't go through the broken xctest harness). 213 total SPM tests now. Auto-merge from worktrees was non-deterministic across waves — orchestrator manually FF-merges + cherry-picks when needed."
+  "next_action": "Run /gsd-code-review 4 → /gsd-code-review-fix 4 if findings → /gsd-verify-phase 4 to close Phase 4. After Phase 4 closes: /gsd-plan-phase 5 (MCP — research banked at 1069 lines) before /gsd-execute-phase 5. Phases 6-8 follow.",
+  "context_notes": "Phase 4 code-complete. All 5 plans merged across 4 waves. AgentCore 131/131 (LLMProvider+AnthropicProvider+OllamaProvider+AgentOrchestrator+DevSnapshotEmitter+TEXT-01+ChannelTopology). DevOverlay 14/14 (new SwiftUI overlay package). Replay 25/25, Logging 17/17, Bus 47/47, all closed-phase packages no regression. 277 total SPM tests across 8 packages. All hand-rolled per CLAUDE.md (no Anthropic SDK; no SQLite.swift). Tree clean on develop at 5524989. STATE/ROADMAP byte-identical pre/post each wave. The Xcode 26 xctest harness bug is upstream-blocked — DO NOT re-attempt fixing. SPM swift test runner works fine. Three known stubs deferred: ToolDispatcher concrete impl is Phase 5 (MCP); DevOverlay menu-bar wiring is a future plan (DevOverlay package exposes the toggle method only); replay-log VIEWER UI is Phase 8."
 }
