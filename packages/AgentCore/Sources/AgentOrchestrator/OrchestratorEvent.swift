@@ -1,0 +1,55 @@
+import Foundation
+import AgentCore
+
+/// Events emitted on `AgentOrchestrator.events` for downstream consumers
+/// (Plan 04-05 DevOverlay + Plan 02 bus → webview HUD).
+///
+/// **SEC-06 invariant:** no case carries the per-turn nonce. Verified by a
+/// grep gate in CI: `grep -v '^//' OrchestratorEvent.swift | grep -c 'nonce'`
+/// must equal 0. The nonce lives on the actor and in the replay log only.
+///
+/// `tokenDelta` is lossy under firehose load (the bus channel uses
+/// `dropOldest`); `toolCardUpdate` and `turnEnd` are not lossy.
+public enum OrchestratorEvent: Sendable {
+    case stateChange(TurnState)
+    case tokenDelta(turnId: TurnID, text: String)
+    case thinkingDelta(turnId: TurnID, text: String)
+    case toolCardUpdate(ToolCardUpdate)
+    case turnEnd(turnId: TurnID, stopReason: StopReason)
+    case error(turnId: TurnID, error: LLMProviderError)
+}
+
+public struct ToolCardUpdate: Sendable {
+    public enum Phase: Sendable {
+        case pending
+        case running
+        case awaitingApproval
+        case completed
+        case failed
+    }
+
+    public let turnId: TurnID
+    public let toolUseId: String
+    public let toolName: String
+    public let phase: Phase
+    /// Capped at ~200 characters for HUD display. Full bytes go to ReplayLog
+    /// via `ReplayEvent.toolResultFull` — never to OrchestratorEvent.
+    public let resultPreview: String?
+    public let error: String?
+
+    public init(
+        turnId: TurnID,
+        toolUseId: String,
+        toolName: String,
+        phase: Phase,
+        resultPreview: String?,
+        error: String?
+    ) {
+        self.turnId = turnId
+        self.toolUseId = toolUseId
+        self.toolName = toolName
+        self.phase = phase
+        self.resultPreview = resultPreview
+        self.error = error
+    }
+}
