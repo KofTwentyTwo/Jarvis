@@ -73,4 +73,102 @@ describe("installJarvisBus", () => {
     expect(a).not.toHaveBeenCalled();
     expect(b).toHaveBeenCalledOnce();
   });
+
+  // H-02: the HUD bundle (`main.tsx`) runs in the default JS world, but
+  // Swift registered `webkit.messageHandlers.jarvisBus` in JarvisBusWorld,
+  // so a default-world `send()` cannot reach the message handler. The
+  // Injection.js-installed bus in JarvisBusWorld CAN reach it (it captured
+  // the reference at document-start inside that world), and because
+  // `window.jarvisBus` is a cross-world-shared property the default world
+  // observes the Injection.js bus. Therefore `installJarvisBus()` must
+  // attach to — not replace — a pre-existing bus.
+  describe("H-02 attach-to-existing (pre-installed window.jarvisBus)", () => {
+    it("returns the pre-existing bus unchanged when one is already installed", () => {
+      const preExistingSend = vi.fn().mockResolvedValue(undefined);
+      const preExistingOnOutbound = vi.fn();
+      const preExistingReceive = vi.fn();
+      const preExisting = {
+        protocolVersion: "2.0.0",
+        send: preExistingSend,
+        onOutbound: preExistingOnOutbound,
+        receive: preExistingReceive,
+      };
+      // @ts-expect-error — test shim: seed a pre-installed bus shape matching Injection.js
+      globalThis.window = {
+        jarvisBus: preExisting,
+        // Note: webkit is intentionally absent — in real JarvisBusWorld the
+        // pre-existing bus captured webkit at install time; the default world
+        // never sees webkit. The fix MUST NOT touch the pre-existing bus.
+      };
+
+      installJarvisBus();
+
+      // Attach-to-existing: window.jarvisBus is the SAME object as before,
+      // not a replacement.
+      expect(window.jarvisBus).toBe(preExisting);
+      expect(window.jarvisBus.send).toBe(preExistingSend);
+      expect(window.jarvisBus.onOutbound).toBe(preExistingOnOutbound);
+    });
+
+    it("routes send() through the pre-existing bus's send (reaches JarvisBusWorld-captured handler)", async () => {
+      const preExistingSend = vi.fn().mockResolvedValue({ ok: true });
+      const preExisting = {
+        protocolVersion: "2.0.0",
+        send: preExistingSend,
+        onOutbound: vi.fn(),
+        receive: vi.fn(),
+      };
+      // @ts-expect-error — test shim
+      globalThis.window = { jarvisBus: preExisting };
+
+      installJarvisBus();
+      const reply = await window.jarvisBus.send({ type: "uiReady" });
+
+      // The pre-existing send was called (not a replacement).
+      expect(preExistingSend).toHaveBeenCalledWith({ type: "uiReady" });
+      expect(reply).toEqual({ ok: true });
+    });
+
+    it("registers outbound handler on the pre-existing bus's onOutbound slot", () => {
+      const preExistingOnOutbound = vi.fn();
+      const preExisting = {
+        protocolVersion: "2.0.0",
+        send: vi.fn(),
+        onOutbound: preExistingOnOutbound,
+        receive: vi.fn(),
+      };
+      // @ts-expect-error — test shim
+      globalThis.window = { jarvisBus: preExisting };
+
+      installJarvisBus();
+      const handler = vi.fn();
+      window.jarvisBus.onOutbound(handler);
+
+      expect(preExistingOnOutbound).toHaveBeenCalledWith(handler);
+    });
+
+    it("falls through to fresh install when no pre-existing bus is present (bus-harness.html path)", () => {
+      // Baseline: nothing on window.jarvisBus → fresh install must still win.
+      installJarvisBus();
+      expect(window.jarvisBus).toBeDefined();
+      expect(window.jarvisBus.protocolVersion).toBe(BUS_PROTOCOL_VERSION);
+      // Fresh bus's send reaches webkit directly (configured by outer beforeEach).
+      void window.jarvisBus.send({ type: "uiReady" });
+      expect(postMessage).toHaveBeenCalledWith(`{"type":"uiReady"}`);
+    });
+
+    it("falls through to fresh install if pre-existing value lacks the bus shape", () => {
+      // A non-bus-shaped leftover (e.g. stale test debris) must not hijack
+      // the install — we overwrite, matching pre-H-02 behavior for that path.
+      // @ts-expect-error — test shim: jarvisBus lacks send/onOutbound/receive
+      globalThis.window = {
+        jarvisBus: { something: "else" },
+        webkit: { messageHandlers: { jarvisBus: { postMessage } } },
+      };
+      installJarvisBus();
+      expect(typeof window.jarvisBus.send).toBe("function");
+      expect(typeof window.jarvisBus.onOutbound).toBe("function");
+      expect(window.jarvisBus.protocolVersion).toBe(BUS_PROTOCOL_VERSION);
+    });
+  });
 });
