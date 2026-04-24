@@ -1,0 +1,2 @@
+{"model":"qwen2.5-coder:32b","message":{"role":"assistant","content":"partial"},"done":false}
+{"model":"qwen2.5-coder:32b","message":{"role":"assistant","content":" response"},"done":false}

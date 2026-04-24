@@ -1,0 +1,8 @@
+data: {"id":"chatcmpl-x","choices":[{"delta":{"role":"assistant","content":"Hello"},"index":0}]}
+
+data: {"id":"chatcmpl-x","choices":[{"delta":{"content":" world"},"index":0}]}
+
+data: {"id":"chatcmpl-x","choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}
+
+data: [DONE]
+
