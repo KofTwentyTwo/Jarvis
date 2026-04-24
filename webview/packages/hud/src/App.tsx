@@ -1,5 +1,6 @@
 import { ParticleRing } from './hud/ParticleRing'
 import { LoadingFallbacks } from './hud/LoadingFallbacks'
+import { ChatPanel } from './chat/ChatPanel'
 
 export function App() {
   return (
@@ -8,7 +9,7 @@ export function App() {
         <ParticleRing particles={512} />
       </div>
       <LoadingFallbacks />
-      {/* <ChatPanel /> lands in Plan 03-04 */}
+      <ChatPanel />
     </div>
   )
 }
