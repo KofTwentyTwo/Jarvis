@@ -176,6 +176,18 @@ Waves are sequential (W1 → W2 → W3 → W4 → W5) because the helper bundle 
   6. TTS interrupt sequence runs atomically: cancel Orpheus producer → 10ms cosine fade-out → `stop()` → await completion handler (≤20ms) → emit `.ttsStopped`; ducking is lowered only on `.ttsStopped`, **never on `TTSEvent.finished` alone** (VOICE-11). Barge-in during `.speaking` routes through the single `cancelAndSubmit` orchestrator entry — not two separate actor hops — and re-enters `.listening` without losing turn state (VOICE-14).
   7. End-to-end "Hey Jarvis, what time is it?" produces a natural-sounding spoken answer with HUD state transitioning through idle → listening → thinking → speaking, observable without the DevOverlay (VOICE-07). Push-to-talk hold-hotkey variant (VOICE-13) and menu-bar mute-wake-word toggle (VOICE-12) both work independently: muting wake word pauses the DAG but leaves push-to-talk armed.
 
+**Plans** (5 plans across 4 waves):
+
+| Plan | Wave | Depends on | REQ-IDs | Autonomous |
+|------|------|------------|---------|------------|
+| `06-01-audio-graph` | 1 | [] | VOICE-08, VOICE-09, VOICE-10 | yes |
+| `06-02-wake-word` | 2 | [06-01] | VOICE-01 | yes |
+| `06-03-vad-stt` | 2 | [06-01] | VOICE-02, VOICE-03, VOICE-04 | yes |
+| `06-04-tts-engine` | 3 | [06-01] | VOICE-05, VOICE-06, VOICE-11 | yes |
+| `06-05-controller-wiring` | 4 | [06-01, 06-02, 06-03, 06-04] | VOICE-07, VOICE-09, VOICE-12, VOICE-13, VOICE-14 | no (HUMAN-UAT — scaffold-time empirical probes for Orpheus TTFA, Silero contract-parity, speech-recognition-assets entitlement) |
+
+Wave 2 (06-02 + 06-03) can run in parallel — disjoint scope (`WakeWord/*` vs `VAD/*`+`STT/*`); both consume `RingBuffer` read-only; 06-01 pins all upstream deps in Package.swift so neither wave-2 plan modifies it.
+
 **Plans**: TBD
 
 ### Phase 7: Memory + Vision

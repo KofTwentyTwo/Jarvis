@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-25T20:00:00Z",
+  "timestamp": "2026-04-25T20:30:00Z",
   "context": "phase",
   "phase": "06",
   "phase_name": "voice",
@@ -8,7 +8,7 @@
   "plan": null,
   "task": null,
   "total_tasks": null,
-  "status": "phase_5_verified_closed_phase_6_planning_next",
+  "status": "phase_6_planned_ready_for_execute",
   "completed_phases": [
     {"phase": "01", "name": "foundations", "status": "code_complete_with_human_uat", "verification": "human_needed", "human_items": 4, "plans_done": "5/5"},
     {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"},
@@ -19,18 +19,24 @@
   "current_phase_progress": {
     "phase": "06",
     "name": "voice",
-    "plans_authored": false,
+    "plans_authored": true,
     "wave_1_complete": false,
     "wave_2_complete": false,
     "wave_3_complete": false,
     "wave_4_complete": false,
-    "wave_5_complete": false,
     "all_plans_complete": false,
     "code_review_passed": false,
     "phase_verified": false,
     "plans_completed": [],
-    "plans_remaining": ["TBD — research banked at 740 lines; /gsd-plan-phase 6 will produce N PLAN.md files"],
-    "wave_layout": "TBD — populated by /gsd-plan-phase 6"
+    "plans_remaining": ["06-01", "06-02", "06-03", "06-04", "06-05"],
+    "wave_layout": {
+      "wave_1": ["06-01 AudioGraphController + VPIO ordering + post-AEC format probe + canonical 6-step teardown"],
+      "wave_2": ["06-02 WakeWord (openWakeWord ONNX hey_jarvis)", "06-03 VAD (Silero v6.2.1) + STT (SpeechAnalyzer primary, WhisperKit fallback)"],
+      "wave_3": ["06-04 TTS (AVSpeechSynthesizer tier 1 + Orpheus mlx-audio-swift tier 2 + TTSEngineActor serial executor + atomic interrupt)"],
+      "wave_4": ["06-05 VoiceController + AppDelegate wiring + AEC-off banner + PTT + mute-wake-word + barge-in via cancelAndSubmit (autonomous: false — HUMAN-UAT for scaffold-time empirical probes)"]
+    },
+    "plan_check_findings": "PASS_WITH_ADVISORIES — no BLOCKERs. 2 advisories: (1) 06-05 documents two competing resolutions for cancelAndSubmit(.voice('')) sentinel — executor decides at impl time; (2) 06-05 Task 3 verify uses xcodebuild build (App-shell only, not tests — acceptable, NOT xcodebuild test).",
+    "human_uat_pending_at_execute": "06-05 has 3 scaffold-time empirical probes that need real Apple Silicon hardware: (a) Orpheus TTFA target 150-250ms; if >250ms flip features.tts.tier2='ttskit'; (b) Silero v6.2.1 contract parity vs v5 (boundaries within ±32ms); (c) speech-recognition-assets entitlement load-bearing probe (PASS/INCONCLUSIVE/REFUTED, not hard-fail)."
   },
   "downstream_planned": [],
   "downstream_research_only": [
@@ -70,7 +76,7 @@
     {"decision": "Phase 3 H-02 fix: attach to existing window.jarvisBus (Option B, minimal edit)", "rationale": "WKContentWorld isolation — Injection.js installs in JarvisBusWorld, default-world send() can't reach webkit.messageHandlers. Option B avoids touching Swift.", "phase": "03", "plan": "03-review-fix"}
   ],
   "uncommitted_files": [],
-  "tree_tip": "6efdf15",
+  "tree_tip": "32a5935",
   "tests_passing": {
     "spm_packages": {
       "Keychain": 6,
@@ -93,6 +99,6 @@
       "scripts_smoke_test_hud_sh": "PASS"
     }
   },
-  "next_action": "Run /gsd-plan-phase 6 (Voice — research banked at 740 lines; openWakeWord hey_jarvis ONNX, Silero VAD v6.2.1, SpeechAnalyzer/WhisperKit STT, AVSpeechSynthesizer + Orpheus TTS, canonical audio-graph teardown, barge-in). After plans land: /gsd-execute-phase 6. Phases 7 (Memory+Vision) and 8 (Hardening) follow.",
+  "next_action": "Run /gsd-execute-phase 6 --wave 1 (executes 06-01 AudioGraphController foundation; sequential single-plan wave). Then W2 can fan out 06-02 + 06-03 in parallel (disjoint scope). W3 (06-04 TTS), then W4 (06-05 wiring + HUMAN-UAT). After execute: /gsd-code-review 6 → /gsd-code-review-fix 6 if findings → /gsd-verify-phase 6 → close. Phases 7 (Memory+Vision) and 8 (Hardening) follow.",
   "context_notes": "Phase 5 (MCP) verified PASSED. All 5 plans across 5 sequential waves merged. 11 REQ-IDs satisfied (AGENT-11, MCP-01..04, MCP-07..09, SEC-07, SEC-08, ME-04). JarvisMCP package (renamed from MCP — SDK collision); 79 SPM tests. Three helper bundles (mcp-time, mcp-clipboard, mcp-applescript) with per-helper TCC identity. ConfirmationBroker FSM + AppKit NSPanel beginSheet (no webview modals — lint-enforced via scripts/check-no-modal-presentation.sh). SEC-07 sanitize → headTruncate pipeline with wrap deferred to Phase 4's UntrustedWrapper (no double-wrap). ME-04 closure: BoundedAsyncChannel(2048, .dropOldest) wired observer→channel→drain→ReplayLog in production AppDelegate. Code review found 4 BLOCKER + 7 WARNING + 4 INFO; all BLOCKER+WARNING fixed. Verifier caught one additional G-01 (await in string-interpolation autoclosure) introduced by ME-04 wiring; fixed inline + added scripts/check-app-builds.sh as compile-only gate to prevent recurrence. 360+ total SPM tests across 9 packages + 3 helper SPM packages. HUMAN-UAT pending: developer.apple.com Apple Events capability for mcp-applescript (non-blocking until Phase 8 Release notarization). Tree clean on develop at 6efdf15. Xcode 26 xctest harness still upstream-blocked. STATE.md still Phase-1-era."
 }
