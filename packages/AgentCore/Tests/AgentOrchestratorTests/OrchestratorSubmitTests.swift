@@ -210,13 +210,26 @@ final class OrchestratorSubmitTests: XCTestCase {
         await replay.flush()
         try await replay.close()
 
-        // Re-open and inspect the row directly via SQLiteConnection (fileprivate
-        // in Replay; but we can query through the public OrphanDetector — or
-        // simpler, just verify the file exists + has nonzero size as a proxy
-        // for "row written"). We assert non-empty DB file as proxy.
-        let attrs = try FileManager.default.attributesOfItem(atPath: tempHome.dbURL.path)
-        let size = (attrs[.size] as? Int) ?? 0
-        XCTAssertGreaterThan(size, 1000, "replay DB should have written data for turn \(turnId.rawValue)")
+        // HI-02: real DB-row assertion (not file-size proxy). Open the
+        // closed DB and verify the turn row exists, has a non-empty
+        // turn_nonce, and the nonce is the per-turn value the orchestrator
+        // generated (SEC-06: nonce IS persisted in ReplayLog, NOT in the
+        // OrchestratorEvent stream).
+        let conn = try SQLiteConnection.open(at: tempHome.dbURL)
+        defer { try? conn.close() }
+        let rows: [(nonce: String, sourceText: String)] = try conn.query(
+            "SELECT turn_nonce, source FROM turns WHERE turn_id=?;",
+            bindings: [.text(turnId.rawValue)],
+            map: { ($0.columnText(at: 0) ?? "", $0.columnText(at: 1) ?? "") }
+        )
+        XCTAssertEqual(rows.count, 1, "expected exactly one turn row for \(turnId.rawValue)")
+        XCTAssertFalse(rows[0].nonce.isEmpty,
+                       "turn_nonce must be persisted (SEC-06 — replay log only)")
+        // Nonce is base64url; minimum length for 16-byte SecRandomCopyBytes
+        // base64url-encoded is ~22 chars (no padding).
+        XCTAssertGreaterThanOrEqual(rows[0].nonce.count, 16,
+                                    "turn_nonce must be a non-trivial random string")
+        XCTAssertEqual(rows[0].sourceText, "text", "source column must reflect TurnInput.text")
     }
 
     // MARK: - OS6

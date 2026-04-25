@@ -202,13 +202,21 @@ final class OrchestratorCancelTests: XCTestCase {
         await replay.flush()
         try await replay.close()
 
-        // Prior turn id must have a closed row with stop_reason='cancelled'.
-        // Read directly via sqlite3_open via Foundation Process? Simpler: open
-        // the DB through ReplayLog again (idempotent) and rely on file-size
-        // proxy + the absence of crash to assert the row is durable.
+        // HI-02: real DB-row assertion (not file-size proxy). Open the
+        // closed DB directly and verify the prior turn's row has
+        // ended_at NOT NULL and stop_reason='cancelled'. This is what the
+        // test claims to verify; the file-size proxy was a tautology.
         XCTAssertFalse(priorId.rawValue.isEmpty)
-        let attrs = try FileManager.default.attributesOfItem(atPath: tempHome.dbURL.path)
-        let size = (attrs[.size] as? Int) ?? 0
-        XCTAssertGreaterThan(size, 1000)
+        let conn = try SQLiteConnection.open(at: tempHome.dbURL)
+        defer { try? conn.close() }
+        let row: [(endedNull: Bool, stop: String)] = try conn.query(
+            "SELECT ended_at, stop_reason FROM turns WHERE turn_id=?;",
+            bindings: [.text(priorId.rawValue)],
+            map: { ($0.columnIsNull(at: 0), $0.columnText(at: 1) ?? "") }
+        )
+        XCTAssertEqual(row.count, 1, "prior turn row must exist in turns table")
+        XCTAssertFalse(row[0].endedNull, "ended_at must be set on cancelled turn")
+        XCTAssertEqual(row[0].stop, "cancelled",
+                       "stop_reason must be 'cancelled' (not '\(row[0].stop)')")
     }
 }

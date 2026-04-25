@@ -131,21 +131,52 @@ final class TextInputEndToEndTests: XCTestCase {
 
     // MARK: - TE2: Replay log captures the turn
 
-    /// TE2: ReplayLog receives the turn's events. Verified indirectly by
-    /// checking the DB file exists + has non-trivial size (tens of KB worth
-    /// of events). Full byte-level assertions live in ReplayTests.
+    /// TE2: ReplayLog receives the turn's events. Verified by querying the
+    /// DB directly: the turns row must have started_at + ended_at set, AND
+    /// the events table must contain at least one text_delta and one
+    /// tool_call_requested event for the turn.
     func test_TE2_replayLogReceivesTurn() async throws {
         let (orch, replay, _) = try await buildOrchestrator()
-        _ = await orch.submit(.text("what time is it"))
+        let outcome = await orch.submit(.text("what time is it"))
+        guard case .ran(let turnId) = outcome else {
+            return XCTFail("expected .ran outcome, got \(outcome)")
+        }
         _ = await collectUntilIdle(orch: orch)
 
         await replay.flush()
         try await replay.close()
 
-        let attrs = try FileManager.default.attributesOfItem(atPath: tempHome.dbURL.path)
-        let size = (attrs[.size] as? Int) ?? 0
-        // DB schema + WAL + events for the turn should be well over a few KB.
-        XCTAssertGreaterThan(size, 2000, "replay DB should have the turn on disk")
+        // HI-02: real DB-row assertions (not file-size proxy).
+        let conn = try SQLiteConnection.open(at: tempHome.dbURL)
+        defer { try? conn.close() }
+
+        // Turn row exists with ended_at + started_at both set.
+        let turnRows: [(startedNull: Bool, endedNull: Bool)] = try conn.query(
+            "SELECT started_at, ended_at FROM turns WHERE turn_id=?;",
+            bindings: [.text(turnId.rawValue)],
+            map: { ($0.columnIsNull(at: 0), $0.columnIsNull(at: 1)) }
+        )
+        XCTAssertEqual(turnRows.count, 1, "expected one turns row for the test turn")
+        XCTAssertFalse(turnRows[0].startedNull, "started_at must be set")
+        XCTAssertFalse(turnRows[0].endedNull, "ended_at must be set after turn end")
+
+        // At least one text_delta event for the turn.
+        let textDeltaCount: Int64 = try conn.query(
+            "SELECT COUNT(*) FROM events WHERE turn_id=? AND kind='text_delta';",
+            bindings: [.text(turnId.rawValue)],
+            map: { $0.columnInt(at: 0) }
+        ).first ?? 0
+        XCTAssertGreaterThanOrEqual(textDeltaCount, 1,
+                                    "expected ≥1 text_delta events; got \(textDeltaCount)")
+
+        // At least one tool_call_requested event (the get_time tool).
+        let toolCallCount: Int64 = try conn.query(
+            "SELECT COUNT(*) FROM events WHERE turn_id=? AND kind='tool_call_requested';",
+            bindings: [.text(turnId.rawValue)],
+            map: { $0.columnInt(at: 0) }
+        ).first ?? 0
+        XCTAssertGreaterThanOrEqual(toolCallCount, 1,
+                                    "expected ≥1 tool_call_requested events; got \(toolCallCount)")
     }
 
     // MARK: - TE3: text and voice produce identical event sequences
