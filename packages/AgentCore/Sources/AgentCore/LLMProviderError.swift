@@ -6,9 +6,13 @@ import Foundation
 ///
 /// **Information disclosure note (T-04-01-01):** `.api(statusCode:body:)`
 /// can carry an Anthropic error response that may echo header values
-/// (including a malformed `x-api-key`). The provider does NOT log these
-/// at the provider layer — orchestrator applies `Redact.apply` from
-/// `JarvisLogging` before any persistence.
+/// (including a malformed `x-api-key`). The provider does NOT log or
+/// redact these at the provider layer. The orchestrator applies
+/// `JarvisLogging.Redact.apply(...)` to error bodies BEFORE forwarding
+/// them to either the bus (`OrchestratorEvent.error`) or the replay log,
+/// so credential-shaped substrings never cross the webview trust
+/// boundary or land in persistent storage in cleartext. Single redaction
+/// site — see `AgentOrchestrator.redact(_:)`.
 public enum LLMProviderError: Error, Sendable, Equatable {
     case api(statusCode: Int, body: String)
     case decode(reason: String)

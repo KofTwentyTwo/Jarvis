@@ -431,8 +431,16 @@ public actor AgentOrchestrator {
                         }
 
                     case .providerError(let err):
-                        await events.send(.error(turnId: currentTurnId, error: err))
-                        await replayLog.record(.error(Data(String(describing: err).utf8)), for: currentTurnId)
+                        // HI-01: redact credential-shaped substrings from the
+                        // provider error body BEFORE forwarding to either the
+                        // bus or the replay log. Anthropic's API can echo a
+                        // malformed `x-api-key` header value verbatim in the
+                        // body of a 401 response; that string MUST NOT cross
+                        // the webview trust boundary or land in persistent
+                        // storage in cleartext. Single redaction site.
+                        let redactedErr = Self.redact(err)
+                        await events.send(.error(turnId: currentTurnId, error: redactedErr))
+                        await replayLog.record(.error(Data(String(describing: redactedErr).utf8)), for: currentTurnId)
                         await replayLog.endTurn(currentTurnId, stopReason: "provider_error")
                         await events.send(.stateChange(.idle))
                         currentTurn = nil
@@ -460,8 +468,12 @@ public actor AgentOrchestrator {
             } catch {
                 let mapped: LLMProviderError = (error as? LLMProviderError)
                     ?? .transport(description: String(describing: error))
-                await events.send(.error(turnId: currentTurnId, error: mapped))
-                await replayLog.record(.error(Data(String(describing: mapped).utf8)), for: currentTurnId)
+                // HI-01: same redaction at the catch boundary as the
+                // .providerError case. Single redaction site — see
+                // `redact(_:)` below.
+                let redactedMapped = Self.redact(mapped)
+                await events.send(.error(turnId: currentTurnId, error: redactedMapped))
+                await replayLog.record(.error(Data(String(describing: redactedMapped).utf8)), for: currentTurnId)
                 await replayLog.endTurn(currentTurnId, stopReason: "error")
                 await events.send(.stateChange(.idle))
                 currentTurn = nil
@@ -476,6 +488,24 @@ public actor AgentOrchestrator {
         switch provider {
         case .anthropic: return .opus47
         case .ollama:    return .qwen25coder32b
+        }
+    }
+
+    /// HI-01: scrub credential-shaped substrings (Anthropic `sk-ant-…`,
+    /// OpenAI `sk-…`, Bearer tokens, AKIA, GitHub PATs) from the body of a
+    /// provider error before it crosses the bus or lands in replay. The
+    /// underlying regex lives in `JarvisLogging.Redact`; we only redact
+    /// the `body`/`description` strings, preserving the case structure.
+    nonisolated static func redact(_ err: LLMProviderError) -> LLMProviderError {
+        switch err {
+        case .api(let code, let body):
+            return .api(statusCode: code, body: Redact.apply(body))
+        case .decode(let reason):
+            return .decode(reason: Redact.apply(reason))
+        case .transport(let description):
+            return .transport(description: Redact.apply(description))
+        case .streamTruncatedFinal:
+            return .streamTruncatedFinal
         }
     }
 

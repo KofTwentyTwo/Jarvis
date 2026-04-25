@@ -294,4 +294,60 @@ final class OrchestratorRetryTests: XCTestCase {
         let calls = await mock.getRecordedCalls()
         XCTAssertEqual(calls.count, 1, "refusal must NOT retry; got \(calls.count) calls")
     }
+
+    // MARK: - HI-01
+
+    /// HI-01: provider error bodies that may echo credential-shaped
+    /// substrings (e.g., a malformed `x-api-key`) MUST be redacted before
+    /// reaching the bus or the replay log. The doc on `LLMProviderError`
+    /// claims this; this test verifies the orchestrator actually applies
+    /// `Redact.apply` at the boundary.
+    func test_OR_providerErrorBodyRedactedBeforeBusEmit() async throws {
+        let secret = "sk-ant-api03-1234567890abcdef1234567890"
+        let leakyBody = "Invalid API key: \(secret) rejected by upstream"
+        let leakyErr = LLMProviderError.api(statusCode: 401, body: leakyBody)
+        let mock = MockLLMProvider(script: .init(events: [
+            .messageStart(LLMMessageStart(messageId: "m", model: "x", usagePrefix: nil)),
+            .providerError(leakyErr),
+        ]))
+        let (orch, replay) = try await buildOrchestrator(provider: mock)
+
+        _ = await orch.submit(.text("trigger"))
+        let events = await collectUntil(orch: orch) { ev in
+            if case .stateChange(.idle) = ev { return true }; return false
+        }
+
+        // (1) Bus emit: scan all collected events for the secret string.
+        let errEvents = events.compactMap { ev -> LLMProviderError? in
+            if case .error(_, let e) = ev { return e }
+            return nil
+        }
+        XCTAssertGreaterThanOrEqual(errEvents.count, 1, "expected at least one .error event")
+        for e in errEvents {
+            let asString = String(describing: e)
+            XCTAssertFalse(asString.contains(secret),
+                           "bus error event must not contain raw API key: \(asString)")
+            XCTAssertFalse(asString.contains("sk-ant-api"),
+                           "bus error event must not contain Anthropic key prefix")
+        }
+
+        // (2) Replay log: flush, close, re-open, and scan event payloads.
+        await replay.flush()
+        try await replay.close()
+        let conn = try SQLiteConnection.open(at: tempHome.dbURL)
+        defer { try? conn.close() }
+        let payloads: [Data] = try conn.query(
+            "SELECT payload_bytes FROM events WHERE kind='error';",
+            bindings: [],
+            map: { $0.columnBlob(at: 0) ?? Data() }
+        )
+        XCTAssertGreaterThanOrEqual(payloads.count, 1, "expected at least one error event in replay")
+        for p in payloads {
+            let s = String(data: p, encoding: .utf8) ?? ""
+            XCTAssertFalse(s.contains(secret),
+                           "replay error event must not contain raw API key: \(s)")
+            XCTAssertFalse(s.contains("sk-ant-api"),
+                           "replay error event must not contain Anthropic key prefix")
+        }
+    }
 }
