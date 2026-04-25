@@ -36,9 +36,10 @@ packages:
     path: packages/Shell
   Bus:
     path: packages/Bus
-  # MCP Swift SDK — consumed by both `mcp-time` and `mcp-clipboard` helper
-  # targets (Plan 05-02). Pinned at the same exact version as
-  # `packages/MCP/Package.swift` (Plan 05-01) to avoid dual-resolution drift.
+  # MCP Swift SDK — consumed by `mcp-time`, `mcp-clipboard` (Plan 05-02), and
+  # `mcp-applescript` (Plan 05-03) helper targets. Pinned at the same exact
+  # version as `packages/MCP/Package.swift` (Plan 05-01) to avoid
+  # dual-resolution drift.
   swift-sdk:
     url: https://github.com/modelcontextprotocol/swift-sdk
     exactVersion: "0.12.0"
@@ -107,12 +108,16 @@ targets:
         product: Shell
       - package: Bus
         product: Bus
-      # Plan 05-02: build the helper apps before the Jarvis copyFiles phase
-      # consumes them. xcodegen orders target dependencies before copy phases.
+      # Plan 05-02 / 05-03: build the helper apps before the Jarvis copyFiles
+      # phase consumes them. xcodegen orders target dependencies before copy
+      # phases.
       - target: mcp-time
         embed: false
         link: false
       - target: mcp-clipboard
+        embed: false
+        link: false
+      - target: mcp-applescript
         embed: false
         link: false
     preBuildScripts:
@@ -175,7 +180,7 @@ targets:
           # a helper rename or removal. -R preserves the .app bundle structure.
           set -euo pipefail
           DEST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers"
-          for HELPER in mcp-time mcp-clipboard; do
+          for HELPER in mcp-time mcp-clipboard mcp-applescript; do
             SRC="${BUILT_PRODUCTS_DIR}/${HELPER}.app"
             if [ ! -d "$SRC" ]; then
               echo "error: helper bundle missing at $SRC (was the ${HELPER} target built first?)" >&2
@@ -350,6 +355,60 @@ targets:
           mkdir -p "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources"
           cp "${SRCROOT}/mcp-servers/mcp-clipboard/Support/mcp-clipboard.entitlements" \
              "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources/mcp-clipboard.entitlements"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+
+  # ---------------------------------------------------------------------
+  # mcp-applescript helper (Plan 05-03 / MCP-04)
+  # ---------------------------------------------------------------------
+  # Identical xcodegen shape to mcp-time / mcp-clipboard, with ONE difference:
+  # CODE_SIGN_ENTITLEMENTS points at the per-helper entitlements file that
+  # carries `com.apple.security.automation.apple-events`. scripts/verify-
+  # entitlements.sh --post-codesign enforces bidirectionally that this
+  # helper MUST carry the key and no other helper may.
+  #
+  # Bundle ID `com.koftwentytwo.jarvis.mcp-applescript` MUST have the Apple
+  # Events capability registered at developer.apple.com for Release archive
+  # notarization to succeed (see .planning/phases/05-mcp/05-03-HUMAN-UAT.md).
+  # Debug ad-hoc signing works without the capability registration.
+  mcp-applescript:
+    type: application
+    platform: macOS
+    sources:
+      - path: mcp-servers/mcp-applescript/Sources/mcp-applescript
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.koftwentytwo.jarvis.mcp-applescript
+        PRODUCT_NAME: mcp-applescript
+        INFOPLIST_FILE: mcp-servers/mcp-applescript/Support/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: mcp-servers/mcp-applescript/Support/mcp-applescript.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+      configs:
+        Debug:
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGNING_REQUIRED: NO
+          ENABLE_HARDENED_RUNTIME: NO
+          OTHER_CODE_SIGN_FLAGS: ""
+        Release:
+          DEVELOPMENT_TEAM: 7UC2HETAN9
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGNING_REQUIRED: NO
+    dependencies:
+      - package: swift-sdk
+        product: MCP
+    postBuildScripts:
+      - name: Copy mcp-applescript.entitlements into bundle Resources
+        script: |
+          mkdir -p "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources"
+          cp "${SRCROOT}/mcp-servers/mcp-applescript/Support/mcp-applescript.entitlements" \
+             "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources/mcp-applescript.entitlements"
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
 

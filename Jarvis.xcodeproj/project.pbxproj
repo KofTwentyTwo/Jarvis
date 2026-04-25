@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01787A3F29649644D0B3090D /* MCPAppleScriptMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5077B9E3E7541D72CE0EB1B /* MCPAppleScriptMain.swift */; };
 		0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF0892A5DFF2AD38A93834 /* BannerContent.swift */; };
 		07E7F32B3857ED215DE59FBE /* Keychain in Frameworks */ = {isa = PBXBuildFile; productRef = 1440CCDB2CC412B099BD0310 /* Keychain */; };
 		17072C84550FC4659C4810B9 /* MCPTimeMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCA2C937A1629F873729B75 /* MCPTimeMain.swift */; };
@@ -16,6 +17,7 @@
 		29CF0F24C5D0DD0A8F1A0AEE /* WizardState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B2103B1A123E512CC56B63 /* WizardState.swift */; };
 		2BCA466CFD785F3BC989C35F /* WizardStageAPIKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */; };
 		461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */; };
+		4DF8C0C925F0D09AE39F3380 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = B97DB4370CDF8433823F370C /* MCP */; };
 		50C095E6F675D26E9C399179 /* AnthropicKeyValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77C5BF4E4B659B0A3325E647 /* AnthropicKeyValidator.swift */; };
 		5230995216EF1EE333B51529 /* HudStateCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE712EB628AF5CD6E935E8AF /* HudStateCoordinator.swift */; };
 		526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */; };
@@ -26,6 +28,7 @@
 		66B4B219EF4EC3EBDE5D1A4B /* AppDelegateWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */; };
 		6A2D9DE01C3C53094A820DDF /* JarvisEntitlementProbeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36AC239C99B913A4767C0EE8 /* JarvisEntitlementProbeTests.swift */; };
 		7270A6A54B0DC1510EB9C56A /* WizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33A1960A6404CD790036C46 /* WizardView.swift */; };
+		781E23F05F4EBBD3D3CB8E3F /* AppleScriptRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F80410112AAA66BF53BBC28 /* AppleScriptRunner.swift */; };
 		78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF7206DB98EC02734975536 /* HudState.swift */; };
 		79991014825C2BF8E7226CF8 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 003ADC59F1F11095A80EAE32 /* MCP */; };
 		7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */; };
@@ -66,6 +69,13 @@
 			remoteGlobalIDString = 3D0DD086DB85E343B69EB2E8;
 			remoteInfo = "mcp-time";
 		};
+		22F6E0F368503D9A2922877B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 33E99CF1F5349721FD0BB40B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 77D05BC97C3ECFF21FD60D84;
+			remoteInfo = "mcp-applescript";
+		};
 		3712067C4D21682FCFB04AE1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 33E99CF1F5349721FD0BB40B /* Project object */;
@@ -95,10 +105,12 @@
 		096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBanner.swift; sourceTree = "<group>"; };
 		0CF7206DB98EC02734975536 /* HudState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudState.swift; sourceTree = "<group>"; };
 		17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerPanel.swift; sourceTree = "<group>"; };
+		1F80410112AAA66BF53BBC28 /* AppleScriptRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleScriptRunner.swift; sourceTree = "<group>"; };
 		2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconControllerTests.swift; sourceTree = "<group>"; };
 		2857325F1F38B436FFA8AD8B /* mcp-time.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mcp-time.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E9C7A0B14B3AE5C9100CACF /* Config */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Config; path = packages/Config; sourceTree = SOURCE_ROOT; };
 		3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisHUDPanelTests.swift; sourceTree = "<group>"; };
+		3670E43064CC6F5A307142B2 /* mcp-applescript.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mcp-applescript.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		36AC239C99B913A4767C0EE8 /* JarvisEntitlementProbeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisEntitlementProbeTests.swift; sourceTree = "<group>"; };
 		39DD53A4E2CCED58C85B63FC /* AnthropicKeyValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicKeyValidatorTests.swift; sourceTree = "<group>"; };
 		3EEB80F86BC4DE366810AB99 /* Shell */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Shell; path = packages/Shell; sourceTree = SOURCE_ROOT; };
@@ -135,6 +147,7 @@
 		BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageAPIKeyView.swift; sourceTree = "<group>"; };
 		C1517F151F3BA96803143692 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWizardController.swift; sourceTree = "<group>"; };
+		D5077B9E3E7541D72CE0EB1B /* MCPAppleScriptMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPAppleScriptMain.swift; sourceTree = "<group>"; };
 		D554BFB452EC88ECA9392A2E /* PasteboardReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardReader.swift; sourceTree = "<group>"; };
 		DE712EB628AF5CD6E935E8AF /* HudStateCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinator.swift; sourceTree = "<group>"; };
 		E5B2103B1A123E512CC56B63 /* WizardState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardState.swift; sourceTree = "<group>"; };
@@ -158,6 +171,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				79991014825C2BF8E7226CF8 /* MCP in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E801AA735F5FC16788D2964 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4DF8C0C925F0D09AE39F3380 /* MCP in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -198,6 +219,14 @@
 				922FCD26000A64044B1FF187 /* Wizard */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		153D019325D521C96685E1FC /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				882B08AE0C21580FDAC65C9F /* mcp-applescript */,
+			);
+			path = Sources;
 			sourceTree = "<group>";
 		};
 		208C83303CC662AB2390C1C3 /* mcp-clipboard */ = {
@@ -257,12 +286,21 @@
 			path = Theme;
 			sourceTree = "<group>";
 		};
+		70419DFE15BDA3126E02DEBB /* mcp-applescript */ = {
+			isa = PBXGroup;
+			children = (
+				153D019325D521C96685E1FC /* Sources */,
+			);
+			path = "mcp-applescript";
+			sourceTree = "<group>";
+		};
 		7370B301BC3824D8E135198C /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */,
 				6784683F2262D8AFA439668D /* JarvisAppTests.xctest */,
 				FFBE24D9C8E23A56E1C1EF57 /* JarvisEntitlementProbeTests.xctest */,
+				3670E43064CC6F5A307142B2 /* mcp-applescript.app */,
 				E9CF7C158A5A7699A9CA32DE /* mcp-clipboard.app */,
 				2857325F1F38B436FFA8AD8B /* mcp-time.app */,
 			);
@@ -276,6 +314,15 @@
 				A9211EAD35AE7E8ABF9B4CC6 /* JarvisEntitlementProbeTests */,
 			);
 			path = Tests;
+			sourceTree = "<group>";
+		};
+		882B08AE0C21580FDAC65C9F /* mcp-applescript */ = {
+			isa = PBXGroup;
+			children = (
+				1F80410112AAA66BF53BBC28 /* AppleScriptRunner.swift */,
+				D5077B9E3E7541D72CE0EB1B /* MCPAppleScriptMain.swift */,
+			);
+			path = "mcp-applescript";
 			sourceTree = "<group>";
 		};
 		8A023692CD0AAABE9D630843 /* Sources */ = {
@@ -329,6 +376,7 @@
 		C27D8B6D46DD66A6D5D9AE1D /* mcp-servers */ = {
 			isa = PBXGroup;
 			children = (
+				70419DFE15BDA3126E02DEBB /* mcp-applescript */,
 				F008A8B896C0B896A6BEA1AA /* mcp-clipboard */,
 				A7065AE59E83DE43BF345747 /* mcp-time */,
 			);
@@ -425,6 +473,7 @@
 			dependencies = (
 				054C62B25C6485E4E21A07FB /* PBXTargetDependency */,
 				3CDFB986AFD9C57D0FAC0AF3 /* PBXTargetDependency */,
+				DCCA11185E40A50262FDB945 /* PBXTargetDependency */,
 			);
 			name = Jarvis;
 			packageProductDependencies = (
@@ -436,6 +485,26 @@
 			);
 			productName = Jarvis;
 			productReference = F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */;
+			productType = "com.apple.product-type.application";
+		};
+		77D05BC97C3ECFF21FD60D84 /* mcp-applescript */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3A0BA60507713543EC100949 /* Build configuration list for PBXNativeTarget "mcp-applescript" */;
+			buildPhases = (
+				A74D94C2242E349A4AFCB5AA /* Sources */,
+				5E801AA735F5FC16788D2964 /* Frameworks */,
+				2D727ECAE27A2C9338EB5795 /* Copy mcp-applescript.entitlements into bundle Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "mcp-applescript";
+			packageProductDependencies = (
+				B97DB4370CDF8433823F370C /* MCP */,
+			);
+			productName = "mcp-applescript";
+			productReference = 3670E43064CC6F5A307142B2 /* mcp-applescript.app */;
 			productType = "com.apple.product-type.application";
 		};
 		93F20AEE91BB60C4ED0C0346 /* JarvisAppTests */ = {
@@ -509,6 +578,9 @@
 					461D90920FCD8CAF83348871 = {
 						ProvisioningStyle = Manual;
 					};
+					77D05BC97C3ECFF21FD60D84 = {
+						ProvisioningStyle = Manual;
+					};
 					93F20AEE91BB60C4ED0C0346 = {
 						ProvisioningStyle = Manual;
 					};
@@ -545,6 +617,7 @@
 				461D90920FCD8CAF83348871 /* Jarvis */,
 				93F20AEE91BB60C4ED0C0346 /* JarvisAppTests */,
 				F7B9CBCDAE3BC101ECD8F687 /* JarvisEntitlementProbeTests */,
+				77D05BC97C3ECFF21FD60D84 /* mcp-applescript */,
 				D7D11D4EF8FF2DD490BE1FA6 /* mcp-clipboard */,
 				3D0DD086DB85E343B69EB2E8 /* mcp-time */,
 			);
@@ -602,6 +675,25 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/scripts/check-single-writer-hudstate.sh\"\n";
 		};
+		2D727ECAE27A2C9338EB5795 /* Copy mcp-applescript.entitlements into bundle Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy mcp-applescript.entitlements into bundle Resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "mkdir -p \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources\"\ncp \"${SRCROOT}/mcp-servers/mcp-applescript/Support/mcp-applescript.entitlements\" \\\n   \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources/mcp-applescript.entitlements\"\n";
+		};
 		318A7B75FBCC334BEF639033 /* Verify entitlements (pre-codesign) */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -638,7 +730,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Replace any prior copies wholesale so stale files don't linger after\n# a helper rename or removal. -R preserves the .app bundle structure.\nset -euo pipefail\nDEST=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers\"\nfor HELPER in mcp-time mcp-clipboard; do\n  SRC=\"${BUILT_PRODUCTS_DIR}/${HELPER}.app\"\n  if [ ! -d \"$SRC\" ]; then\n    echo \"error: helper bundle missing at $SRC (was the ${HELPER} target built first?)\" >&2\n    exit 1\n  fi\n  rm -rf \"${DEST}/${HELPER}.app\"\n  cp -R \"$SRC\" \"${DEST}/${HELPER}.app\"\ndone\n";
+			shellScript = "# Replace any prior copies wholesale so stale files don't linger after\n# a helper rename or removal. -R preserves the .app bundle structure.\nset -euo pipefail\nDEST=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers\"\nfor HELPER in mcp-time mcp-clipboard mcp-applescript; do\n  SRC=\"${BUILT_PRODUCTS_DIR}/${HELPER}.app\"\n  if [ ! -d \"$SRC\" ]; then\n    echo \"error: helper bundle missing at $SRC (was the ${HELPER} target built first?)\" >&2\n    exit 1\n  fi\n  rm -rf \"${DEST}/${HELPER}.app\"\n  cp -R \"$SRC\" \"${DEST}/${HELPER}.app\"\ndone\n";
 		};
 		4B80D79B2A0254274258618C /* Build webview bundle */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -864,6 +956,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A74D94C2242E349A4AFCB5AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				781E23F05F4EBBD3D3CB8E3F /* AppleScriptRunner.swift in Sources */,
+				01787A3F29649644D0B3090D /* MCPAppleScriptMain.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E0992BE4761F337F2AC5BF62 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -916,6 +1017,11 @@
 			target = 461D90920FCD8CAF83348871 /* Jarvis */;
 			targetProxy = D219C62B6F700143D5A8973F /* PBXContainerItemProxy */;
 		};
+		DCCA11185E40A50262FDB945 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 77D05BC97C3ECFF21FD60D84 /* mcp-applescript */;
+			targetProxy = 22F6E0F368503D9A2922877B /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -942,6 +1048,34 @@
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
+		};
+		07E5B71316B4C86D9A7171B5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = "mcp-servers/mcp-applescript/Support/mcp-applescript.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = 7UC2HETAN9;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "mcp-servers/mcp-applescript/Support/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CODE_SIGN_FLAGS = "--options=runtime --timestamp";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.koftwentytwo.jarvis.mcp-applescript";
+				PRODUCT_NAME = "mcp-applescript";
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
 		};
 		3AC3410B6AFDA84D1A773C6C /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -1112,6 +1246,33 @@
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		982FE6DD3825769AF0840191 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = "mcp-servers/mcp-applescript/Support/mcp-applescript.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "mcp-servers/mcp-applescript/Support/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CODE_SIGN_FLAGS = "";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.koftwentytwo.jarvis.mcp-applescript";
+				PRODUCT_NAME = "mcp-applescript";
+				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
@@ -1322,6 +1483,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		3A0BA60507713543EC100949 /* Build configuration list for PBXNativeTarget "mcp-applescript" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				982FE6DD3825769AF0840191 /* Debug */,
+				07E5B71316B4C86D9A7171B5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		5FF39917AC552CB1A0BD9FBA /* Build configuration list for PBXProject "Jarvis" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1420,6 +1590,11 @@
 		6FAD561608B0D1C402015E0D /* Shell */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Shell;
+		};
+		B97DB4370CDF8433823F370C /* MCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3C850EFCEBC3B4947F0F7AE1 /* XCRemoteSwiftPackageReference "swift-sdk" */;
+			productName = MCP;
 		};
 		ED53153FE6F73137C23AD43B /* JarvisLogging */ = {
 			isa = XCSwiftPackageProductDependency;
