@@ -1,46 +1,36 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-25T16:10:00Z",
+  "timestamp": "2026-04-25T20:00:00Z",
   "context": "phase",
-  "phase": "05",
-  "phase_name": "mcp",
-  "phase_dir": ".planning/phases/05-mcp",
+  "phase": "06",
+  "phase_name": "voice",
+  "phase_dir": ".planning/phases/06-voice",
   "plan": null,
   "task": null,
   "total_tasks": null,
-  "status": "phase_5_wave_1_complete_wave_2_pending",
+  "status": "phase_5_verified_closed_phase_6_planning_next",
   "completed_phases": [
     {"phase": "01", "name": "foundations", "status": "code_complete_with_human_uat", "verification": "human_needed", "human_items": 4, "plans_done": "5/5"},
     {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"},
     {"phase": "03", "name": "hud", "status": "verified_human_needed_uat_only", "verification": "passed_with_manual_uat_pending", "human_items": 1, "plans_done": "5/5"},
-    {"phase": "04", "name": "agent-core", "status": "verified_passed", "verification": "passed", "human_items": 0, "plans_done": "5/5", "review_findings": "1 BLOCKER + 2 HIGH + 6 MEDIUM (5 fixed, 1 deferred per known-stub)", "test_count": 281}
+    {"phase": "04", "name": "agent-core", "status": "verified_passed", "verification": "passed", "human_items": 0, "plans_done": "5/5", "review_findings": "1 BLOCKER + 2 HIGH + 6 MEDIUM (5 fixed, 1 deferred per known-stub)", "test_count": 281},
+    {"phase": "05", "name": "mcp", "status": "verified_passed", "verification": "passed_with_human_uat_pending", "human_items": 1, "plans_done": "5/5", "review_findings": "4 BLOCKER + 7 WARNING + 4 INFO (BLOCKER+WARNING all fixed; G-01 verify-time blocker fixed); INFO deferred per default scope", "test_count": "360+", "human_uat": "developer.apple.com Apple Events capability for com.koftwentytwo.jarvis.mcp-applescript (non-blocking until Phase 8 Release notarization)"}
   ],
   "current_phase_progress": {
-    "phase": "05",
-    "name": "mcp",
+    "phase": "06",
+    "name": "voice",
+    "plans_authored": false,
     "wave_1_complete": false,
     "wave_2_complete": false,
     "wave_3_complete": false,
     "wave_4_complete": false,
+    "wave_5_complete": false,
     "all_plans_complete": false,
-    "plans_authored": false,
     "code_review_passed": false,
     "phase_verified": false,
-    "plans_completed": ["05-01"],
-    "plans_remaining": ["05-02", "05-03", "05-04", "05-05"],
-    "plans_authored": true,
-    "wave_layout": {
-      "wave_1": ["05-01 MCPClient + StdioTransport + restart mutex + ChildSpawnGate"],
-      "wave_2": ["05-02 mcp-time + mcp-clipboard helpers"],
-      "wave_3": ["05-03 mcp-applescript helper (autonomous: false — App ID capability gate)"],
-      "wave_4": ["05-04 sanitize→headTruncate pipeline + MCPToolDispatcher (conforms P4 ToolDispatcher)"],
-      "wave_5": ["05-05 ConfirmationBroker + AppKit NSPanel presenter + ConfirmingToolDispatcher + AppDelegate wiring + modal-presentation lint (closes ME-04)"]
-    },
-    "plan_check_findings": "PASS after 1 revision — initial draft had 2 BLOCKERs (05-05 truncated mid-Task 2; wave-2 project.yml collision between 05-02 and 05-03). Fixed by completing 05-05 (1144 lines, 5 tasks, full STRIDE block) and bumping waves so each helper-modifying-project.yml plan is in its own wave.",
-    "wave_2_deviations": [
-      "04-02 (OllamaProvider) and 04-03 (Replay log) executed in parallel worktrees — disjoint scope (packages/AgentCore/Sources/OllamaProvider/* vs packages/Replay/* + packages/Logging/Sources/JarvisLogging/JarvisLogChannel.swift). Neither auto-FF'd this time. Orchestrator FF-merged 04-02 then cherry-picked 04-03's 4 commits onto develop to keep linear history. No conflicts."
-    ],
-    "auto_merge_observation": "Wave 1 (Phase 3 03-05) and the Phase 4 04-01 single-plan worktrees auto-FF-merged on Agent-tool exit. Wave 2 of Phase 4 (parallel 04-02 + 04-03) did NOT auto-merge — both worktree branches stayed at their executor-final SHA. Either the auto-FF heuristic gates on single-worktree-active, or it's non-deterministic. Either way the orchestrator's manual merge logic handled it cleanly."
+    "plans_completed": [],
+    "plans_remaining": ["TBD — research banked at 740 lines; /gsd-plan-phase 6 will produce N PLAN.md files"],
+    "wave_layout": "TBD — populated by /gsd-plan-phase 6"
   },
   "downstream_planned": [],
   "downstream_research_only": [
@@ -80,7 +70,7 @@
     {"decision": "Phase 3 H-02 fix: attach to existing window.jarvisBus (Option B, minimal edit)", "rationale": "WKContentWorld isolation — Injection.js installs in JarvisBusWorld, default-world send() can't reach webkit.messageHandlers. Option B avoids touching Swift.", "phase": "03", "plan": "03-review-fix"}
   ],
   "uncommitted_files": [],
-  "tree_tip": "fb0a0e7",
+  "tree_tip": "6efdf15",
   "tests_passing": {
     "spm_packages": {
       "Keychain": 6,
@@ -91,8 +81,9 @@
       "AgentCore": 134,
       "Replay": 27,
       "DevOverlay": 14,
-      "JarvisMCP": 16,
-      "total": 297
+      "JarvisMCP": 79,
+      "mcp-helpers": "6+4 (mcp-clipboard PasteboardReader 6 + mcp-applescript Runner 4); mcp-time runs at build only",
+      "total": "360+"
     },
     "app_xctest": "compile-clean; runtime blocked by upstream Xcode 26 harness",
     "webview_vitest": {"bus": 33, "hud": 80, "total": 113},
@@ -102,6 +93,6 @@
       "scripts_smoke_test_hud_sh": "PASS"
     }
   },
-  "next_action": "Run /gsd-execute-phase 5 --wave 2 (executes 05-02 mcp-time + mcp-clipboard helpers). 05-02 must `import JarvisMCP` (not `import MCP` — name collision with SDK forced rename in 05-01). After W2 merges: W3 (05-03 mcp-applescript, autonomous: false), W4 (05-04 sanitize+dispatcher), W5 (05-05 broker+presenter+wiring + ME-04 closure). Then /gsd-code-review 5 → /gsd-verify-phase 5 → close.",
-  "context_notes": "Phase 5 Wave 1 complete. JarvisMCP package created (renamed from MCP due to SDK library-name collision — same JarvisLogging precedent). 16 SPM tests on JarvisMCP, 4 commits 896d7fb..fb0a0e7. ChildSpawnGate is the single Process() spawn surface (verified by grep gate); per-server restart mutex shares one restart across concurrent callers; 100-cycle FD-leak test delta=0 from baseline=4. Closes MCP-01 + MCP-07 + MCP-08. Three load-bearing executor deviations: (1) renamed MCP→JarvisMCP throughout (downstream plans must import JarvisMCP); (2) PID-pinned process.terminationHandler to prevent stale handlers flipping isCrashed=true on live restarted process; (3) FD_CLOEXEC retrofit on parent-side Pipe ends after Process.run() because Foundation creates Pipe FDs without O_CLOEXEC. 297 total SPM tests across 9 packages. STATE/ROADMAP byte-identical. Tree clean on develop at fb0a0e7. Xcode 26 xctest harness still upstream-blocked."
+  "next_action": "Run /gsd-plan-phase 6 (Voice — research banked at 740 lines; openWakeWord hey_jarvis ONNX, Silero VAD v6.2.1, SpeechAnalyzer/WhisperKit STT, AVSpeechSynthesizer + Orpheus TTS, canonical audio-graph teardown, barge-in). After plans land: /gsd-execute-phase 6. Phases 7 (Memory+Vision) and 8 (Hardening) follow.",
+  "context_notes": "Phase 5 (MCP) verified PASSED. All 5 plans across 5 sequential waves merged. 11 REQ-IDs satisfied (AGENT-11, MCP-01..04, MCP-07..09, SEC-07, SEC-08, ME-04). JarvisMCP package (renamed from MCP — SDK collision); 79 SPM tests. Three helper bundles (mcp-time, mcp-clipboard, mcp-applescript) with per-helper TCC identity. ConfirmationBroker FSM + AppKit NSPanel beginSheet (no webview modals — lint-enforced via scripts/check-no-modal-presentation.sh). SEC-07 sanitize → headTruncate pipeline with wrap deferred to Phase 4's UntrustedWrapper (no double-wrap). ME-04 closure: BoundedAsyncChannel(2048, .dropOldest) wired observer→channel→drain→ReplayLog in production AppDelegate. Code review found 4 BLOCKER + 7 WARNING + 4 INFO; all BLOCKER+WARNING fixed. Verifier caught one additional G-01 (await in string-interpolation autoclosure) introduced by ME-04 wiring; fixed inline + added scripts/check-app-builds.sh as compile-only gate to prevent recurrence. 360+ total SPM tests across 9 packages + 3 helper SPM packages. HUMAN-UAT pending: developer.apple.com Apple Events capability for mcp-applescript (non-blocking until Phase 8 Release notarization). Tree clean on develop at 6efdf15. Xcode 26 xctest harness still upstream-blocked. STATE.md still Phase-1-era."
 }
