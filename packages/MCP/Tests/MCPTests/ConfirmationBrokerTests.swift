@@ -175,6 +175,39 @@ final class ConfirmationBrokerTests: XCTestCase {
         XCTAssertEqual(snap.dismiss, 0)
     }
 
+    /// WR-03 (REVIEW 05) regression: at a sub-second timeout, a `.deny`
+    /// arriving microseconds before the timer fires must not cause a
+    /// double-resolve. The first-write-wins guard already covers this,
+    /// but the explicit do/catch on Task.sleep cancellation removes the
+    /// silent race window between Task.sleep returning and Task.isCancelled
+    /// being read. Repeated runs to absorb scheduler jitter.
+    func test_response_atTimerBoundary_firstWriteWins_noDoubleResolve() async {
+        for _ in 0..<10 {
+            let presenter = SpyPresenter()
+            let broker = ConfirmationBroker(timeoutSeconds: 0.05, presenter: presenter)
+            let id = UUID()
+
+            async let outcome = broker.request(id: id, toolName: "run_applescript", argsPreview: "{}")
+            // Race: send .deny ≈ at the timer boundary. Some runs land
+            // pre-timer (deny wins); some land post-timer (timeout wins).
+            // EITHER outcome is OK — we're asserting the broker resolves
+            // EXACTLY ONCE, not which one wins.
+            try? await Task.sleep(nanoseconds: 49_000_000)
+            await broker.response(id: id, outcome: .deny)
+
+            let result = await outcome
+            XCTAssertTrue(
+                result == .deny || result == .timeout,
+                "broker must resolve to deny or timeout (got \(result))"
+            )
+
+            // Settle any stragglers — dismiss must fire exactly once.
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            let snap = await presenter.snapshot()
+            XCTAssertEqual(snap.dismiss, 1, "dismiss must fire exactly once even at the timer boundary")
+        }
+    }
+
     /// Lifecycle invariant: `dismiss(id:)` is called exactly once across the
     /// resolve lifecycle (not 0, not 2).
     func test_dismissCalledExactlyOnce_perRequest() async {

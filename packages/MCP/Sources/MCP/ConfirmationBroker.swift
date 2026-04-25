@@ -75,10 +75,25 @@ public actor ConfirmationBroker {
             // Schedule the AGENT-11 timeout. Captured weakly so the actor
             // can deinit cleanly if the awaiter resolves first; the timer
             // task is canceled in `response(id:outcome:)`.
+            //
+            // WR-03 (REVIEW 05): explicit do/catch on Task.sleep so the
+            // CancellationError early-returns. Previous form used
+            // `try? Task.sleep` (which swallows the error) plus
+            // `Task.isCancelled` check — under sub-second timeouts the
+            // window between Task.sleep returning and isCancelled being
+            // observed could let a cancelled timer fire .timeout. Today
+            // the broker's first-write-wins guard (resolved == false)
+            // saves us, but if a future contributor removes that guard
+            // the broker would double-resolve. Explicit cancellation
+            // handling makes intent self-evident and removes the silent
+            // race.
             let timeout = self.timeoutSeconds
             let timerTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(timeout))
-                if Task.isCancelled { return }
+                do {
+                    try await Task.sleep(for: .seconds(timeout))
+                } catch {
+                    return  // canceled — first-write-wins already resolved.
+                }
                 await self?.response(id: id, outcome: .timeout)
             }
 
