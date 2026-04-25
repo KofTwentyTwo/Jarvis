@@ -6,9 +6,11 @@ final class LoggingTests: XCTestCase {
     func test_sevenChannelsAreDefined() {
         // `bus` was added in Phase 2 (RESEARCH §OBS-06 open question #7).
         // `replay` + `devoverlay` were added in Plan 04-03 for the on-disk
-        // replay log + DevOverlay surfaces (Plan 04-05). Keep this set in
-        // sync with `JarvisLogChannel`.
-        let expected: Set<String> = ["agent", "tools", "ui", "system", "bus", "replay", "devoverlay"]
+        // replay log + DevOverlay surfaces (Plan 04-05). `mcp` was added in
+        // Plan 05-05 for the JarvisMCP confirmation broker WARNING log lines
+        // (AGENT-11 timeout-as-deny). Keep this set in sync with
+        // `JarvisLogChannel`.
+        let expected: Set<String> = ["agent", "tools", "ui", "system", "bus", "replay", "devoverlay", "mcp"]
         let actual = Set(JarvisLogChannel.allCases.map(\.rawValue))
         XCTAssertEqual(actual, expected)
     }
