@@ -80,8 +80,20 @@ public actor MCPClient {
 
     // MARK: - Tool dispatch
 
-    /// Dispatch a single tool call. In Task 3 this method gains the per-server
-    /// restart-mutex layer; for now (Task 2) it forwards directly to the handle.
+    /// Dispatch a single tool call. Layers the per-server restart mutex on top
+    /// of the handle's `restartTask` slot:
+    ///
+    ///   1. If a restart is already in flight for this server, await it.
+    ///   2. Else if the handle is crashed, atomically claim-or-share the slot
+    ///      via `MCPServerHandle.claimOrShareRestart`. The claimant runs
+    ///      start(); sharers await the existing task.
+    ///   3. Dispatch through the SDK client.
+    ///
+    /// Concurrent callers on a crashed server therefore share ONE in-flight
+    /// restart Task rather than stampeding the spawn path. On restart failure,
+    /// the slot is cleared so a subsequent call can attempt again. (We do not
+    /// add backoff/retry here — RESEARCH A5: failed restart propagates;
+    /// hardening is a future plan.)
     public func callTool(name: String, arguments: [String: Value]) async throws -> CallTool.Result {
         guard let serverName = toolToServer[name] else {
             throw JarvisMCPError.helperMissing(name: name)
@@ -89,6 +101,47 @@ public actor MCPClient {
         guard let handle = registry[serverName] else {
             throw JarvisMCPError.helperMissing(name: name)
         }
+
+        // 1. If a restart is already in flight, share it.
+        if let inFlight = await handle.restartTask {
+            try await inFlight.value
+        }
+
+        // 2. If still crashed, atomically claim or share the restart slot.
+        //    The claim-or-share decision happens under the handle actor's
+        //    isolation, so concurrent callers can't both fall through to
+        //    spawn fresh start() tasks.
+        if await handle.isCrashed {
+            // The closure builds a Task only if claimOrShareRestart picks "claim".
+            // Implementation note: claimOrShareRestart is a sync method on the
+            // actor; the closure is invoked synchronously inside the actor's
+            // executor before returning, so the Task is created on the right
+            // executor and the slot is committed atomically with isCrashed/
+            // restartTask checks.
+            let outcome = await handle.claimOrShareRestart {
+                Task { try await handle.start() }
+            }
+            if outcome.claimed, let task = outcome.task {
+                do {
+                    try await task.value
+                    await handle.setRestartTask(nil)
+                } catch {
+                    // Clear the slot so a future call can try again. The error
+                    // propagates verbatim — caller sees the underlying spawn
+                    // failure.
+                    await handle.setRestartTask(nil)
+                    throw error
+                }
+            } else if let shared = outcome.task {
+                // Another caller already claimed; await their restart.
+                try await shared.value
+            }
+            // outcome.task == nil → handle is no longer crashed (a third
+            // caller completed restart and cleared the slot before we got
+            // here). Fall through to dispatch.
+        }
+
+        // 3. Dispatch.
         return try await handle.callTool(name: name, arguments: arguments)
     }
 
@@ -122,4 +175,14 @@ public actor MCPClient {
         registry.removeAll()
         toolToServer.removeAll()
     }
+
+    // MARK: - Test-only inspection
+
+    #if DEBUG
+    /// Test-only accessor into the registry. Used by restart-mutex tests that
+    /// need to SIGKILL the helper PID directly. NOT for production use.
+    public func _testHandle(named name: String) -> MCPServerHandle? {
+        registry[name]
+    }
+    #endif
 }

@@ -115,6 +115,16 @@ public actor MCPServerHandle {
         try? stdoutPipe.fileHandleForWriting.close()
         try? stderrPipe.fileHandleForWriting.close()
 
+        // 4b. Set FD_CLOEXEC on the parent-side pipe ends WE retain so a future
+        //     ChildSpawnGate.shared.prepare() sweep doesn't fatalError on them.
+        //     The gate's contract is "every long-lived parent FD is CLOEXEC";
+        //     Foundation creates Pipe FDs without O_CLOEXEC, so we own retrofit
+        //     here at the FD-creation point (consistent with the gate's primary
+        //     defense — CLOEXEC at open time, not at sweep time).
+        Self.setCloexec(stdinPipe.fileHandleForWriting.fileDescriptor)
+        Self.setCloexec(stdoutPipe.fileHandleForReading.fileDescriptor)
+        Self.setCloexec(stderrPipe.fileHandleForReading.fileDescriptor)
+
         // 5. Wire stderr drain. The handler closure runs on a background queue
         //    owned by Foundation; we only forward bytes to a plain Logger so
         //    no actor isolation issues.
@@ -154,9 +164,13 @@ public actor MCPServerHandle {
         }
 
         // 8. Wire termination handler. The handler captures a weak ref into
-        //    a Task to bridge back into actor isolation.
+        //    a Task to bridge back into actor isolation. We pin the PID at
+        //    wire time so a stale handler from a prior helper (post-restart)
+        //    can't flip isCrashed on the LIVE process. handleTermination
+        //    no-ops if the supplied PID no longer matches.
+        let pinnedPID = process.processIdentifier
         process.terminationHandler = { [weak self] _ in
-            Task { await self?.handleTermination() }
+            Task { await self?.handleTermination(forPID: pinnedPID) }
         }
 
         // 9. Commit state.
@@ -196,6 +210,25 @@ public actor MCPServerHandle {
         self.restartTask = task
     }
 
+    /// Atomic claim-or-share: if the handle is still crashed and the slot is
+    /// empty, install the supplied Task and return `(claimed: true, task)`.
+    /// If another caller already installed a task, return `(false, that task)`.
+    /// If the helper is no longer crashed (someone else completed restart and
+    /// cleared the slot), return `(false, nil)` — caller proceeds directly.
+    ///
+    /// Runs entirely under this actor's isolation, so the read-modify-write is
+    /// serialized w.r.t. other callers on the same handle. This is the
+    /// load-bearing primitive of the per-server restart mutex.
+    public func claimOrShareRestart(_ buildTask: () -> Task<Void, Error>) -> (claimed: Bool, task: Task<Void, Error>?) {
+        if !isCrashed { return (false, nil) }
+        if let existing = restartTask {
+            return (false, existing)
+        }
+        let task = buildTask()
+        self.restartTask = task
+        return (true, task)
+    }
+
     // MARK: - SDK call passthrough
 
     /// Public — used by `MCPClient` and (in Task 3) the per-server restart mutex.
@@ -223,7 +256,13 @@ public actor MCPServerHandle {
 
     // MARK: - Internals
 
-    private func handleTermination() async {
+    private func handleTermination(forPID pid: Int32) async {
+        // Stale handler guard: only act if the terminating PID matches our
+        // currently-tracked process. After a restart, the OLD process's
+        // terminationHandler (still hooked up under iOS/macOS Foundation)
+        // would otherwise flip isCrashed=true on the LIVE process.
+        guard let p = self.process, p.processIdentifier == pid else { return }
+
         // SDK drains its pending-request map with `MCPError.internalError("Client disconnected")`.
         // Our callTool wrapper above translates that into `JarvisMCPError.serverCrashed` for any
         // caller still awaiting at the boundary (because `isCrashed` is set first).
@@ -252,6 +291,16 @@ public actor MCPServerHandle {
     private nonisolated func terminateProcessImmediately(_ process: Process) throws {
         if process.isRunning {
             kill(process.processIdentifier, SIGKILL)
+        }
+    }
+
+    /// Set FD_CLOEXEC on a file descriptor. Idempotent on closed FDs (returns
+    /// silently). Used at FD-creation time on parent-side Pipe ends so the
+    /// ChildSpawnGate sweep treats them as well-behaved on subsequent spawns.
+    private nonisolated static func setCloexec(_ fd: Int32) {
+        let flags = fcntl(fd, F_GETFD)
+        if flags >= 0 {
+            _ = fcntl(fd, F_SETFD, flags | FD_CLOEXEC)
         }
     }
 
