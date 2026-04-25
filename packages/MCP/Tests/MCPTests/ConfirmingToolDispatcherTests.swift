@@ -24,21 +24,24 @@ final class ConfirmingToolDispatcherTests: XCTestCase {
 
     /// Records every bus emission, preserving order. Conforms to the
     /// dispatcher's BusGateway protocol.
+    ///
+    /// CR-03 (REVIEW 05): toolUseId is `String` — the original Anthropic
+    /// `toolu_…` / Ollama free-form id, not a synthesized UUID.
     actor SpyBus: BusGateway {
         enum Event: Equatable {
-            case toolCallStart(toolUseId: UUID, name: String, argsPreview: String)
-            case argsPreviewUpdate(toolUseId: UUID, name: String, argsPreview: String)
-            case toolCallEnd(toolUseId: UUID, name: String, ok: Bool, previewOrError: String)
+            case toolCallStart(toolUseId: String, name: String, argsPreview: String)
+            case argsPreviewUpdate(toolUseId: String, name: String, argsPreview: String)
+            case toolCallEnd(toolUseId: String, name: String, ok: Bool, previewOrError: String)
         }
         private(set) var events: [Event] = []
 
-        func emitToolCallStart(toolUseId: UUID, name: String, argsPreview: String) async {
+        func emitToolCallStart(toolUseId: String, name: String, argsPreview: String) async {
             events.append(.toolCallStart(toolUseId: toolUseId, name: name, argsPreview: argsPreview))
         }
-        func updateArgsPreview(toolUseId: UUID, name: String, argsPreview: String) async {
+        func updateArgsPreview(toolUseId: String, name: String, argsPreview: String) async {
             events.append(.argsPreviewUpdate(toolUseId: toolUseId, name: name, argsPreview: argsPreview))
         }
-        func emitToolCallEnd(toolUseId: UUID, name: String, ok: Bool, previewOrError: String) async {
+        func emitToolCallEnd(toolUseId: String, name: String, ok: Bool, previewOrError: String) async {
             events.append(.toolCallEnd(toolUseId: toolUseId, name: name, ok: ok, previewOrError: previewOrError))
         }
 
@@ -184,7 +187,8 @@ final class ConfirmingToolDispatcherTests: XCTestCase {
     }
 
     /// On approve, dispatcher emits a follow-up sanitized argsPreview AND
-    /// calls inner.dispatch.
+    /// calls inner.dispatch AND emits toolCallEnd(ok: true) on success
+    /// (WR-04 — bus consumers must see Running → Completed).
     func test_dispatch_confirmTool_onApprove_emitsPostApprovalPreview_AND_callsInner() async throws {
         let bus = SpyBus()
         let inner = SpyInnerDispatcher(
@@ -205,15 +209,97 @@ final class ConfirmingToolDispatcherTests: XCTestCase {
         XCTAssertEqual(String(data: result, encoding: .utf8), "approved-result")
 
         let busEvents = await bus.snapshot()
-        // Expect: toolCallStart(awaitingApproval) → argsPreviewUpdate(sanitized).
-        XCTAssertEqual(busEvents.count, 2)
+        // WR-04: now expect THREE events on success —
+        // toolCallStart(awaitingApproval) → argsPreviewUpdate(sanitized) →
+        // toolCallEnd(ok: true, preview: result).
+        XCTAssertEqual(busEvents.count, 3, "WR-04: success path emits start + update + end")
         if case .argsPreviewUpdate(_, _, let preview) = busEvents[1] {
             XCTAssertEqual(preview, #"{"source":"echo hi"}"#)
         } else {
             XCTFail("second bus event must be argsPreviewUpdate, got \(busEvents[1])")
         }
+        if case .toolCallEnd(_, _, let ok, let preview) = busEvents[2] {
+            XCTAssertTrue(ok, "WR-04: success path emits ok: true")
+            XCTAssertEqual(preview, "approved-result", "WR-04: previewOrError carries result preview")
+        } else {
+            XCTFail("third bus event must be toolCallEnd, got \(busEvents[2])")
+        }
         let calls = await inner.snapshot()
         XCTAssertEqual(calls.count, 1)
+    }
+
+    /// CR-03 (REVIEW 05) regression: the bus toolUseId is the ORIGINAL
+    /// String id from Anthropic / Ollama, NOT a synthesized UUID. The same
+    /// String is carried verbatim across toolCallStart, argsPreviewUpdate,
+    /// and toolCallEnd so downstream consumers (orchestrator, ReplayLog,
+    /// HUD) can correlate.
+    func test_dispatch_busToolUseId_isOriginalString_acrossAllEmissions() async throws {
+        let bus = SpyBus()
+        let inner = SpyInnerDispatcher(
+            confirmationFor: ["run_applescript": true],
+            scriptedResult: .success(Data("ok".utf8))
+        )
+        let broker = await makeScriptedBroker(outcome: .approve)
+        let dispatcher = ConfirmingToolDispatcher(
+            inner: inner,
+            broker: broker,
+            bus: bus,
+            argsPreviewSanitizer: passthroughSanitizer
+        )
+
+        let anthropicId = "toolu_01ABCDEFGHIJKLMNOPQRSTUVWX"
+        let req = ToolUseRequest(id: anthropicId, name: "run_applescript", argsJSON: Data("{}".utf8))
+        _ = try await dispatcher.dispatch(toolUse: req)
+
+        let busEvents = await bus.snapshot()
+        XCTAssertEqual(busEvents.count, 3, "approve path emits 3 events (WR-04)")
+        for (idx, event) in busEvents.enumerated() {
+            switch event {
+            case .toolCallStart(let id, _, _),
+                 .argsPreviewUpdate(let id, _, _),
+                 .toolCallEnd(let id, _, _, _):
+                XCTAssertEqual(
+                    id, anthropicId,
+                    "CR-03: bus event #\(idx) must carry original toolUse.id (got \(id), expected \(anthropicId))"
+                )
+            }
+        }
+    }
+
+    /// CR-03 (REVIEW 05): a non-UUID Ollama-style id flows through verbatim.
+    /// Previously `UUID(uuidString:) ?? UUID()` synthesized a fresh random
+    /// UUID for every non-UUID id, breaking correlation.
+    func test_dispatch_nonUUIDId_passesThroughVerbatim_onDeny() async {
+        let bus = SpyBus()
+        let inner = SpyInnerDispatcher(confirmationFor: ["run_applescript": true])
+        let broker = await makeScriptedBroker(outcome: .deny)
+        let dispatcher = ConfirmingToolDispatcher(
+            inner: inner,
+            broker: broker,
+            bus: bus,
+            argsPreviewSanitizer: passthroughSanitizer
+        )
+
+        let ollamaId = "ollama-call-7f3a"
+        let req = ToolUseRequest(id: ollamaId, name: "run_applescript", argsJSON: Data("{}".utf8))
+        do {
+            _ = try await dispatcher.dispatch(toolUse: req)
+            XCTFail("expected ConfirmationError.denied")
+        } catch is ConfirmationError {
+            // expected
+        } catch {
+            XCTFail("unexpected error \(error)")
+        }
+
+        let busEvents = await bus.snapshot()
+        for event in busEvents {
+            switch event {
+            case .toolCallStart(let id, _, _),
+                 .argsPreviewUpdate(let id, _, _),
+                 .toolCallEnd(let id, _, _, _):
+                XCTAssertEqual(id, ollamaId, "CR-03: non-UUID id must flow through verbatim")
+            }
+        }
     }
 
     /// On deny: throws ConfirmationError.denied, emits toolCallEnd(ok:false),

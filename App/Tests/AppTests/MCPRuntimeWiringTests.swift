@@ -56,13 +56,14 @@ final class MCPRuntimeWiringTests: XCTestCase {
         private(set) var startCount: Int = 0
         private(set) var endCount: Int = 0
         private(set) var updateCount: Int = 0
-        func emitToolCallStart(toolUseId: UUID, name: String, argsPreview: String) async {
+        // CR-03 (REVIEW 05): toolUseId is String, not UUID.
+        func emitToolCallStart(toolUseId: String, name: String, argsPreview: String) async {
             startCount += 1
         }
-        func updateArgsPreview(toolUseId: UUID, name: String, argsPreview: String) async {
+        func updateArgsPreview(toolUseId: String, name: String, argsPreview: String) async {
             updateCount += 1
         }
-        func emitToolCallEnd(toolUseId: UUID, name: String, ok: Bool, previewOrError: String) async {
+        func emitToolCallEnd(toolUseId: String, name: String, ok: Bool, previewOrError: String) async {
             endCount += 1
         }
         func snapshot() -> (start: Int, end: Int, update: Int) {
@@ -108,6 +109,9 @@ final class MCPRuntimeWiringTests: XCTestCase {
         let snap = await bus.snapshot()
         XCTAssertEqual(snap.start, 1, "awaiting-approval bus emission once")
         XCTAssertEqual(snap.update, 1, "post-approval argsPreview update once")
+        // WR-04 (REVIEW 05): success path now emits toolCallEnd(ok:true)
+        // so HUD ToolCallCard transitions Running → Completed.
+        XCTAssertEqual(snap.end, 1, "WR-04: success path emits toolCallEnd")
         let dispatched = await inner.snapshot()
         XCTAssertEqual(dispatched, ["run_applescript"])
     }

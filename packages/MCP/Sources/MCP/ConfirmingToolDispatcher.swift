@@ -41,19 +41,26 @@ import JarvisLogging
 /// dispatcher doesn't depend on Bus directly; the App-level wiring
 /// implements it on top of the existing `BusOutbound.toolCallStart` /
 /// `toolCallEnd` cases.
+///
+/// CR-03 (REVIEW 05): `toolUseId` is the original String id from
+/// Anthropic's `toolu_01ABCD…` / Ollama free-form id formats, NEVER a
+/// UUID. The bus's `toolCallStart.id` is `String` per Phase 2's closed
+/// schema; the orchestrator's tool-use record and ReplayLog both
+/// correlate by this same String id. Synthesizing a UUID here would
+/// break audit-trail correlation across bus / replay / orchestrator.
 public protocol BusGateway: Sendable {
     /// Pre-approval emission: `argsPreview = "{\"awaitingApproval\":true}"`.
     /// Literal seal — see file-level comment.
-    func emitToolCallStart(toolUseId: UUID, name: String, argsPreview: String) async
+    func emitToolCallStart(toolUseId: String, name: String, argsPreview: String) async
 
     /// Post-approval follow-up carrying the sanitized argsPreview. The
     /// HUD's ToolCallCard reconciles this with the prior toolCallStart by
     /// `toolUseId`.
-    func updateArgsPreview(toolUseId: UUID, name: String, argsPreview: String) async
+    func updateArgsPreview(toolUseId: String, name: String, argsPreview: String) async
 
     /// Emitted on .deny / .timeout / .barge with `ok: false` and a
     /// human-readable reason in `previewOrError`.
-    func emitToolCallEnd(toolUseId: UUID, name: String, ok: Bool, previewOrError: String) async
+    func emitToolCallEnd(toolUseId: String, name: String, ok: Bool, previewOrError: String) async
 }
 
 // MARK: - Dispatcher
@@ -103,22 +110,35 @@ public actor ConfirmingToolDispatcher: ToolDispatcher {
         }
 
         // Step 1 — emit awaiting-approval phase to the bus. Args are SEALED.
-        // The toolUse.id from Anthropic / Ollama is a string; convert to
-        // UUID where possible, fallback to fresh UUID for synthetic ids
-        // (e.g. tool_use blocks the SDK didn't stamp with a UUID).
-        let toolUseUUID = UUID(uuidString: toolUse.id) ?? UUID()
+        //
+        // CR-03 (REVIEW 05): pass the ORIGINAL toolUse.id (Anthropic
+        // 'toolu_01ABC…' or Ollama free-form) verbatim to the bus. The bus
+        // schema's toolUseId is String (Phase 2 closed schema); the
+        // orchestrator's tool-use record and ReplayLog already correlate by
+        // this same id. Previously we synthesized a fresh UUID via the SDK
+        // which silently produced a fresh UUID on EVERY non-UUID id (i.e.
+        // every Anthropic / Ollama call), breaking cross-system correlation.
+        //
+        // The broker, internally, still keys by UUID — a fresh UUID per
+        // call so concurrent requests don't collide. The internal UUID
+        // does NOT replace the bus-facing String id.
+        let busToolUseId = toolUse.id
+        // Internal correlation key for the broker FSM — independent of the
+        // bus-facing String id. Fresh UUID per call; concurrent requests
+        // get distinct broker entries even when their bus ids collide
+        // (e.g. test fixtures using fixed strings).
+        let internalCorrelationID = UUID()
         let awaitingPreview = #"{"awaitingApproval":true}"#
         await bus?.emitToolCallStart(
-            toolUseId: toolUseUUID,
+            toolUseId: busToolUseId,
             name: toolUse.name,
             argsPreview: awaitingPreview
         )
 
-        // Step 2 — await broker. The broker's pending-id matches the
-        // toolUseUUID so the HUD ring's awaitingConfirmation state can
-        // correlate with the presenter's panel keying.
+        // Step 2 — await broker. Broker keys by UUID internally; this is
+        // independent of the bus-facing String id (CR-03).
         let outcome = await broker.request(
-            id: toolUseUUID,
+            id: internalCorrelationID,
             toolName: toolUse.name,
             argsPreview: awaitingPreview
         )
@@ -129,15 +149,41 @@ public actor ConfirmingToolDispatcher: ToolDispatcher {
             // Emit follow-up argsPreview carrying the sanitized real args.
             let postApprovalPreview = argsPreviewSanitizer(toolUse.argsJSON)
             await bus?.updateArgsPreview(
-                toolUseId: toolUseUUID,
+                toolUseId: busToolUseId,
                 name: toolUse.name,
                 argsPreview: postApprovalPreview
             )
-            return try await inner.dispatch(toolUse: toolUse)
+            // WR-04 (REVIEW 05): on success, emit toolCallEnd(ok: true) so
+            // bus consumers (HUD ToolCallCard) transition Running → Completed.
+            // Previously the dispatcher only emitted toolCallEnd on failure,
+            // leaving HUD stuck on Running until the orchestrator's own
+            // toolCardUpdate(.completed) landed (and that surface is wired
+            // separately in Phase 4). On dispatch error the result preview
+            // carries the error description; the orchestrator's existing
+            // throw path still records the throw verbatim.
+            do {
+                let resultBytes = try await inner.dispatch(toolUse: toolUse)
+                let resultPreview = Self.previewForResult(resultBytes)
+                await bus?.emitToolCallEnd(
+                    toolUseId: busToolUseId,
+                    name: toolUse.name,
+                    ok: true,
+                    previewOrError: resultPreview
+                )
+                return resultBytes
+            } catch {
+                await bus?.emitToolCallEnd(
+                    toolUseId: busToolUseId,
+                    name: toolUse.name,
+                    ok: false,
+                    previewOrError: String(describing: error)
+                )
+                throw error
+            }
 
         case .deny:
             await bus?.emitToolCallEnd(
-                toolUseId: toolUseUUID,
+                toolUseId: busToolUseId,
                 name: toolUse.name,
                 ok: false,
                 previewOrError: "denied by user"
@@ -152,7 +198,7 @@ public actor ConfirmingToolDispatcher: ToolDispatcher {
                 + "\(toolUse.name) (toolUseId=\(toolUse.id))"
             )
             await bus?.emitToolCallEnd(
-                toolUseId: toolUseUUID,
+                toolUseId: busToolUseId,
                 name: toolUse.name,
                 ok: false,
                 previewOrError: "approval timed out after \(Int(timeoutSecondsForLogging))s"
@@ -161,13 +207,24 @@ public actor ConfirmingToolDispatcher: ToolDispatcher {
 
         case .barge:
             await bus?.emitToolCallEnd(
-                toolUseId: toolUseUUID,
+                toolUseId: busToolUseId,
                 name: toolUse.name,
                 ok: false,
                 previewOrError: "superseded by new turn (barge-in)"
             )
             throw ConfirmationError.barged
         }
+    }
+
+    /// 256-byte UTF-8 truncating preview of a successful tool result. Same
+    /// shape the production sanitizer in MCPRuntimeWiring uses for
+    /// argsPreview, applied to result bytes for the WR-04 toolCallEnd
+    /// previewOrError field.
+    private static func previewForResult(_ bytes: Data) -> String {
+        guard let s = String(data: bytes, encoding: .utf8) else { return "(non-UTF-8 result)" }
+        if s.utf8.count <= 256 { return s }
+        let head = Data(s.utf8.prefix(256))
+        return String(decoding: head, as: UTF8.self) + "…[result-truncated]"
     }
 
     public nonisolated func requiresConfirmation(toolName: String) -> Bool {
