@@ -38,7 +38,13 @@ ALLOWLIST=(
     "packages/MCP/Sources/MCP/ConfirmationPresenter.swift"
 )
 
-PATTERN='runModal\b|beginModalSession\b|NSApp\.run\b|NSApplication\.shared\.run\b|NSAlert.*\.runModal\b'
+# WR-01 (REVIEW 05): tighten the grep so it only fires on actual call
+# sites, not bare identifiers, doc-comment mentions, or string literals.
+# Each alternation now requires either a `.method(` (instance call) or
+# `Type.method(` (static call) shape — so `let docs = "Use NSApp.run() ..."`
+# inside a string no longer triggers the lint after the pre-strip pass
+# below scrubs string literals.
+PATTERN='\.runModal[[:space:]]*\(|\.beginModalSession[[:space:]]*\(|NSApp\.run[[:space:]]*\(|NSApplication\.shared\.run[[:space:]]*\('
 
 is_allowlisted() {
     local path="$1"
@@ -54,12 +60,23 @@ is_allowlisted() {
 
 scan_file() {
     local file="$1"
-    # Strip lines whose first non-whitespace is `//` so doc-comment
-    # mentions of runModal don't false-positive. Block comments /* */ are
-    # uncommon in this codebase; the cross-check by grep -v keeps the
-    # regex simple.
+    # WR-01 (REVIEW 05): pre-strip line comments, block comments, and
+    # string literals before grep — otherwise documentation that mentions
+    # `NSApp.run()` inside quotes or `/* */` blocks would false-positive
+    # after the previous fix only stripped LEADING `//` lines.
+    #
+    # The sed pipeline:
+    #   1. `s|//.*$||`            strip trailing line comments
+    #   2. `/\/\*/,/\*\//d`        delete lines from `/*` to `*/` inclusive
+    #   3. `s/"[^"]*"//g`          strip "..." string literals (one-line)
+    #
+    # The block-comment delete is line-based (whole-line removal, not
+    # per-character), so a line that opens AND closes a block comment
+    # plus has a real call site on the same line would be incorrectly
+    # filtered out. That's an acceptable trade — the codebase doesn't use
+    # this idiom and the false-negative is bounded.
     local matches
-    matches="$(grep -vE '^[[:space:]]*//' "$file" | grep -E "$PATTERN" || true)"
+    matches="$(sed -E 's|//.*$||; /\/\*/,/\*\//d; s/"[^"]*"//g' "$file" | grep -E "$PATTERN" || true)"
     if [ -n "$matches" ]; then
         if is_allowlisted "$file"; then
             return 0
