@@ -1,14 +1,14 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-24T19:00:00Z",
+  "timestamp": "2026-04-25T15:00:00Z",
   "context": "phase",
-  "phase": "04",
-  "phase_name": "agent-core",
-  "phase_dir": ".planning/phases/04-agent-core",
+  "phase": "05",
+  "phase_name": "mcp",
+  "phase_dir": ".planning/phases/05-mcp",
   "plan": null,
   "task": null,
   "total_tasks": null,
-  "status": "phase_4_verified_closed_phase_5_planning_next",
+  "status": "phase_5_planned_ready_for_execute",
   "completed_phases": [
     {"phase": "01", "name": "foundations", "status": "code_complete_with_human_uat", "verification": "human_needed", "human_items": 4, "plans_done": "5/5"},
     {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"},
@@ -27,8 +27,16 @@
     "code_review_passed": false,
     "phase_verified": false,
     "plans_completed": [],
-    "plans_remaining": ["TBD — research banked at 1069 lines; /gsd-plan-phase 5 will produce N PLAN.md files"],
-    "wave_layout": "TBD — populated by /gsd-plan-phase 5",
+    "plans_remaining": ["05-01", "05-02", "05-03", "05-04", "05-05"],
+    "plans_authored": true,
+    "wave_layout": {
+      "wave_1": ["05-01 MCPClient + StdioTransport + restart mutex + ChildSpawnGate"],
+      "wave_2": ["05-02 mcp-time + mcp-clipboard helpers"],
+      "wave_3": ["05-03 mcp-applescript helper (autonomous: false — App ID capability gate)"],
+      "wave_4": ["05-04 sanitize→headTruncate pipeline + MCPToolDispatcher (conforms P4 ToolDispatcher)"],
+      "wave_5": ["05-05 ConfirmationBroker + AppKit NSPanel presenter + ConfirmingToolDispatcher + AppDelegate wiring + modal-presentation lint (closes ME-04)"]
+    },
+    "plan_check_findings": "PASS after 1 revision — initial draft had 2 BLOCKERs (05-05 truncated mid-Task 2; wave-2 project.yml collision between 05-02 and 05-03). Fixed by completing 05-05 (1144 lines, 5 tasks, full STRIDE block) and bumping waves so each helper-modifying-project.yml plan is in its own wave.",
     "wave_2_deviations": [
       "04-02 (OllamaProvider) and 04-03 (Replay log) executed in parallel worktrees — disjoint scope (packages/AgentCore/Sources/OllamaProvider/* vs packages/Replay/* + packages/Logging/Sources/JarvisLogging/JarvisLogChannel.swift). Neither auto-FF'd this time. Orchestrator FF-merged 04-02 then cherry-picked 04-03's 4 commits onto develop to keep linear history. No conflicts."
     ],
@@ -72,7 +80,7 @@
     {"decision": "Phase 3 H-02 fix: attach to existing window.jarvisBus (Option B, minimal edit)", "rationale": "WKContentWorld isolation — Injection.js installs in JarvisBusWorld, default-world send() can't reach webkit.messageHandlers. Option B avoids touching Swift.", "phase": "03", "plan": "03-review-fix"}
   ],
   "uncommitted_files": [],
-  "tree_tip": "2e7e5c1",
+  "tree_tip": "9ee1ec7",
   "tests_passing": {
     "spm_packages": {
       "Keychain": 6,
@@ -93,6 +101,6 @@
       "scripts_smoke_test_hud_sh": "PASS"
     }
   },
-  "next_action": "Run /gsd-plan-phase 5 (MCP — research banked at 1069 lines). After plans land: /gsd-execute-phase 5. Plan 5 will close ME-04 (orch→replay 2048-cap live wiring) when the real ToolDispatcher interposes. Phases 6 (Voice), 7 (Memory+Vision), 8 (Hardening) follow.",
-  "context_notes": "Phase 4 verified PASSED (14/14 REQ-IDs covered, all gates green, post-review fixes audited not trusted). 281 total SPM tests across 8 packages. Tree clean on develop at 2e7e5c1. Phase 4 closed cleanly with 1 BLOCKER + 2 HIGH + 5 MEDIUM fixed; ME-04 deferred per known-stub (orch→replay live wiring lands in Phase 5 with real ToolDispatcher). All hand-rolled per CLAUDE.md (no Anthropic SDK, no SQLite.swift, only qwen2.5-coder:32b for Ollama). The Xcode 26 xctest harness bug is upstream-blocked — DO NOT re-attempt fixing. STATE.md is still Phase-1-era; refresh it during Phase 5 verify or ad-hoc before milestone close."
+  "next_action": "Run /gsd-execute-phase 5 (MCP). Wave 1 alone first (05-01 MCPClient foundation). Then sequentially: W2 (05-02 helpers), W3 (05-03 mcp-applescript — has user_setup gate, autonomous: false), W4 (05-04 sanitize+dispatcher), W5 (05-05 broker+presenter+wiring + ME-04 closure). After execute: /gsd-code-review 5 → /gsd-code-review-fix 5 if findings → /gsd-verify-phase 5 → close.",
+  "context_notes": "Phase 5 plans authored + verified PASS. 5 plans across 5 sequential waves (no parallelism — both helper-bundle plans 05-02 and 05-03 modify project.yml; bumping 05-03 to its own wave was cleaner than serializing within a wave). Plan 05-05 explicitly closes ME-04 (Phase 4 deferred) by instantiating BoundedAsyncChannel(capacity: 2048, policy: .dropOldest) in production AppDelegate. Phase 4 closed PASSED 14/14 REQ-IDs at 2e7e5c1; tree at 9ee1ec7 (Phase 5 plans untracked). 281 SPM tests across 8 packages from Phases 1-4. Xcode 26 xctest harness still upstream-blocked. STATE.md is still Phase-1-era; refresh ad-hoc before milestone close."
 }

@@ -147,7 +147,17 @@ Plans:
   5. Child processes spawn through a single `ChildSpawnGate` that enforces `FD_CLOEXEC` on parent long-lived FDs plus a minimal environment (`PATH=/usr/bin:/bin` only) (MCP-08). No helper inherits the parent's env by default.
   6. Tool-result sanitize pipeline runs on every MCP-boundary byte stream in a fixed order: **sanitize → headTruncate → wrapUntrusted**, called BEFORE packing into `LLMMessage` history (SEC-07). Sanitize enforces UTF-8 validity, strips C0 controls (except `\t`), strips bidi/zero-width characters, and caps line length. Replay captures both pre- and post-sanitize bytes.
 
-**Plans**: TBD
+**Plans** (5 plans across 5 waves):
+
+| Plan | Wave | Depends on | REQ-IDs | Autonomous |
+|------|------|------------|---------|------------|
+| `05-01-mcp-client-stdio-transport` | 1 | [] | MCP-01, MCP-07, MCP-08 | yes |
+| `05-02-helpers-time-clipboard` | 2 | [05-01] | MCP-02, MCP-03 | yes |
+| `05-03-helper-applescript` | 3 | [05-01] | MCP-04 (helper portion) | no (App ID capability gate) |
+| `05-04-sanitize-pipeline-tool-dispatcher` | 4 | [05-01, 05-02, 05-03] | SEC-07 | yes |
+| `05-05-confirmation-broker-presenter-wiring` | 5 | [05-01, 05-02, 05-03, 05-04] | MCP-04, MCP-09, AGENT-11 | yes |
+
+Waves are sequential (W1 → W2 → W3 → W4 → W5) because the helper bundle plans (05-02, 05-03) both modify `project.yml`, so they cannot run in parallel. Plan 05-05 also closes ME-04 (Phase 4's deferred orch→replay 2048-cap live wiring) by instantiating the BoundedAsyncChannel in production AppDelegate.
 
 ### Phase 6: Voice
 
