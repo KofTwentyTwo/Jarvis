@@ -6,6 +6,8 @@ import JarvisLogging
 import Shell
 import WebKit
 import Logging   // swift-log — `Logger` here is `Logging.Logger`
+import AgentCore       // Plan 05-05: BoundedAsyncChannel for ME-04 closure
+import Replay          // Plan 05-05: ReplayEvent type for the orch→replay channel
 
 /// Abstract the Info.plist `JarvisEntitlementsVerified` read so tests can inject
 /// a mock that returns false without touching the running binary's Info.plist.
@@ -94,6 +96,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var dormantAgentContinuation: AsyncStream<AgentHudIntent>.Continuation?
     var dormantVoiceContinuation: AsyncStream<VoiceHudIntent>.Continuation?
     var dormantConfirmContinuation: AsyncStream<ConfirmHudIntent>.Continuation?
+
+    /// Plan 05-05 / ME-04 closure (Plan 04-05 deferred state).
+    ///
+    /// Production instance of the orch→replay 2048-capacity .dropOldest
+    /// `BoundedAsyncChannel<ReplayEvent>`. Plan 04-03 created the primitive;
+    /// Plan 04-05's ChannelTopologyTests CT2 verified the contract; Plan
+    /// 05-05 (this file) instantiates it in production code so future
+    /// orchestrator wiring (later plan) drains replay events through this
+    /// channel rather than directly into the ReplayLog. The 2048 capacity
+    /// + .dropOldest policy is the AGENT-10 spec for tokenDelta-class
+    /// events: lossy on saturation, freshness > completeness.
+    ///
+    /// Held strongly here so it doesn't deinit before consumers attach;
+    /// the orch→replay seam consumes it via a `for await` drain Task.
+    var orchToReplayChannel: BoundedAsyncChannel<ReplayEvent>?
+
+    /// Drain task spawned in `applicationWillFinishLaunching` — reads from
+    /// `orchToReplayChannel` and forwards to the (future) ReplayLog. For
+    /// now (pre-orchestrator) the task drains and discards; the production
+    /// consumer wires in once the orchestrator is instantiated.
+    ///
+    /// Future wiring lands when AgentOrchestrator + ReplayLog open: the
+    /// AppDelegate calls `MCPRuntimeWiring.build(bundleURL:bus:replayLog:)`
+    /// to assemble the ConfirmingToolDispatcher chain (Plan 05-05) and
+    /// passes its dispatcher into the orchestrator. Until then the
+    /// channel + drain Task above are the production ME-04 instantiation
+    /// (Plan 04-05's CT2 verified the primitive; this is the prod
+    /// instance).
+    var orchToReplayDrainTask: Task<Void, Never>?
 
     /// Plan 03-05 test seam. Default production value is `"index"` (the R3F
     /// bundle entry). `installBus()` assigns this once when it resolves the
@@ -201,10 +232,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !apiKeyStored {
             openWizard(firstLaunch: true)
         }
+
+        // 9. Plan 05-05 / ME-04 closure: instantiate the orch→replay
+        // 2048-capacity .dropOldest channel that Plan 04-05's CT2 only
+        // verified as a primitive. The drain task fires-and-forgets each
+        // event until the (later-plan) orchestrator wires its real
+        // ReplayLog consumer through this seam. The channel's existence
+        // in production code IS the deliverable — without instantiation
+        // the orchestrator's replay-emit path has no consumer to attach
+        // to, and ME-04 stays open.
+        let channel = BoundedAsyncChannel<ReplayEvent>(capacity: 2048, policy: .dropOldest)
+        orchToReplayChannel = channel
+        orchToReplayDrainTask = Task.detached { [weak self] in
+            for await _ in channel {
+                _ = self  // silence unused-capture; future plan wires the real consumer.
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkeyBinder?.unbind()
+        // Plan 05-05 / ME-04: tear down the orch→replay drain so the Task
+        // doesn't outlive the process.
+        orchToReplayDrainTask?.cancel()
     }
 
     // MARK: - Test-host detection

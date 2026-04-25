@@ -36,6 +36,16 @@ packages:
     path: packages/Shell
   Bus:
     path: packages/Bus
+  # Plan 05-05: App-level wiring consumes JarvisMCP (the confirmation
+  # broker / dispatcher / presenter chain), AgentCore (BoundedAsyncChannel
+  # for ME-04 closure + ToolUseRequest), and Replay (ReplayEvent type for
+  # the orch→replay channel + ReplayLog for the SEC-07 observer).
+  AgentCore:
+    path: packages/AgentCore
+  MCP:
+    path: packages/MCP
+  Replay:
+    path: packages/Replay
   # MCP Swift SDK — consumed by `mcp-time`, `mcp-clipboard` (Plan 05-02), and
   # `mcp-applescript` (Plan 05-03) helper targets. Pinned at the same exact
   # version as `packages/MCP/Package.swift` (Plan 05-01) to avoid
@@ -43,6 +53,15 @@ packages:
   swift-sdk:
     url: https://github.com/modelcontextprotocol/swift-sdk
     exactVersion: "0.12.0"
+  # Plan 05-05: swift-log is consumed transitively by `JarvisLogging`,
+  # `Replay`, `AgentOrchestrator`, and `JarvisMCP`. The Xcode framework
+  # linker needs an explicit App-target dependency once these are linked
+  # as separate frameworks (the App previously only saw Logging through
+  # JarvisLogging's exported symbols, which xcodegen surfaces as a
+  # "Logger.MetadataValue undefined" linker error).
+  swift-log:
+    url: https://github.com/apple/swift-log.git
+    from: "1.5.0"
 targets:
   Jarvis:
     type: application
@@ -108,6 +127,23 @@ targets:
         product: Shell
       - package: Bus
         product: Bus
+      # Plan 05-05: App-level MCP runtime wiring (App/MCP/MCPRuntimeWiring,
+      # App/MCP/ReplayingToolResultObserver) consumes these.
+      - package: AgentCore
+        product: AgentCore
+      - package: AgentCore
+        product: AgentOrchestrator
+      - package: MCP
+        product: JarvisMCP
+      - package: Replay
+        product: Replay
+      # Plan 05-05: AppDelegate and other App sources `import Logging`
+      # (swift-log's Logger). The App target previously got swift-log
+      # transitively through JarvisLogging; the Xcode framework linker is
+      # stricter once the App pulls in extra package frameworks (Replay,
+      # AgentCore, JarvisMCP) so the dep needs to be explicit.
+      - package: swift-log
+        product: Logging
       # Plan 05-02 / 05-03: build the helper apps before the Jarvis copyFiles
       # phase consumes them. xcodegen orders target dependencies before copy
       # phases.
@@ -237,6 +273,32 @@ targets:
           CODE_SIGNING_REQUIRED: NO
     dependencies:
       - target: Jarvis
+      # Plan 05-05: MCPRuntimeWiringTests imports JarvisMCP, AgentCore, Replay
+      # for the structural wiring-graph assertions. Adding these new
+      # package deps to the AppTests target unfortunately disturbs the
+      # transitive resolution of Config/Keychain/Bus/Shell/Logging that the
+      # bundle was getting through `target: Jarvis`; declare them
+      # explicitly so the test bundle links cleanly.
+      - package: AgentCore
+        product: AgentCore
+      - package: AgentCore
+        product: AgentOrchestrator
+      - package: MCP
+        product: JarvisMCP
+      - package: Replay
+        product: Replay
+      - package: swift-log
+        product: Logging
+      - package: Config
+        product: Config
+      - package: Keychain
+        product: Keychain
+      - package: Bus
+        product: Bus
+      - package: Shell
+        product: Shell
+      - package: Logging
+        product: JarvisLogging
   JarvisEntitlementProbeTests:
     type: bundle.unit-test
     platform: macOS

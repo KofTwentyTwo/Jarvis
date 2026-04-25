@@ -28,6 +28,12 @@ let package = Package(
         // to. AgentCore intentionally does NOT depend on MCP — the
         // orchestrator is provider-agnostic and only sees the protocol.
         .package(path: "../AgentCore"),
+        // Plan 05-05 deviation (Rule 3, blocking): Sources `import
+        // Logging` (swift-log) directly. SPM tolerated implicit
+        // transitive visibility through JarvisLogging; the Xcode
+        // framework linker is stricter and needs the explicit dep so
+        // JarvisMCP.framework links cleanly when consumed by App target.
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
     ],
     targets: [
         .target(
@@ -37,6 +43,7 @@ let package = Package(
                 .product(name: "JarvisLogging", package: "Logging"),
                 .product(name: "AgentCore", package: "AgentCore"),
                 .product(name: "AgentOrchestrator", package: "AgentCore"),
+                .product(name: "Logging", package: "swift-log"),
             ],
             path: "Sources/MCP",
             swiftSettings: [.swiftLanguageMode(.v6)]

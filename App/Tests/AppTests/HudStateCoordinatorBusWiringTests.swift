@@ -113,7 +113,11 @@ final class HudStateCoordinatorBusWiringTests: XCTestCase {
         // If either enum gains or renames a case without the other, this
         // table-driven check fires before `busHudState(from:)` hits its
         // assertionFailure at runtime.
-        for appCase in HudState.allCases {
+        // Plan 05-05 deviation (Rule 1): Adding JarvisMCP / Replay
+        // framework deps to the AppTests target made unqualified
+        // `HudState` ambiguous between `Jarvis.HudState` and
+        // `Bus.HudState`. Qualified references restore disambiguation.
+        for appCase in Jarvis.HudState.allCases {
             XCTAssertNotNil(
                 Bus.HudState(rawValue: appCase.rawValue),
                 "App.HudState.\(appCase.rawValue) has no matching Bus.HudState rawValue"
@@ -122,12 +126,12 @@ final class HudStateCoordinatorBusWiringTests: XCTestCase {
         // Reverse parity — Bus cases must all be representable in App.
         for busCase in Bus.HudState.allCases {
             XCTAssertNotNil(
-                HudState(rawValue: busCase.rawValue),
+                Jarvis.HudState(rawValue: busCase.rawValue),
                 "Bus.HudState.\(busCase.rawValue) has no matching App.HudState rawValue"
             )
         }
         // Spot-check the helper on every App case.
-        for appCase in HudState.allCases {
+        for appCase in Jarvis.HudState.allCases {
             let bus = busHudState(from: appCase)
             XCTAssertEqual(bus.rawValue, appCase.rawValue)
         }

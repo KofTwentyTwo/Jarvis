@@ -10,6 +10,7 @@
 		01787A3F29649644D0B3090D /* MCPAppleScriptMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5077B9E3E7541D72CE0EB1B /* MCPAppleScriptMain.swift */; };
 		0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF0892A5DFF2AD38A93834 /* BannerContent.swift */; };
 		07E7F32B3857ED215DE59FBE /* Keychain in Frameworks */ = {isa = PBXBuildFile; productRef = 1440CCDB2CC412B099BD0310 /* Keychain */; };
+		0B1E24FF2DB306F28A36680E /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 8B5C832427B631F1F6EED6C2 /* Logging */; };
 		17072C84550FC4659C4810B9 /* MCPTimeMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCA2C937A1629F873729B75 /* MCPTimeMain.swift */; };
 		18CDCC4155A2604BC4D67147 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 467AE2D19D58325D227E2F89 /* Assets.xcassets */; };
 		1D281661B4A64095FF9FA8BA /* Bus in Frameworks */ = {isa = PBXBuildFile; productRef = FB642DDAD826E62BBE1B8623 /* Bus */; };
@@ -23,27 +24,37 @@
 		526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */; };
 		535CF63FE4AD779CE4EBFA2A /* HudStateBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6569DC91C2ACEB0E1396E1B8 /* HudStateBridge.swift */; };
 		573540593E2D1EB1F0F6F31C /* WizardTCCStageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */; };
+		5AD556F5095852328E72BE36 /* MCPRuntimeWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B5B16BDAC02919861AA4B0B /* MCPRuntimeWiringTests.swift */; };
 		5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */; };
+		5D3E4C1819EE3CC3A1EA74F6 /* Replay in Frameworks */ = {isa = PBXBuildFile; productRef = DD541498D4EDB1CB45EDBA21 /* Replay */; };
 		63C72C019170ED28C4900DB9 /* WizardStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */; };
 		66B4B219EF4EC3EBDE5D1A4B /* AppDelegateWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */; };
 		6A2D9DE01C3C53094A820DDF /* JarvisEntitlementProbeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36AC239C99B913A4767C0EE8 /* JarvisEntitlementProbeTests.swift */; };
+		6AD395C3C083197537B81713 /* AgentCore in Frameworks */ = {isa = PBXBuildFile; productRef = 73CDBE39012C4ECD47291B0E /* AgentCore */; };
 		7270A6A54B0DC1510EB9C56A /* WizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33A1960A6404CD790036C46 /* WizardView.swift */; };
 		781E23F05F4EBBD3D3CB8E3F /* AppleScriptRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F80410112AAA66BF53BBC28 /* AppleScriptRunner.swift */; };
 		78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF7206DB98EC02734975536 /* HudState.swift */; };
 		79991014825C2BF8E7226CF8 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 003ADC59F1F11095A80EAE32 /* MCP */; };
 		7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */; };
+		8161FA597A019607B3DE7DA1 /* JarvisLogging in Frameworks */ = {isa = PBXBuildFile; productRef = 0216B841D52A80482E6DA800 /* JarvisLogging */; };
 		8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1517F151F3BA96803143692 /* AppDelegate.swift */; };
 		896984D88C412595C0F6F97E /* HudStateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511D7B2406F485ED0D4B9E0D /* HudStateIntent.swift */; };
 		8E4590089A7955545E2146D3 /* HudStateCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */; };
+		8EF7109838AD91E95506BD1B /* MCPRuntimeWiring.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF3EF4CDCC653EF50D99AF7 /* MCPRuntimeWiring.swift */; };
+		92BBF98C9A7B9B7835FC0949 /* Replay in Frameworks */ = {isa = PBXBuildFile; productRef = 8E74C5DEAD36FEDB6342A54D /* Replay */; };
 		93FDBFFCCEFC0848F1C5E630 /* AppDelegateBusWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6BA7673B5FD73B588D9084 /* AppDelegateBusWiringTests.swift */; };
+		94512D113669E85D50AC6C8C /* AgentOrchestrator in Frameworks */ = {isa = PBXBuildFile; productRef = 9DC9B6B513D7CCE63399A43B /* AgentOrchestrator */; };
 		9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */; };
 		9A06E835DE29158C0EC43DE3 /* webview in Resources */ = {isa = PBXBuildFile; fileRef = 8C8267C7BE6D4B16FEE6004E /* webview */; };
+		9ECD7215D86C83BB826F903E /* Shell in Frameworks */ = {isa = PBXBuildFile; productRef = 8D3EE6699BA5134A3A067596 /* Shell */; };
 		9F451A31E6DF755ABC86885A /* WizardStageTCCView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43886353ECED823D4CB689D3 /* WizardStageTCCView.swift */; };
 		A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */; };
+		A30C09AE5D98B07A92945E1F /* ReplayingToolResultObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0358E0CAC1377752398FA3C4 /* ReplayingToolResultObserver.swift */; };
 		A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */; };
 		A9F18AF7B16BEA1776F76321 /* HUDBannerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */; };
 		AA6FBB22D0352A50335801C1 /* MCPClipboardMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF983357F35F736ADCEF1D5 /* MCPClipboardMain.swift */; };
 		AC359FF68F49110FF9B6E6E5 /* WizardStageAPIKeyViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */; };
+		B2072C6FF5589D00A8B19613 /* AgentOrchestrator in Frameworks */ = {isa = PBXBuildFile; productRef = 955423140BB4EC27191C4FA7 /* AgentOrchestrator */; };
 		B64A0CAA46B3C146B54F9F85 /* HUDBannerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */; };
 		BBD8BBC82E0D3C57E0DB4ED0 /* HudStateEnumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */; };
 		BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */; };
@@ -52,11 +63,18 @@
 		C9F3B34208084769106C4B07 /* HudStateCoordinatorBusWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46CB8B7693CEA625D7331C3E /* HudStateCoordinatorBusWiringTests.swift */; };
 		CD22CB0656265A2623BA7FD0 /* AnthropicKeyValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39DD53A4E2CCED58C85B63FC /* AnthropicKeyValidatorTests.swift */; };
 		CFBEF67D687A1227C9C2A6BD /* HUDBannerCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */; };
+		CFFC4AB8D77907C477B1E947 /* JarvisMCP in Frameworks */ = {isa = PBXBuildFile; productRef = DE970D2B3CA1AB0097A120D3 /* JarvisMCP */; };
+		D0F74EFBDD6B9FDD0FC15A80 /* JarvisMCP in Frameworks */ = {isa = PBXBuildFile; productRef = 0AA20E2847670C06A4E77816 /* JarvisMCP */; };
+		D85C8151FBA82DBDA57E0CBA /* Keychain in Frameworks */ = {isa = PBXBuildFile; productRef = B2A25AADC21AA52E8197BC00 /* Keychain */; };
+		DC9B4FF6C5861E93709832BB /* Bus in Frameworks */ = {isa = PBXBuildFile; productRef = 97D6A753B03EF5503BEB726F /* Bus */; };
+		DD8919E2AB6DF6CDFE8CB322 /* AgentCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4CB4DC60ABEBF2DC7A7FFE4C /* AgentCore */; };
 		DF6EC4DD8D8A029748F382AE /* Config in Frameworks */ = {isa = PBXBuildFile; productRef = 61127935D1430B78A6FEACB0 /* Config */; };
 		E218ADC35078C6F26F0D0041 /* HUDBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */; };
+		E39D7F3B185FA8D84C33B421 /* Config in Frameworks */ = {isa = PBXBuildFile; productRef = 1058DB02D52D27FA07A79025 /* Config */; };
 		E49FEEFE453A055F65DA31FF /* WizardStageHotkeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */; };
 		E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */; };
 		EB07CD704A3568F27DD4D901 /* Shell in Frameworks */ = {isa = PBXBuildFile; productRef = 6FAD561608B0D1C402015E0D /* Shell */; };
+		F340ACA6D0AD06E8ACF65010 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = D5E0D943EBC768ADB9C87F13 /* Logging */; };
 		F8E9590D40A0B88DD4FD712D /* JarvisLogging in Frameworks */ = {isa = PBXBuildFile; productRef = ED53153FE6F73137C23AD43B /* JarvisLogging */; };
 		F9CD3EC30A33CDBAFA274784 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = EFBD95BA85DEFC31F7583FF2 /* MCP */; };
 /* End PBXBuildFile section */
@@ -102,7 +120,9 @@
 /* Begin PBXFileReference section */
 		00C01D284ECCFC986C7F2E16 /* Keychain */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Keychain; path = packages/Keychain; sourceTree = SOURCE_ROOT; };
 		024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStateTests.swift; sourceTree = "<group>"; };
+		0358E0CAC1377752398FA3C4 /* ReplayingToolResultObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplayingToolResultObserver.swift; sourceTree = "<group>"; };
 		096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBanner.swift; sourceTree = "<group>"; };
+		0B5B16BDAC02919861AA4B0B /* MCPRuntimeWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPRuntimeWiringTests.swift; sourceTree = "<group>"; };
 		0CF7206DB98EC02734975536 /* HudState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudState.swift; sourceTree = "<group>"; };
 		17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerPanel.swift; sourceTree = "<group>"; };
 		1F80410112AAA66BF53BBC28 /* AppleScriptRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleScriptRunner.swift; sourceTree = "<group>"; };
@@ -129,15 +149,18 @@
 		6569DC91C2ACEB0E1396E1B8 /* HudStateBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateBridge.swift; sourceTree = "<group>"; };
 		6784683F2262D8AFA439668D /* JarvisAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageHotkeyView.swift; sourceTree = "<group>"; };
+		756AA19AD01796D665A09094 /* MCP */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MCP; path = packages/MCP; sourceTree = SOURCE_ROOT; };
 		77C5BF4E4B659B0A3325E647 /* AnthropicKeyValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicKeyValidator.swift; sourceTree = "<group>"; };
 		8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinatorTests.swift; sourceTree = "<group>"; };
 		8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardTCCStageTests.swift; sourceTree = "<group>"; };
 		8C8267C7BE6D4B16FEE6004E /* webview */ = {isa = PBXFileReference; lastKnownFileType = folder; name = webview; path = App/Resources/webview; sourceTree = SOURCE_ROOT; };
 		909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateWiringTests.swift; sourceTree = "<group>"; };
 		90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisApp.swift; sourceTree = "<group>"; };
+		960E9FC636D6FF3DD68E5FE9 /* Replay */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Replay; path = packages/Replay; sourceTree = SOURCE_ROOT; };
 		96BF0892A5DFF2AD38A93834 /* BannerContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerContent.swift; sourceTree = "<group>"; };
 		98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerCoordinatorTests.swift; sourceTree = "<group>"; };
 		A16929275D5323F505DF12E9 /* WebviewBundleLoadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebviewBundleLoadTests.swift; sourceTree = "<group>"; };
+		A1E748E1EAA90C94FA7F3707 /* AgentCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentCore; path = packages/AgentCore; sourceTree = SOURCE_ROOT; };
 		A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateEntitlementTests.swift; sourceTree = "<group>"; };
 		A33A1960A6404CD790036C46 /* WizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardView.swift; sourceTree = "<group>"; };
 		A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageAPIKeyViewTests.swift; sourceTree = "<group>"; };
@@ -147,6 +170,7 @@
 		BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageAPIKeyView.swift; sourceTree = "<group>"; };
 		C1517F151F3BA96803143692 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWizardController.swift; sourceTree = "<group>"; };
+		CBF3EF4CDCC653EF50D99AF7 /* MCPRuntimeWiring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPRuntimeWiring.swift; sourceTree = "<group>"; };
 		D5077B9E3E7541D72CE0EB1B /* MCPAppleScriptMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPAppleScriptMain.swift; sourceTree = "<group>"; };
 		D554BFB452EC88ECA9392A2E /* PasteboardReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardReader.swift; sourceTree = "<group>"; };
 		DE712EB628AF5CD6E935E8AF /* HudStateCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinator.swift; sourceTree = "<group>"; };
@@ -182,6 +206,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6341DE8F6C38220389F46936 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DD8919E2AB6DF6CDFE8CB322 /* AgentCore in Frameworks */,
+				94512D113669E85D50AC6C8C /* AgentOrchestrator in Frameworks */,
+				D0F74EFBDD6B9FDD0FC15A80 /* JarvisMCP in Frameworks */,
+				5D3E4C1819EE3CC3A1EA74F6 /* Replay in Frameworks */,
+				0B1E24FF2DB306F28A36680E /* Logging in Frameworks */,
+				E39D7F3B185FA8D84C33B421 /* Config in Frameworks */,
+				D85C8151FBA82DBDA57E0CBA /* Keychain in Frameworks */,
+				DC9B4FF6C5861E93709832BB /* Bus in Frameworks */,
+				9ECD7215D86C83BB826F903E /* Shell in Frameworks */,
+				8161FA597A019607B3DE7DA1 /* JarvisLogging in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		886D43D159942AB5C149B33B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -191,6 +232,11 @@
 				F8E9590D40A0B88DD4FD712D /* JarvisLogging in Frameworks */,
 				EB07CD704A3568F27DD4D901 /* Shell in Frameworks */,
 				1D281661B4A64095FF9FA8BA /* Bus in Frameworks */,
+				6AD395C3C083197537B81713 /* AgentCore in Frameworks */,
+				B2072C6FF5589D00A8B19613 /* AgentOrchestrator in Frameworks */,
+				CFFC4AB8D77907C477B1E947 /* JarvisMCP in Frameworks */,
+				92BBF98C9A7B9B7835FC0949 /* Replay in Frameworks */,
+				F340ACA6D0AD06E8ACF65010 /* Logging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -212,6 +258,7 @@
 				467AE2D19D58325D227E2F89 /* Assets.xcassets */,
 				90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */,
 				F76520C565169D7547EE9608 /* HUD */,
+				EE585F62F46C659EDFC48DE7 /* MCP */,
 				35E7CF3C8F80086AD447480E /* MenuBar */,
 				D80B1ECFB5748E20A6ADF0EB /* Resources */,
 				7B0D5E57F282044CD98E347B /* Tests */,
@@ -260,6 +307,7 @@
 				8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */,
 				510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */,
 				3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */,
+				0B5B16BDAC02919861AA4B0B /* MCPRuntimeWiringTests.swift */,
 				2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */,
 				A16929275D5323F505DF12E9 /* WebviewBundleLoadTests.swift */,
 				A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */,
@@ -394,13 +442,25 @@
 		EBFF6C47A440673BFB3E17FB /* Packages */ = {
 			isa = PBXGroup;
 			children = (
+				A1E748E1EAA90C94FA7F3707 /* AgentCore */,
 				639B5F162E847B0CFC679E30 /* Bus */,
 				2E9C7A0B14B3AE5C9100CACF /* Config */,
 				00C01D284ECCFC986C7F2E16 /* Keychain */,
 				5DE981947E40847F9BAF5641 /* Logging */,
+				756AA19AD01796D665A09094 /* MCP */,
+				960E9FC636D6FF3DD68E5FE9 /* Replay */,
 				3EEB80F86BC4DE366810AB99 /* Shell */,
 			);
 			path = Packages;
+			sourceTree = "<group>";
+		};
+		EE585F62F46C659EDFC48DE7 /* MCP */ = {
+			isa = PBXGroup;
+			children = (
+				CBF3EF4CDCC653EF50D99AF7 /* MCPRuntimeWiring.swift */,
+				0358E0CAC1377752398FA3C4 /* ReplayingToolResultObserver.swift */,
+			);
+			path = MCP;
 			sourceTree = "<group>";
 		};
 		F008A8B896C0B896A6BEA1AA /* mcp-clipboard */ = {
@@ -482,6 +542,11 @@
 				ED53153FE6F73137C23AD43B /* JarvisLogging */,
 				6FAD561608B0D1C402015E0D /* Shell */,
 				FB642DDAD826E62BBE1B8623 /* Bus */,
+				73CDBE39012C4ECD47291B0E /* AgentCore */,
+				955423140BB4EC27191C4FA7 /* AgentOrchestrator */,
+				DE970D2B3CA1AB0097A120D3 /* JarvisMCP */,
+				8E74C5DEAD36FEDB6342A54D /* Replay */,
+				D5E0D943EBC768ADB9C87F13 /* Logging */,
 			);
 			productName = Jarvis;
 			productReference = F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */;
@@ -512,6 +577,7 @@
 			buildConfigurationList = C56026A0C29F7E486D873FBB /* Build configuration list for PBXNativeTarget "JarvisAppTests" */;
 			buildPhases = (
 				A5FA109B8186C9417E8AF319 /* Sources */,
+				6341DE8F6C38220389F46936 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -520,6 +586,16 @@
 			);
 			name = JarvisAppTests;
 			packageProductDependencies = (
+				4CB4DC60ABEBF2DC7A7FFE4C /* AgentCore */,
+				9DC9B6B513D7CCE63399A43B /* AgentOrchestrator */,
+				0AA20E2847670C06A4E77816 /* JarvisMCP */,
+				DD541498D4EDB1CB45EDBA21 /* Replay */,
+				8B5C832427B631F1F6EED6C2 /* Logging */,
+				1058DB02D52D27FA07A79025 /* Config */,
+				B2A25AADC21AA52E8197BC00 /* Keychain */,
+				97D6A753B03EF5503BEB726F /* Bus */,
+				8D3EE6699BA5134A3A067596 /* Shell */,
+				0216B841D52A80482E6DA800 /* JarvisLogging */,
 			);
 			productName = JarvisAppTests;
 			productReference = 6784683F2262D8AFA439668D /* JarvisAppTests.xctest */;
@@ -602,11 +678,15 @@
 			mainGroup = BC0DCAC9B7584481D8C65021;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				096B8CF3E4F95B22B4E50BE6 /* XCRemoteSwiftPackageReference "swift-log" */,
 				3C850EFCEBC3B4947F0F7AE1 /* XCRemoteSwiftPackageReference "swift-sdk" */,
+				7C9A86EDAF8C4170A3BD03EB /* XCLocalSwiftPackageReference "packages/AgentCore" */,
 				C9F5C5BB642801B788644312 /* XCLocalSwiftPackageReference "packages/Bus" */,
 				EFF4B62688DB8BC3E515BD34 /* XCLocalSwiftPackageReference "packages/Config" */,
 				22F43C6F6F358E8483EC4DE0 /* XCLocalSwiftPackageReference "packages/Keychain" */,
 				984FAE3C0A7E82CA2D8C6CB0 /* XCLocalSwiftPackageReference "packages/Logging" */,
+				6F782D2F097AA8CC6D055E24 /* XCLocalSwiftPackageReference "packages/MCP" */,
+				A5DF717817FCDA729574DE60 /* XCLocalSwiftPackageReference "packages/Replay" */,
 				041A479A331602AEDB682446 /* XCLocalSwiftPackageReference "packages/Shell" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -948,6 +1028,7 @@
 				8E4590089A7955545E2146D3 /* HudStateCoordinatorTests.swift in Sources */,
 				BBD8BBC82E0D3C57E0DB4ED0 /* HudStateEnumTests.swift in Sources */,
 				461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */,
+				5AD556F5095852328E72BE36 /* MCPRuntimeWiringTests.swift in Sources */,
 				5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */,
 				C336B40332A148A5A1F2DDC8 /* WebviewBundleLoadTests.swift in Sources */,
 				AC359FF68F49110FF9B6E6E5 /* WizardStageAPIKeyViewTests.swift in Sources */,
@@ -983,9 +1064,11 @@
 				896984D88C412595C0F6F97E /* HudStateIntent.swift in Sources */,
 				526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */,
 				BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */,
+				8EF7109838AD91E95506BD1B /* MCPRuntimeWiring.swift in Sources */,
 				A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */,
 				9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */,
 				7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */,
+				A30C09AE5D98B07A92945E1F /* ReplayingToolResultObserver.swift in Sources */,
 				2BCA466CFD785F3BC989C35F /* WizardStageAPIKeyView.swift in Sources */,
 				E49FEEFE453A055F65DA31FF /* WizardStageHotkeyView.swift in Sources */,
 				9F451A31E6DF755ABC86885A /* WizardStageTCCView.swift in Sources */,
@@ -1548,9 +1631,21 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = packages/Keychain;
 		};
+		6F782D2F097AA8CC6D055E24 /* XCLocalSwiftPackageReference "packages/MCP" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = packages/MCP;
+		};
+		7C9A86EDAF8C4170A3BD03EB /* XCLocalSwiftPackageReference "packages/AgentCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = packages/AgentCore;
+		};
 		984FAE3C0A7E82CA2D8C6CB0 /* XCLocalSwiftPackageReference "packages/Logging" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = packages/Logging;
+		};
+		A5DF717817FCDA729574DE60 /* XCLocalSwiftPackageReference "packages/Replay" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = packages/Replay;
 		};
 		C9F5C5BB642801B788644312 /* XCLocalSwiftPackageReference "packages/Bus" */ = {
 			isa = XCLocalSwiftPackageReference;
@@ -1563,6 +1658,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		096B8CF3E4F95B22B4E50BE6 /* XCRemoteSwiftPackageReference "swift-log" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-log.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.0;
+			};
+		};
 		3C850EFCEBC3B4947F0F7AE1 /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk";
@@ -1579,9 +1682,25 @@
 			package = 3C850EFCEBC3B4947F0F7AE1 /* XCRemoteSwiftPackageReference "swift-sdk" */;
 			productName = MCP;
 		};
+		0216B841D52A80482E6DA800 /* JarvisLogging */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JarvisLogging;
+		};
+		0AA20E2847670C06A4E77816 /* JarvisMCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JarvisMCP;
+		};
+		1058DB02D52D27FA07A79025 /* Config */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Config;
+		};
 		1440CCDB2CC412B099BD0310 /* Keychain */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Keychain;
+		};
+		4CB4DC60ABEBF2DC7A7FFE4C /* AgentCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AgentCore;
 		};
 		61127935D1430B78A6FEACB0 /* Config */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1591,10 +1710,56 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = Shell;
 		};
+		73CDBE39012C4ECD47291B0E /* AgentCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AgentCore;
+		};
+		8B5C832427B631F1F6EED6C2 /* Logging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 096B8CF3E4F95B22B4E50BE6 /* XCRemoteSwiftPackageReference "swift-log" */;
+			productName = Logging;
+		};
+		8D3EE6699BA5134A3A067596 /* Shell */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Shell;
+		};
+		8E74C5DEAD36FEDB6342A54D /* Replay */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Replay;
+		};
+		955423140BB4EC27191C4FA7 /* AgentOrchestrator */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AgentOrchestrator;
+		};
+		97D6A753B03EF5503BEB726F /* Bus */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Bus;
+		};
+		9DC9B6B513D7CCE63399A43B /* AgentOrchestrator */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AgentOrchestrator;
+		};
+		B2A25AADC21AA52E8197BC00 /* Keychain */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Keychain;
+		};
 		B97DB4370CDF8433823F370C /* MCP */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 3C850EFCEBC3B4947F0F7AE1 /* XCRemoteSwiftPackageReference "swift-sdk" */;
 			productName = MCP;
+		};
+		D5E0D943EBC768ADB9C87F13 /* Logging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 096B8CF3E4F95B22B4E50BE6 /* XCRemoteSwiftPackageReference "swift-log" */;
+			productName = Logging;
+		};
+		DD541498D4EDB1CB45EDBA21 /* Replay */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Replay;
+		};
+		DE970D2B3CA1AB0097A120D3 /* JarvisMCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JarvisMCP;
 		};
 		ED53153FE6F73137C23AD43B /* JarvisLogging */ = {
 			isa = XCSwiftPackageProductDependency;

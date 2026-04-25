@@ -15,6 +15,11 @@ let package = Package(
         .package(path: "../Logging"),
         .package(path: "../Config"),
         .package(path: "../Replay"),
+        // Plan 05-05 deviation (Rule 3, blocking): AgentOrchestrator
+        // sources `import Logging` (swift-log Logger) directly. Same fix
+        // pattern as Replay's Package.swift — the Xcode framework
+        // linker is stricter than SPM's transitive visibility.
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
     ],
     targets: [
         // Core protocol surface — provider-agnostic.
@@ -58,6 +63,7 @@ let package = Package(
                 .product(name: "JarvisLogging", package: "Logging"),
                 .product(name: "Config", package: "Config"),
                 .product(name: "Replay", package: "Replay"),
+                .product(name: "Logging", package: "swift-log"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
