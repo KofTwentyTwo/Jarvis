@@ -9,11 +9,11 @@ import Foundation
 /// uses to fan token-delta + tool-call streams into the replay log: tokens
 /// are lossy under firehose load, but tool-calls must NEVER drop.
 ///
-/// **Re-entrancy note.** `send` for a non-`dropTag` element suspends and
-/// retries on resume. In practice the orchestrator has exactly one producer
-/// per turn, so the recursion depth is bounded by the consumer drain rate.
-/// For adversarial workloads use `BoundedAsyncChannel` directly with the
-/// uniform `.suspend` policy.
+/// **Re-entrancy note.** `send` for a non-`dropTag` element suspends until
+/// the consumer drains a slot, then loops to re-attempt the enqueue. The
+/// loop is iterative (no recursive `await send(...)` calls) so producer
+/// stacks stay O(1) under pathological consumer stalls. Mirrors the shape
+/// of `BoundedAsyncChannel.send`.
 public actor TokenDeltaDropOldestChannel<Tag: Sendable & Equatable & Hashable>: AsyncSequence {
     public typealias AsyncIterator = Iterator
 
@@ -49,40 +49,46 @@ public actor TokenDeltaDropOldestChannel<Tag: Sendable & Equatable & Hashable>: 
     ///   and append. If the buffer contains zero `dropTag` elements (all are
     ///   protected), suspend like a non-dropTag element.
     /// - Else → suspend until the consumer drains a slot.
+    ///
+    /// **ME-03:** loop, don't recurse. Swift does not guarantee tail-call
+    /// elimination across `await` suspension points; `await send(element)`
+    /// after resume could grow the stack under pathological consumer
+    /// stalls. The `while` loop re-attempts the enqueue at the same stack
+    /// frame on every wake-up.
     public func send(_ element: Element) async {
-        guard !finished else { return }
+        while true {
+            guard !finished else { return }
 
-        // Fast path: a consumer is already waiting.
-        if let waiter = pendingReceive {
-            pendingReceive = nil
-            waiter.resume(returning: element)
-            return
-        }
+            // Fast path: a consumer is already waiting.
+            if let waiter = pendingReceive {
+                pendingReceive = nil
+                waiter.resume(returning: element)
+                return
+            }
 
-        if buffer.count < capacity {
-            buffer.append(element)
-            return
-        }
+            if buffer.count < capacity {
+                buffer.append(element)
+                return
+            }
 
-        // Overflow.
-        if element.tag == dropTag {
-            // Find and evict the oldest dropTag element. If the buffer is
-            // saturated with non-dropTag elements (a degenerate case), fall
-            // through to the suspend path so we never drop a protected event.
-            if let idx = buffer.firstIndex(where: { $0.tag == dropTag }) {
+            // Overflow.
+            if element.tag == dropTag,
+               let idx = buffer.firstIndex(where: { $0.tag == dropTag }) {
+                // Find and evict the oldest dropTag element. If the buffer is
+                // saturated with non-dropTag elements (a degenerate case),
+                // fall through to the suspend path so we never drop a
+                // protected event.
                 buffer.remove(at: idx)
                 buffer.append(element)
                 return
             }
-            // No dropTag in buffer — suspend.
-        }
 
-        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            pendingSends.append(cont)
+            // Suspend, then loop to re-attempt the enqueue.
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                pendingSends.append(cont)
+            }
+            // Loop continues: re-check finished, fast paths, and overflow.
         }
-        // After resume, re-check `finished` and retry.
-        if finished { return }
-        await send(element)
     }
 
     public func finish() {

@@ -126,6 +126,31 @@ final class TokenDeltaDropOldestChannelTests: XCTestCase {
         await ch.finish()
     }
 
+    // T7 — ME-03: stress non-dropTag protected sends through a capacity-1
+    // channel with a slow drainer. Each send suspends until the previous
+    // element is drained; the loop-based send must not grow the stack.
+    // Pre-fix this would have recursed N deep on each send.
+    func test_T7_nonDropTagBackpressureNoStackGrowth() async {
+        let ch = Channel(capacity: 1, dropTag: .tokenDelta)
+        let n = 5000
+
+        // Producer: fire all n protected (toolCall) sends.
+        let producer = Task {
+            for i in 0..<n {
+                await ch.send(.init(tag: .toolCall, payload: Data([UInt8(i & 0xFF)])))
+            }
+            await ch.finish()
+        }
+
+        // Consumer: drain serially. Each next() unblocks one suspended send.
+        var count = 0
+        for await _ in ch {
+            count += 1
+        }
+        await producer.value
+        XCTAssertEqual(count, n, "every protected element must be delivered exactly once")
+    }
+
     // T6: finish() drains the remaining buffer before iterator exits.
     func test_T6_finishDrainsBuffer() async {
         let ch = Channel(capacity: 4, dropTag: .tokenDelta)
