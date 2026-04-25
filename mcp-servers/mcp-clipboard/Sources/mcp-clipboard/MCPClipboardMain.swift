@@ -15,19 +15,37 @@ import Foundation
 import MCP
 
 /// Production adapter: forwards `PasteboardLike` calls to `NSPasteboard.general`.
-/// Pasteboard reads are synchronous on the calling thread — no `NSApplication.run()`
-/// needed (RESEARCH Open Question #3 inverse).
 ///
-/// `@unchecked Sendable`: `NSPasteboard` is not declared Sendable in AppKit,
-/// but `NSPasteboard.general` is a process-wide singleton that AppKit
-/// serializes internally for read access. The adapter holds no mutable state
-/// of its own; capturing the singleton via `.general` inside each method also
-/// avoids retaining a stale reference.
+/// WR-05 (REVIEW 05): pasteboard reads now hop to MainActor via
+/// `MainActor.assumeIsolated` (or `MainActor.run` from non-MainActor
+/// contexts). macOS Sequoia/Sonoma have been progressively requiring
+/// main-thread access for NSPasteboard.general reads in some
+/// configurations; reads from background threads can return stale or
+/// empty data with no error. The integration test
+/// `test_get_clipboard_seeded_returnsSeededString_CR04` (CR-04 fix-pass)
+/// asserts a real round-trip, so a regression here would surface as a
+/// test failure rather than the silent-empty mode the original code had.
+///
+/// `@unchecked Sendable`: `NSPasteboard` is not declared Sendable in
+/// AppKit, but `NSPasteboard.general` is a process-wide singleton.
 struct SystemPasteboard: PasteboardLike, @unchecked Sendable {
-    var types: [NSPasteboard.PasteboardType]? { NSPasteboard.general.types }
+    var types: [NSPasteboard.PasteboardType]? {
+        // Synchronous MainActor hop. The PasteboardLike protocol's
+        // `types` property is non-async; on a non-Main caller we need a
+        // blocking trampoline. dispatchPrecondition + DispatchQueue.main.sync
+        // is the standard idiom; assumeIsolated avoids the dispatch
+        // overhead on the fast path.
+        if Thread.isMainThread {
+            return MainActor.assumeIsolated { NSPasteboard.general.types }
+        }
+        return DispatchQueue.main.sync { NSPasteboard.general.types }
+    }
 
     func string(forType type: NSPasteboard.PasteboardType) -> String? {
-        NSPasteboard.general.string(forType: type)
+        if Thread.isMainThread {
+            return MainActor.assumeIsolated { NSPasteboard.general.string(forType: type) }
+        }
+        return DispatchQueue.main.sync { NSPasteboard.general.string(forType: type) }
     }
 }
 
