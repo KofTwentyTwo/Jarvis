@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-25T15:00:00Z",
+  "timestamp": "2026-04-25T16:10:00Z",
   "context": "phase",
   "phase": "05",
   "phase_name": "mcp",
@@ -8,7 +8,7 @@
   "plan": null,
   "task": null,
   "total_tasks": null,
-  "status": "phase_5_planned_ready_for_execute",
+  "status": "phase_5_wave_1_complete_wave_2_pending",
   "completed_phases": [
     {"phase": "01", "name": "foundations", "status": "code_complete_with_human_uat", "verification": "human_needed", "human_items": 4, "plans_done": "5/5"},
     {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"},
@@ -26,8 +26,8 @@
     "plans_authored": false,
     "code_review_passed": false,
     "phase_verified": false,
-    "plans_completed": [],
-    "plans_remaining": ["05-01", "05-02", "05-03", "05-04", "05-05"],
+    "plans_completed": ["05-01"],
+    "plans_remaining": ["05-02", "05-03", "05-04", "05-05"],
     "plans_authored": true,
     "wave_layout": {
       "wave_1": ["05-01 MCPClient + StdioTransport + restart mutex + ChildSpawnGate"],
@@ -80,7 +80,7 @@
     {"decision": "Phase 3 H-02 fix: attach to existing window.jarvisBus (Option B, minimal edit)", "rationale": "WKContentWorld isolation — Injection.js installs in JarvisBusWorld, default-world send() can't reach webkit.messageHandlers. Option B avoids touching Swift.", "phase": "03", "plan": "03-review-fix"}
   ],
   "uncommitted_files": [],
-  "tree_tip": "9ee1ec7",
+  "tree_tip": "fb0a0e7",
   "tests_passing": {
     "spm_packages": {
       "Keychain": 6,
@@ -91,7 +91,8 @@
       "AgentCore": 134,
       "Replay": 27,
       "DevOverlay": 14,
-      "total": 281
+      "JarvisMCP": 16,
+      "total": 297
     },
     "app_xctest": "compile-clean; runtime blocked by upstream Xcode 26 harness",
     "webview_vitest": {"bus": 33, "hud": 80, "total": 113},
@@ -101,6 +102,6 @@
       "scripts_smoke_test_hud_sh": "PASS"
     }
   },
-  "next_action": "Run /gsd-execute-phase 5 (MCP). Wave 1 alone first (05-01 MCPClient foundation). Then sequentially: W2 (05-02 helpers), W3 (05-03 mcp-applescript — has user_setup gate, autonomous: false), W4 (05-04 sanitize+dispatcher), W5 (05-05 broker+presenter+wiring + ME-04 closure). After execute: /gsd-code-review 5 → /gsd-code-review-fix 5 if findings → /gsd-verify-phase 5 → close.",
-  "context_notes": "Phase 5 plans authored + verified PASS. 5 plans across 5 sequential waves (no parallelism — both helper-bundle plans 05-02 and 05-03 modify project.yml; bumping 05-03 to its own wave was cleaner than serializing within a wave). Plan 05-05 explicitly closes ME-04 (Phase 4 deferred) by instantiating BoundedAsyncChannel(capacity: 2048, policy: .dropOldest) in production AppDelegate. Phase 4 closed PASSED 14/14 REQ-IDs at 2e7e5c1; tree at 9ee1ec7 (Phase 5 plans untracked). 281 SPM tests across 8 packages from Phases 1-4. Xcode 26 xctest harness still upstream-blocked. STATE.md is still Phase-1-era; refresh ad-hoc before milestone close."
+  "next_action": "Run /gsd-execute-phase 5 --wave 2 (executes 05-02 mcp-time + mcp-clipboard helpers). 05-02 must `import JarvisMCP` (not `import MCP` — name collision with SDK forced rename in 05-01). After W2 merges: W3 (05-03 mcp-applescript, autonomous: false), W4 (05-04 sanitize+dispatcher), W5 (05-05 broker+presenter+wiring + ME-04 closure). Then /gsd-code-review 5 → /gsd-verify-phase 5 → close.",
+  "context_notes": "Phase 5 Wave 1 complete. JarvisMCP package created (renamed from MCP due to SDK library-name collision — same JarvisLogging precedent). 16 SPM tests on JarvisMCP, 4 commits 896d7fb..fb0a0e7. ChildSpawnGate is the single Process() spawn surface (verified by grep gate); per-server restart mutex shares one restart across concurrent callers; 100-cycle FD-leak test delta=0 from baseline=4. Closes MCP-01 + MCP-07 + MCP-08. Three load-bearing executor deviations: (1) renamed MCP→JarvisMCP throughout (downstream plans must import JarvisMCP); (2) PID-pinned process.terminationHandler to prevent stale handlers flipping isCrashed=true on live restarted process; (3) FD_CLOEXEC retrofit on parent-side Pipe ends after Process.run() because Foundation creates Pipe FDs without O_CLOEXEC. 297 total SPM tests across 9 packages. STATE/ROADMAP byte-identical. Tree clean on develop at fb0a0e7. Xcode 26 xctest harness still upstream-blocked."
 }
