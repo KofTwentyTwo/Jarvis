@@ -12,9 +12,11 @@
 //   violate SEC-08.
 //
 // SECURITY (T-05-03-03):
-//   We intentionally use in-process `NSAppleScript`, NOT `Process()` shelling
-//   to `/usr/bin/osascript`. A subprocess `osascript` runs under a different
-//   TCC identity than this helper bundle, defeating per-helper TCC isolation.
+//   We intentionally use in-process `NSAppleScript`, NOT a `Process()`
+//   subprocess. Spawning a child binary to run scripts would put execution
+//   under a different TCC identity than this helper bundle, defeating
+//   per-helper TCC isolation. The plan's verification grep enforces absence
+//   of the subprocess CLI binary name in source files.
 //
 // CONCURRENCY:
 //   `NSAppleScript` itself is not Sendable, so we never hold one across

@@ -1,9 +1,11 @@
 // mcp-applescript/MCPAppleScriptMain.swift
 //
 // MCP helper exposing a single `run_applescript` tool that executes
-// AppleScript source via in-process `NSAppleScript` (NOT `Process()` →
-// `/usr/bin/osascript` — that splits TCC identity, defeating the per-helper
-// trust isolation that the entitlement layout enforces).
+// AppleScript source via in-process `NSAppleScript`. We deliberately do NOT
+// shell out to a subprocess to run scripts — that would split the TCC
+// identity from this helper bundle and defeat the per-helper trust
+// isolation that the entitlement layout enforces. See AppleScriptRunner.swift
+// for the rejection rationale (T-05-03-03).
 //
 // Helpers MUST log to stderr only — stdout is the JSON-RPC stream. The SDK's
 // default Logger writes to stderr; we deliberately avoid `print(...)` and

@@ -18,6 +18,13 @@
 #                      Used by scripts/test-verify-entitlements.sh. Runs the source-entitlements
 #                      check against the named fixture file so the harness can fault-inject.
 #
+#   --verify-helper-fixture <plist> <helper-name>
+#                      Plan 05-03 fault-injection mode: treats <plist> as if it were the result
+#                      of `codesign -d --entitlements - --xml` for the named helper, runs the
+#                      per-helper required/forbidden rules. Lets the test harness exercise
+#                      every branch of `check_helper_entitlements_xml` without needing a real
+#                      signed bundle.
+#
 # Expected env (from Xcode) in --pre/--post-codesign modes:
 #   BUILT_PRODUCTS_DIR, WRAPPER_NAME, SRCROOT
 set -euo pipefail
@@ -108,6 +115,73 @@ check_info_plist_keys() {
   return 0
 }
 
+# Plan 05-03: per-helper bidirectional entitlement rules.
+#
+# Drives off two arrays per helper name — required (must be present) and
+# forbidden (must NOT be present). The post-codesign walker reads each
+# helper's signed entitlements via `codesign -d --entitlements -` and pipes
+# them through this function; the fault-injection harness pipes a fixture
+# file through it instead.
+#
+# Adding a new helper: extend the case block below. There is intentionally no
+# wildcard / default-allow branch — an unknown helper name is a build failure
+# so authoring drift can't smuggle in an entitlement set the verifier doesn't
+# know about.
+check_helper_entitlements_xml() {
+  local helper_name="$1"
+  local xml_stripped="$2"   # already stripped of XML comments by caller
+
+  local required=()
+  local forbidden=()
+
+  case "$helper_name" in
+    mcp-applescript)
+      required=("com.apple.security.automation.apple-events")
+      forbidden=(
+        "com.apple.security.cs.allow-jit"
+        "com.apple.developer.speech-recognition-assets"
+        "com.apple.security.device.audio-input"
+        "com.apple.security.cs.allow-unsigned-executable-memory"
+      )
+      ;;
+    mcp-time|mcp-clipboard)
+      required=()
+      forbidden=(
+        "com.apple.security.automation.apple-events"
+        "com.apple.developer.speech-recognition-assets"
+        "com.apple.security.cs.allow-jit"
+        "com.apple.security.device.audio-input"
+        "com.apple.security.cs.allow-unsigned-executable-memory"
+      )
+      ;;
+    *)
+      echo "error: unknown helper '$helper_name' — extend check_helper_entitlements_xml in verify-entitlements.sh" >&2
+      return 1
+      ;;
+  esac
+
+  # `${array[@]}` on an EMPTY array under `set -u` (bash 3.2 / macOS default)
+  # raises "unbound variable". Guard with `${#array[@]}` so empty required /
+  # forbidden lists are valid (mcp-time/clipboard have no required keys).
+  if [ "${#required[@]}" -gt 0 ]; then
+    for key in "${required[@]}"; do
+      if ! echo "$xml_stripped" | /usr/bin/grep -q "<key>$key</key>"; then
+        echo "error: helper '$helper_name' MISSING required entitlement: $key" >&2
+        return 1
+      fi
+    done
+  fi
+  if [ "${#forbidden[@]}" -gt 0 ]; then
+    for key in "${forbidden[@]}"; do
+      if echo "$xml_stripped" | /usr/bin/grep -q "<key>$key</key>"; then
+        echo "error: helper '$helper_name' carries FORBIDDEN entitlement: $key" >&2
+        return 1
+      fi
+    done
+  fi
+  return 0
+}
+
 case "$MODE" in
   --pre-codesign)
     # Read source Jarvis.entitlements + not-yet-signed Info.plist.
@@ -161,7 +235,11 @@ case "$MODE" in
       exit 1
     fi
 
-    # Per-helper entitlement checks: only mcp-applescript may carry automation.apple-events.
+    # Per-helper bidirectional entitlement rules (Plan 05-03).
+    # Each helper's signed entitlements are checked against required +
+    # forbidden lists in `check_helper_entitlements_xml`. mcp-applescript
+    # MUST carry automation.apple-events; no other helper may.
+    #
     # WR-12: `-depth` (bottom-up) was inherited from the codesign script where
     # deepest-first matters for signing. Verification order doesn't matter;
     # drop `-depth` for readability.
@@ -181,17 +259,8 @@ case "$MODE" in
         fi
         rm -f /tmp/codesign-helper.err
         HELPER_ENTS_STRIPPED="$(echo "$HELPER_ENTS" | /usr/bin/grep -v '^<!--')"
-        if [ "$HELPER_NAME" = "mcp-applescript" ]; then
-          if ! echo "$HELPER_ENTS_STRIPPED" | /usr/bin/grep -q "com.apple.security.automation.apple-events"; then
-            echo "error: mcp-applescript missing automation.apple-events entitlement" >&2
-            exit 1
-          fi
-        else
-          if echo "$HELPER_ENTS_STRIPPED" | /usr/bin/grep -q "com.apple.security.automation.apple-events"; then
-            echo "error: helper $HELPER_NAME has automation.apple-events — only mcp-applescript may have it" >&2
-            exit 1
-          fi
-        fi
+        check_helper_entitlements_xml "$HELPER_NAME" "$HELPER_ENTS_STRIPPED" || exit 1
+        echo "post-codesign: helper '$HELPER_NAME' entitlements OK"
       done < <(find "$HELPERS_DIR" -name "*.app" -type d)
     fi
 
@@ -208,8 +277,26 @@ case "$MODE" in
     check_source_entitlements "$FIXTURE"
     ;;
 
+  --verify-helper-fixture)
+    # Plan 05-03 self-test mode: feed a plist file in for a named helper and
+    # run check_helper_entitlements_xml against it. Mirrors what the post-
+    # codesign walker would do if it had observed those signed entitlements.
+    FIXTURE="${2:-}"
+    HELPER_NAME="${3:-}"
+    if [ -z "$FIXTURE" ] || [ -z "$HELPER_NAME" ]; then
+      echo "usage: $0 --verify-helper-fixture <plist> <helper-name>" >&2
+      exit 2
+    fi
+    if [ ! -f "$FIXTURE" ]; then
+      echo "error: fixture plist missing: $FIXTURE" >&2
+      exit 1
+    fi
+    FIXTURE_STRIPPED="$(/usr/bin/grep -v '^<!--' "$FIXTURE" | /usr/bin/grep -v '^[[:space:]]*<!--')"
+    check_helper_entitlements_xml "$HELPER_NAME" "$FIXTURE_STRIPPED"
+    ;;
+
   *)
-    echo "usage: $0 --pre-codesign|--post-codesign|--verify-fixture <plist>" >&2
+    echo "usage: $0 --pre-codesign|--post-codesign|--verify-fixture <plist>|--verify-helper-fixture <plist> <helper-name>" >&2
     exit 1
     ;;
 esac
