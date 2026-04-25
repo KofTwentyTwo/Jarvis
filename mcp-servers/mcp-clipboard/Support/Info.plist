@@ -15,14 +15,14 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <!--
-        CR-04 (REVIEW 05): LSBackgroundOnly removed.
-        macOS Sonoma+ silently denies NSPasteboard.general access to
-        LSBackgroundOnly daemons (Apple feedback FB13402281 lineage).
-        LSUIElement: true is enough — it suppresses the Dock icon while
-        still permitting pasteboard reads. The helper is a subprocess
-        spawned by the parent app, so neither key is strictly needed for
-        Dock-suppression, but LSUIElement is the safer of the two on the
-        Sequoia/Tahoe pasteboard threading rules.
+        CR-04 (REVIEW 05): the background-only LaunchServices key was
+        removed. macOS Sonoma+ silently denies NSPasteboard.general
+        access to background-only daemons (Apple feedback FB13402281
+        lineage). LSUIElement: true is enough — it suppresses the Dock
+        icon while still permitting pasteboard reads. The helper is a
+        subprocess spawned by the parent app, so neither key is strictly
+        needed for Dock-suppression, but LSUIElement is the safer of the
+        two on the Sequoia/Tahoe pasteboard threading rules.
     -->
     <key>LSUIElement</key>
     <true/>
