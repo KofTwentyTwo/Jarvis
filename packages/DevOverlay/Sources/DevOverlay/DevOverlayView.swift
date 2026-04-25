@@ -17,10 +17,15 @@ import AgentOrchestrator
 /// subscriber, so nothing in this file mutates state.
 @available(macOS 14.0, *)
 public struct DevOverlayView: View {
-    @State public var viewModel: DevOverlayViewModel
+    // ME-01: `@Observable` triggers re-renders via the property-wrapper
+    // macros; `@State` on a reference type defeats this — it captures the
+    // initial reference and ignores subsequent inits. The view-model is
+    // injected from outside (DevOverlayWindow), so a plain `let` is the
+    // canonical Observation-framework pattern for read-only observation.
+    public let viewModel: DevOverlayViewModel
 
     public init(viewModel: DevOverlayViewModel) {
-        self._viewModel = State(wrappedValue: viewModel)
+        self.viewModel = viewModel
     }
 
     public var body: some View {
