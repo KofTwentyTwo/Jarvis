@@ -16,7 +16,11 @@ import AgentOrchestrator
 @MainActor
 @Observable
 public final class DevOverlayViewModel {
-    public var snapshot: DevSnapshot
+    // ME-02: `private(set)` enforces single-write-path by type, not
+    // convention. `DevOverlayBridge`'s subscriber Task routes writes
+    // through `apply(_:)`. Without this scope restriction any caller
+    // could `vm.snapshot = …` directly and break the AGENT-10 invariant.
+    public private(set) var snapshot: DevSnapshot
 
     public init(snapshot: DevSnapshot = .initial) {
         self.snapshot = snapshot
