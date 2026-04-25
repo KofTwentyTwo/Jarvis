@@ -148,18 +148,29 @@ public actor MCPServerHandle {
         let transport = StdioTransport(input: transportInput, output: transportOutput, logger: logger)
 
         // 7. Connect — this auto-runs the initialize handshake.
+        //
+        // CR-01 (REVIEW 05): on init-failure paths, parent-side pipe ends must
+        // be closed BEFORE we throw, otherwise three FDs leak per failure
+        // (stdin write, stdout read, stderr read). Foundation's Pipe deinit
+        // does NOT close FDs (closeOnDealloc:false is the default), and
+        // terminateProcessImmediately only SIGKILLs the child. Without this,
+        // a poisoned helper that crashes during initialize would leak FDs
+        // until ChildSpawnGate.shared.prepare()'s next CLOEXEC sweep
+        // fatalErrors in DEBUG.
         let initResult: Initialize.Result
         do {
             initResult = try await client.connect(transport: transport)
         } catch {
             // Initialize failure: tear down and bubble up the cause.
             try? terminateProcessImmediately(process)
+            Self.closeParentPipeEnds(stdinPipe: stdinPipe, stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
             throw JarvisMCPError.spawnFailed(name: name, underlying: String(describing: error))
         }
 
         guard initResult.capabilities.tools != nil else {
             try? terminateProcessImmediately(process)
             await client.disconnect()
+            Self.closeParentPipeEnds(stdinPipe: stdinPipe, stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
             throw JarvisMCPError.helperMissingToolsCapability(name: name)
         }
 
@@ -302,6 +313,24 @@ public actor MCPServerHandle {
         if flags >= 0 {
             _ = fcntl(fd, F_SETFD, flags | FD_CLOEXEC)
         }
+    }
+
+    /// CR-01 (REVIEW 05): close the parent-retained pipe ends on
+    /// initialize-failure paths so a poisoned helper doesn't leak 3 FDs per
+    /// failed start(). Detaches the stderr readability handler first so
+    /// Foundation's background queue doesn't fire on a closed FD.
+    ///
+    /// Idempotent — close() on an already-closed FD throws which `try?`
+    /// swallows. Safe to call from any throw site.
+    private nonisolated static func closeParentPipeEnds(
+        stdinPipe: Pipe,
+        stdoutPipe: Pipe,
+        stderrPipe: Pipe
+    ) {
+        stderrPipe.fileHandleForReading.readabilityHandler = nil
+        try? stdinPipe.fileHandleForWriting.close()
+        try? stdoutPipe.fileHandleForReading.close()
+        try? stderrPipe.fileHandleForReading.close()
     }
 
     // MARK: - Test-only inspection
