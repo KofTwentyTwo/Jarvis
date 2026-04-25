@@ -8,6 +8,7 @@ import WebKit
 import Logging   // swift-log — `Logger` here is `Logging.Logger`
 import AgentCore       // Plan 05-05: BoundedAsyncChannel for ME-04 closure
 import Replay          // Plan 05-05: ReplayEvent type for the orch→replay channel
+import JarvisMCP       // CR-02 (REVIEW 05): MCPRuntimeWiring.build for end-to-end ME-04 closure
 
 /// Abstract the Info.plist `JarvisEntitlementsVerified` read so tests can inject
 /// a mock that returns false without touching the running binary's Info.plist.
@@ -97,33 +98,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var dormantVoiceContinuation: AsyncStream<VoiceHudIntent>.Continuation?
     var dormantConfirmContinuation: AsyncStream<ConfirmHudIntent>.Continuation?
 
-    /// Plan 05-05 / ME-04 closure (Plan 04-05 deferred state).
+    /// Plan 05-05 / ME-04 closure (CR-02 REVIEW 05 — wired end-to-end).
     ///
     /// Production instance of the orch→replay 2048-capacity .dropOldest
-    /// `BoundedAsyncChannel<ReplayEvent>`. Plan 04-03 created the primitive;
-    /// Plan 04-05's ChannelTopologyTests CT2 verified the contract; Plan
-    /// 05-05 (this file) instantiates it in production code so future
-    /// orchestrator wiring (later plan) drains replay events through this
-    /// channel rather than directly into the ReplayLog. The 2048 capacity
-    /// + .dropOldest policy is the AGENT-10 spec for tokenDelta-class
-    /// events: lossy on saturation, freshness > completeness.
+    /// `BoundedAsyncChannel<ReplayEnvelope>`. Plan 04-03 created the
+    /// primitive; Plan 04-05's ChannelTopologyTests CT2 verified the
+    /// contract; CR-02 wires the producer (`ReplayingToolResultObserver`)
+    /// AND the consumer (`orchToReplayDrainTask`) so the channel actually
+    /// carries traffic. The 2048 capacity + .dropOldest policy is the
+    /// AGENT-10 spec for tokenDelta-class events: lossy on saturation,
+    /// freshness > completeness.
     ///
     /// Held strongly here so it doesn't deinit before consumers attach;
     /// the orch→replay seam consumes it via a `for await` drain Task.
-    var orchToReplayChannel: BoundedAsyncChannel<ReplayEvent>?
+    var orchToReplayChannel: BoundedAsyncChannel<ReplayEnvelope>?
 
-    /// Drain task spawned in `applicationWillFinishLaunching` — reads from
-    /// `orchToReplayChannel` and forwards to the (future) ReplayLog. For
-    /// now (pre-orchestrator) the task drains and discards; the production
-    /// consumer wires in once the orchestrator is instantiated.
-    ///
-    /// Future wiring lands when AgentOrchestrator + ReplayLog open: the
-    /// AppDelegate calls `MCPRuntimeWiring.build(bundleURL:bus:replayLog:)`
-    /// to assemble the ConfirmingToolDispatcher chain (Plan 05-05) and
-    /// passes its dispatcher into the orchestrator. Until then the
-    /// channel + drain Task above are the production ME-04 instantiation
-    /// (Plan 04-05's CT2 verified the primitive; this is the prod
-    /// instance).
+    /// CR-02 (REVIEW 05): the on-disk audit log opened at boot. The
+    /// drain task writes drained ReplayEvents here. Held strongly so it
+    /// outlives the drain task. Pre-CR-02, AppDelegate had no ReplayLog
+    /// instance — the observer wrote directly to a ReplayLog that
+    /// MCPRuntimeWiring.build constructed and threw away on return.
+    var replayLog: ReplayLog?
+
+    /// CR-02 (REVIEW 05): the MCPRuntime returned by
+    /// `MCPRuntimeWiring.build(...)`. Held strongly so the broker /
+    /// presenter / observer / dispatcher chain stays alive for the
+    /// lifetime of the process.
+    var mcpRuntime: MCPRuntime?
+
+    /// Drain task spawned in `applicationWillFinishLaunching` — reads
+    /// envelopes from `orchToReplayChannel` and forwards to `replayLog`.
+    /// CR-02: production consumer for ME-04. Previously this task
+    /// `for await _ in channel` discarded everything; the channel had
+    /// no producer either, so ME-04's contract was structurally
+    /// unverifiable in production code.
     var orchToReplayDrainTask: Task<Void, Never>?
 
     /// Plan 03-05 test seam. Default production value is `"index"` (the R3F
@@ -233,21 +241,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openWizard(firstLaunch: true)
         }
 
-        // 9. Plan 05-05 / ME-04 closure: instantiate the orch→replay
-        // 2048-capacity .dropOldest channel that Plan 04-05's CT2 only
-        // verified as a primitive. The drain task fires-and-forgets each
-        // event until the (later-plan) orchestrator wires its real
-        // ReplayLog consumer through this seam. The channel's existence
-        // in production code IS the deliverable — without instantiation
-        // the orchestrator's replay-emit path has no consumer to attach
-        // to, and ME-04 stays open.
-        let channel = BoundedAsyncChannel<ReplayEvent>(capacity: 2048, policy: .dropOldest)
+        // 9. Plan 05-05 / ME-04 closure (CR-02 REVIEW 05): instantiate
+        //    the orch→replay 2048-capacity .dropOldest channel + open
+        //    the on-disk ReplayLog + spawn the drain task that writes
+        //    drained envelopes through to ReplayLog. AGENT-10's
+        //    four-seam contract is now exercised by production traffic:
+        //    the observer (created lazily by MCPRuntimeWiring.build,
+        //    step 10 below) PRODUCES into the channel; this drain task
+        //    CONSUMES.
+        let channel = BoundedAsyncChannel<ReplayEnvelope>(capacity: 2048, policy: .dropOldest)
         orchToReplayChannel = channel
-        orchToReplayDrainTask = Task.detached { [weak self] in
-            for await _ in channel {
-                _ = self  // silence unused-capture; future plan wires the real consumer.
+        let replayDBURL = replayDatabaseURL()
+        do {
+            let log = try ReplayLog(databaseURL: replayDBURL)
+            self.replayLog = log
+            orchToReplayDrainTask = Task.detached {
+                for await envelope in channel {
+                    await log.record(envelope.event, for: envelope.turnId)
+                }
+            }
+        } catch {
+            systemLogger?.error("CR-02: failed to open ReplayLog at \(replayDBURL.path): \(String(describing: error))")
+            // Drain still runs — discards events so the producer doesn't
+            // block. Boot continues; replay capture is best-effort per
+            // OBS-02.
+            orchToReplayDrainTask = Task.detached { [weak self] in
+                for await _ in channel {
+                    _ = self
+                }
             }
         }
+
+        // 10. CR-02 (REVIEW 05): instantiate the production MCPRuntime
+        //     so the dispatcher chain (broker + presenter + observer)
+        //     is wired and the orchestrator (later plan) has a
+        //     ToolDispatcher to consume. Helpers may be absent under
+        //     XCTest hosts or before-codesign builds; failure is
+        //     non-fatal — we log and proceed without MCP, the same way
+        //     a missing API key proceeds without the agent.
+        let bundleURL = Bundle.main.bundleURL
+        Task { @MainActor [weak self] in
+            guard let self = self, let channel = self.orchToReplayChannel else { return }
+            let busAdapter = NoopBusGateway()  // CR-02: orchestrator wiring (later plan) replaces with real bus adapter.
+            do {
+                let runtime = try await MCPRuntimeWiring.build(
+                    bundleURL: bundleURL,
+                    bus: busAdapter,
+                    replayChannel: channel,
+                    turnIDResolver: { nil }  // pre-orchestrator returns nil (observer logs without writing).
+                )
+                self.mcpRuntime = runtime
+                self.systemLogger?.info("MCPRuntime built — \(await runtime.client.registeredToolNames().count) tools")
+            } catch {
+                self.systemLogger?.warning("MCPRuntime build failed (helpers absent or unsigned?): \(String(describing: error))")
+            }
+        }
+    }
+
+    /// CR-02 (REVIEW 05): on-disk replay log path. Lives next to
+    /// config.json under Application Support / Jarvis / replay.sqlite.
+    private func replayDatabaseURL() -> URL {
+        configFileURL().deletingLastPathComponent().appendingPathComponent("replay.sqlite")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -577,4 +631,18 @@ private final class BridgeNavigationDelegate: NSObject, WKNavigationDelegate {
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         MainActor.assumeIsolated { onDidFinish() }
     }
+}
+
+// MARK: - Bus gateway placeholder
+
+/// CR-02 (REVIEW 05): pre-orchestrator no-op BusGateway. Phase 6 / 7
+/// orchestrator wiring replaces this with a real adapter that translates
+/// the dispatcher's bus events into `BusOutbound.toolCallStart` /
+/// `toolCallEnd` cases on the WebviewBridge. Until then, the dispatcher
+/// chain still composes (BusGateway must be non-nil for some call sites)
+/// but emits into a sink that drops events on the floor.
+struct NoopBusGateway: BusGateway {
+    func emitToolCallStart(toolUseId: String, name: String, argsPreview: String) async {}
+    func updateArgsPreview(toolUseId: String, name: String, argsPreview: String) async {}
+    func emitToolCallEnd(toolUseId: String, name: String, ok: Bool, previewOrError: String) async {}
 }

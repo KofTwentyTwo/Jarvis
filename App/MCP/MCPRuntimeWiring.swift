@@ -59,19 +59,27 @@ public enum MCPRuntimeWiring {
     /// MCPClient, builds the ToolRegistry, wires the observer +
     /// dispatcher chain, and returns the MCPRuntime.
     ///
+    /// CR-02 (REVIEW 05): observer now produces into the orch→replay
+    /// channel; the AppDelegate drain Task is the consumer that calls
+    /// `replayLog.record(...)` per drained event. This wires the four-seam
+    /// AGENT-10 contract end-to-end — previously the observer wrote
+    /// directly to ReplayLog and the channel was dead code.
+    ///
     /// - Parameters:
     ///   - bundleURL: typically `Bundle.main.bundleURL`. Helpers live at
     ///     `<bundleURL>/Contents/Helpers/<name>.app/Contents/MacOS/<name>`.
     ///   - bus: the gateway adapter that translates the ConfirmingToolDispatcher's
     ///     bus events to the existing `BusOutbound.toolCallStart`/`toolCallEnd`.
-    ///   - replayLog: the on-disk audit log opened earlier in AppDelegate.
+    ///   - replayChannel: the AppDelegate-owned orch→replay 2048-cap
+    ///     `.dropOldest` channel. The observer sends ReplayEnvelopes here;
+    ///     AppDelegate's drain Task consumes them.
     ///   - turnIDResolver: closure the observer uses to resolve the
     ///     active TurnID at write time. Returns `nil` until the
     ///     orchestrator is wired (later plan).
     public static func build(
         bundleURL: URL,
         bus: any BusGateway,
-        replayLog: ReplayLog,
+        replayChannel: BoundedAsyncChannel<ReplayEnvelope>,
         turnIDResolver: @escaping @Sendable () async -> TurnID? = { nil }
     ) async throws -> MCPRuntime {
         let helpersDir = bundleURL.appendingPathComponent("Contents/Helpers", isDirectory: true)
@@ -100,8 +108,9 @@ public enum MCPRuntimeWiring {
         registry.register(toolName: "get_clipboard", serverName: "mcp-clipboard", requiresConfirmation: false)
         registry.register(toolName: "run_applescript", serverName: "mcp-applescript", requiresConfirmation: true)
 
-        // 3. Replaying observer (SEC-07).
-        let observer = ReplayingToolResultObserver(replayLog: replayLog, turnIDResolver: turnIDResolver)
+        // 3. Replaying observer (SEC-07) — produces into the orch→replay
+        //    channel. CR-02 wires the actual ME-04 contract end-to-end.
+        let observer = ReplayingToolResultObserver(replayChannel: replayChannel, turnIDResolver: turnIDResolver)
 
         // 4. Inner MCPToolDispatcher (Plan 05-04).
         let inner = MCPToolDispatcher(client: client, registry: registry, observer: observer)
