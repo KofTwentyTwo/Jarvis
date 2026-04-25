@@ -22,6 +22,12 @@ let package = Package(
         // Pin SDK at exact 0.12.0 (no range float — pre-1.0 SDK).
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk", exact: "0.12.0"),
         .package(path: "../Logging"),
+        // Plan 05-04: ASYMMETRIC dep on AgentCore (MCP→AgentCore only; never
+        // the reverse). MCPToolDispatcher imports AgentCore for `ToolUseRequest`
+        // and AgentOrchestrator for the `ToolDispatcher` protocol it conforms
+        // to. AgentCore intentionally does NOT depend on MCP — the
+        // orchestrator is provider-agnostic and only sees the protocol.
+        .package(path: "../AgentCore"),
     ],
     targets: [
         .target(
@@ -29,6 +35,8 @@ let package = Package(
             dependencies: [
                 .product(name: "MCP", package: "swift-sdk"),
                 .product(name: "JarvisLogging", package: "Logging"),
+                .product(name: "AgentCore", package: "AgentCore"),
+                .product(name: "AgentOrchestrator", package: "AgentCore"),
             ],
             path: "Sources/MCP",
             swiftSettings: [.swiftLanguageMode(.v6)]
