@@ -186,6 +186,14 @@ targets:
           "${SRCROOT}/scripts/check-single-writer-hudstate.sh"
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
+      # Plan 05-05 (MCP-04): reject runModal / beginModalSession / NSApp.run
+      # outside the two-file allowlist (TCCAlertService + ConfirmationPresenter).
+      # Module-wide lint — fails the build fast on regression.
+      - name: Check no modal presentation (MCP-04)
+        script: |
+          "${SRCROOT}/scripts/check-no-modal-presentation.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
       - name: Build webview bundle
         script: |
           "${SRCROOT}/scripts/build-webview.sh"
