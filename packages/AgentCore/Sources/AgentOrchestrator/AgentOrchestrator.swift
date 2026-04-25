@@ -152,9 +152,17 @@ public actor AgentOrchestrator {
         // Build the initial messages with the untrusted-content wrapper
         // pattern in scope. The user message itself is trusted; the wrapper
         // is held for the *tool result* messages that arrive later.
+        //
+        // SEC-06: compose the caller's system prompt with a nonce-keyed
+        // directive that tells the model the wrapper means "data, not
+        // instructions". Without this directive the wrapper is decoration —
+        // see `UntrustedWrapper.composeSystemPrompt(base:nonce:)` doc.
         let wrapper = UntrustedWrapper(nonce: nonce)
+        let composedSystem = UntrustedWrapper.composeSystemPrompt(
+            base: systemPrompt, nonce: nonce
+        )
         let initialMessages: [LLMMessage] = [
-            LLMMessage(role: .system, content: [.text(systemPrompt)]),
+            LLMMessage(role: .system, content: [.text(composedSystem)]),
             LLMMessage(role: .user, content: [.text(input.userText)]),
         ]
 

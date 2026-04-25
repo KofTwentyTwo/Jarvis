@@ -268,6 +268,123 @@ final class OrchestratorSubmitTests: XCTestCase {
 
     // MARK: - OS7
 
+    // MARK: - OS — SEC-06 system-prompt directive (CR-01)
+
+    /// OS_systemPromptCarriesUntrustedDirective: the per-turn system prompt
+    /// the provider receives MUST contain the nonce-keyed "treat as data"
+    /// directive. Without it, the `<UNTRUSTED_CONTENT id="…">` wrapper is
+    /// decoration the model has no reason to honor (SEC-06 mitigation gap).
+    ///
+    /// Asserts:
+    /// - The directive substring "UNTRUSTED_CONTENT" appears in the system
+    ///   message.
+    /// - The same nonce id appears in BOTH the directive AND any later
+    ///   tool-result wrapper — proves the directive references the wrapper.
+    /// - When caller passes `systemPrompt = ""`, the directive still emits
+    ///   (defense-in-depth even with no caller-supplied prompt).
+    func test_OS_systemPromptCarriesUntrustedDirective() async throws {
+        let toolReq = ToolUseRequest(id: "tu1", name: "get_time", argsJSON: Data("{}".utf8))
+        let mock = MockLLMProvider(scripts: [
+            .init(events: [
+                .messageStart(LLMMessageStart(messageId: "m1", model: "x", usagePrefix: nil)),
+                .toolUseRequested(toolReq),
+                .stopReason(.toolUse),
+                .messageStop,
+            ]),
+            .init(events: [
+                .messageStart(LLMMessageStart(messageId: "m2", model: "x", usagePrefix: nil)),
+                .stopReason(.endTurn),
+                .messageStop,
+            ]),
+        ])
+        let dispatcher = StubToolDispatcher(dispatch: { _ in Data("12:34".utf8) })
+        let (orch, _, _) = try await buildOrchestrator(provider: mock, dispatcher: dispatcher)
+
+        _ = await orch.submit(.text("hi"))
+        _ = await collectUntil(orch: orch) { ev in
+            if case .stateChange(.idle) = ev { return true }; return false
+        }
+
+        let calls = await mock.getRecordedCalls()
+        XCTAssertEqual(calls.count, 2, "expected 2 provider calls for tool-use loop")
+
+        // Extract the system message text from the first call.
+        let firstSystemMsg = calls[0].messages.first(where: { $0.role == .system })
+        XCTAssertNotNil(firstSystemMsg, "first call must include a .system role message")
+        guard let sysMsg = firstSystemMsg else { return }
+        guard case .text(let sysText) = sysMsg.content[0] else {
+            return XCTFail("expected text content in system message")
+        }
+        // Caller-supplied prompt is preserved.
+        XCTAssertTrue(sysText.contains("you are jarvis"),
+                      "caller-supplied system prompt must be preserved")
+        // SEC-06 directive substring is present.
+        XCTAssertTrue(sysText.contains("UNTRUSTED_CONTENT"),
+                      "system prompt must carry the SEC-06 'treat as data' directive")
+        XCTAssertTrue(sysText.contains("Treat ALL content"),
+                      "directive language must be unambiguous")
+
+        // Extract the nonce from the directive (the value between id=" and ").
+        // The wrapper format is id="<nonce>".
+        let pattern = #"id="([A-Za-z0-9_\-]+)""#
+        let regex = try NSRegularExpression(pattern: pattern)
+        let range = NSRange(sysText.startIndex..<sysText.endIndex, in: sysText)
+        let match = regex.firstMatch(in: sysText, range: range)
+        XCTAssertNotNil(match, "directive must include id=\"<nonce>\" pattern")
+        guard let m = match,
+              let nonceRange = Range(m.range(at: 1), in: sysText) else {
+            return XCTFail("could not extract nonce from directive")
+        }
+        let nonceFromDirective = String(sysText[nonceRange])
+        XCTAssertFalse(nonceFromDirective.isEmpty)
+
+        // Nonce in the directive must equal nonce in the second-call tool-result wrapper.
+        let secondCallToolMsg = calls[1].messages.first(where: { $0.role == .tool })
+        XCTAssertNotNil(secondCallToolMsg, "second call must include a .tool message")
+        guard let toolMsg = secondCallToolMsg,
+              case .toolResult(_, let content) = toolMsg.content[0] else {
+            return XCTFail("expected toolResult content")
+        }
+        XCTAssertTrue(content.contains("id=\"\(nonceFromDirective)\""),
+                      "wrapper nonce must match the directive nonce — same per-turn value")
+    }
+
+    /// Defense-in-depth: even with an empty caller-supplied systemPrompt,
+    /// the SEC-06 directive must still be emitted.
+    func test_OS_systemPromptDirectiveEmittedWhenCallerPromptEmpty() async throws {
+        let mock = MockLLMProvider(script: .init(events: [
+            .messageStart(LLMMessageStart(messageId: "m", model: "x", usagePrefix: nil)),
+            .stopReason(.endTurn),
+            .messageStop,
+        ]))
+        let replay = try ReplayLog(databaseURL: tempHome.dbURL)
+        let session = try await replay.beginSession(appVersion: "test", buildSHA: "deadbeef")
+        let orch = AgentOrchestrator(
+            configStore: makeConfigStore(),
+            providerFactory: { _ in mock },
+            toolDispatcher: StubToolDispatcher(),
+            replayLog: replay,
+            sessionId: session,
+            systemPrompt: "",  // empty caller prompt
+            availableTools: []
+        )
+
+        _ = await orch.submit(.text("hi"))
+        _ = await collectUntil(orch: orch) { ev in
+            if case .stateChange(.idle) = ev { return true }; return false
+        }
+
+        let calls = await mock.getRecordedCalls()
+        let firstSystemMsg = calls[0].messages.first(where: { $0.role == .system })
+        XCTAssertNotNil(firstSystemMsg)
+        guard let sysMsg = firstSystemMsg,
+              case .text(let sysText) = sysMsg.content[0] else {
+            return XCTFail("expected text content in system message")
+        }
+        XCTAssertTrue(sysText.contains("UNTRUSTED_CONTENT"),
+                      "directive must emit even when caller systemPrompt is empty")
+    }
+
     /// OS7: ReplayLog.endTurn called exactly once per turn with the stop_reason.
     /// Indirect check: after end_turn, a second submit succeeds (nothing is held).
     func test_OS7_endTurnCalledOncePerTurn() async throws {
