@@ -291,7 +291,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     turnIDResolver: { nil }  // pre-orchestrator returns nil (observer logs without writing).
                 )
                 self.mcpRuntime = runtime
-                self.systemLogger?.info("MCPRuntime built — \(await runtime.client.registeredToolNames().count) tools")
+                let toolCount = await runtime.client.registeredToolNames().count
+                self.systemLogger?.info("MCPRuntime built — \(toolCount) tools")
             } catch {
                 self.systemLogger?.warning("MCPRuntime build failed (helpers absent or unsigned?): \(String(describing: error))")
             }
