@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-24T18:30:00Z",
+  "timestamp": "2026-04-24T19:00:00Z",
   "context": "phase",
   "phase": "04",
   "phase_name": "agent-core",
@@ -8,25 +8,26 @@
   "plan": null,
   "task": null,
   "total_tasks": null,
-  "status": "phase_4_code_complete_review_pending",
+  "status": "phase_4_verified_closed_phase_5_planning_next",
   "completed_phases": [
     {"phase": "01", "name": "foundations", "status": "code_complete_with_human_uat", "verification": "human_needed", "human_items": 4, "plans_done": "5/5"},
     {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"},
-    {"phase": "03", "name": "hud", "status": "verified_human_needed_uat_only", "verification": "passed_with_manual_uat_pending", "human_items": 1, "plans_done": "5/5"}
+    {"phase": "03", "name": "hud", "status": "verified_human_needed_uat_only", "verification": "passed_with_manual_uat_pending", "human_items": 1, "plans_done": "5/5"},
+    {"phase": "04", "name": "agent-core", "status": "verified_passed", "verification": "passed", "human_items": 0, "plans_done": "5/5", "review_findings": "1 BLOCKER + 2 HIGH + 6 MEDIUM (5 fixed, 1 deferred per known-stub)", "test_count": 281}
   ],
   "current_phase_progress": {
-    "phase": "04",
-    "name": "agent-core",
-    "wave_1_complete": true,
-    "wave_2_complete": true,
-    "wave_3_complete": true,
-    "wave_4_complete": true,
-    "all_plans_complete": true,
+    "phase": "05",
+    "name": "mcp",
+    "wave_1_complete": false,
+    "wave_2_complete": false,
+    "wave_3_complete": false,
+    "wave_4_complete": false,
+    "all_plans_complete": false,
+    "plans_authored": false,
     "code_review_passed": false,
     "phase_verified": false,
-    "plans_completed": ["04-01", "04-02", "04-03", "04-04", "04-05"],
-    "plans_remaining": [],
-    "requirements_closed": ["AGENT-01", "AGENT-02", "AGENT-03", "AGENT-04", "AGENT-06", "AGENT-07", "AGENT-08", "AGENT-09", "AGENT-10", "OBS-01", "OBS-02", "OBS-07", "TEXT-01", "SEC-06"],
+    "plans_completed": [],
+    "plans_remaining": ["TBD — research banked at 1069 lines; /gsd-plan-phase 5 will produce N PLAN.md files"]
     "wave_layout": {
       "wave_1": ["04-01 LLMProvider protocol + AnthropicProvider"],
       "wave_2": ["04-02 OllamaProvider", "04-03 Replay log"],
@@ -76,7 +77,7 @@
     {"decision": "Phase 3 H-02 fix: attach to existing window.jarvisBus (Option B, minimal edit)", "rationale": "WKContentWorld isolation — Injection.js installs in JarvisBusWorld, default-world send() can't reach webkit.messageHandlers. Option B avoids touching Swift.", "phase": "03", "plan": "03-review-fix"}
   ],
   "uncommitted_files": [],
-  "tree_tip": "5524989",
+  "tree_tip": "2e7e5c1",
   "tests_passing": {
     "spm_packages": {
       "Keychain": 6,
@@ -84,10 +85,10 @@
       "Logging": 17,
       "Shell": "20+1skipped",
       "Bus": 47,
-      "AgentCore": 131,
-      "Replay": 25,
+      "AgentCore": 134,
+      "Replay": 27,
       "DevOverlay": 14,
-      "total": 277
+      "total": 281
     },
     "app_xctest": "compile-clean; runtime blocked by upstream Xcode 26 harness",
     "webview_vitest": {"bus": 33, "hud": 80, "total": 113},
@@ -97,6 +98,6 @@
       "scripts_smoke_test_hud_sh": "PASS"
     }
   },
-  "next_action": "Run /gsd-code-review 4 → /gsd-code-review-fix 4 if findings → /gsd-verify-phase 4 to close Phase 4. After Phase 4 closes: /gsd-plan-phase 5 (MCP — research banked at 1069 lines) before /gsd-execute-phase 5. Phases 6-8 follow.",
-  "context_notes": "Phase 4 code-complete. All 5 plans merged across 4 waves. AgentCore 131/131 (LLMProvider+AnthropicProvider+OllamaProvider+AgentOrchestrator+DevSnapshotEmitter+TEXT-01+ChannelTopology). DevOverlay 14/14 (new SwiftUI overlay package). Replay 25/25, Logging 17/17, Bus 47/47, all closed-phase packages no regression. 277 total SPM tests across 8 packages. All hand-rolled per CLAUDE.md (no Anthropic SDK; no SQLite.swift). Tree clean on develop at 5524989. STATE/ROADMAP byte-identical pre/post each wave. The Xcode 26 xctest harness bug is upstream-blocked — DO NOT re-attempt fixing. SPM swift test runner works fine. Three known stubs deferred: ToolDispatcher concrete impl is Phase 5 (MCP); DevOverlay menu-bar wiring is a future plan (DevOverlay package exposes the toggle method only); replay-log VIEWER UI is Phase 8."
+  "next_action": "Run /gsd-plan-phase 5 (MCP — research banked at 1069 lines). After plans land: /gsd-execute-phase 5. Plan 5 will close ME-04 (orch→replay 2048-cap live wiring) when the real ToolDispatcher interposes. Phases 6 (Voice), 7 (Memory+Vision), 8 (Hardening) follow.",
+  "context_notes": "Phase 4 verified PASSED (14/14 REQ-IDs covered, all gates green, post-review fixes audited not trusted). 281 total SPM tests across 8 packages. Tree clean on develop at 2e7e5c1. Phase 4 closed cleanly with 1 BLOCKER + 2 HIGH + 5 MEDIUM fixed; ME-04 deferred per known-stub (orch→replay live wiring lands in Phase 5 with real ToolDispatcher). All hand-rolled per CLAUDE.md (no Anthropic SDK, no SQLite.swift, only qwen2.5-coder:32b for Ollama). The Xcode 26 xctest harness bug is upstream-blocked — DO NOT re-attempt fixing. STATE.md is still Phase-1-era; refresh it during Phase 5 verify or ad-hoc before milestone close."
 }
