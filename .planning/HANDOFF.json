@@ -27,13 +27,8 @@
     "code_review_passed": false,
     "phase_verified": false,
     "plans_completed": [],
-    "plans_remaining": ["TBD — research banked at 1069 lines; /gsd-plan-phase 5 will produce N PLAN.md files"]
-    "wave_layout": {
-      "wave_1": ["04-01 LLMProvider protocol + AnthropicProvider"],
-      "wave_2": ["04-02 OllamaProvider", "04-03 Replay log"],
-      "wave_3": ["04-04 AgentOrchestrator"],
-      "wave_4": ["04-05 DevOverlay + TEXT-01 E2E"]
-    },
+    "plans_remaining": ["TBD — research banked at 1069 lines; /gsd-plan-phase 5 will produce N PLAN.md files"],
+    "wave_layout": "TBD — populated by /gsd-plan-phase 5",
     "wave_2_deviations": [
       "04-02 (OllamaProvider) and 04-03 (Replay log) executed in parallel worktrees — disjoint scope (packages/AgentCore/Sources/OllamaProvider/* vs packages/Replay/* + packages/Logging/Sources/JarvisLogging/JarvisLogChannel.swift). Neither auto-FF'd this time. Orchestrator FF-merged 04-02 then cherry-picked 04-03's 4 commits onto develop to keep linear history. No conflicts."
     ],
