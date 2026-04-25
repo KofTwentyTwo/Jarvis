@@ -94,11 +94,16 @@ final class ReplayLogTests: XCTestCase {
         XCTAssertEqual(retryRows[0].nonce, "nonce-B")
     }
 
-    // L3: 64 records, no flush trigger fires (count is exactly 64 → triggers).
-    // Use 50 events instead, well under the chunk threshold and within
-    // the 50ms window. Must remain unflushed.
+    // L3 — ME-06: 50 records below chunk threshold; assert nothing flushed.
+    //
+    // Pre-fix the test relied on the 50ms window not having fired by the
+    // time the assertion ran. CI under load would race the timer ahead of
+    // the assertion and the count would be 50 instead of 0. The fix
+    // injects a long batch-window override (60s) so the timer cannot fire
+    // within the test's lifetime — the only flush trigger that could fire
+    // is the 64-event chunk trigger, which 50 events doesn't reach.
     func test_L3_eventsBufferedBelowChunkThreshold() async throws {
-        let log = try ReplayLog(databaseURL: dbURL)
+        let log = try ReplayLog(databaseURL: dbURL, batchWindowMs: 60_000)
         let session = try await log.beginSession(appVersion: "v", buildSHA: "s")
         let turn = TurnID.fresh()
         try await log.startTurn(
@@ -109,8 +114,8 @@ final class ReplayLogTests: XCTestCase {
         for _ in 0..<50 {
             await log.record(.textDelta("a"), for: turn)
         }
-        // Immediately read events table from a separate connection — buffer
-        // hasn't flushed yet (no chunk trigger, no 50ms timer fired).
+        // Read events table from a separate connection — buffer must not
+        // have flushed (60s window cannot fire; 50 < 64 chunk threshold).
         let conn = try SQLiteConnection.open(at: dbURL)
         defer { try? conn.close() }
         let count: Int64 = try conn.query(

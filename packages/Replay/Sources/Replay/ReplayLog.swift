@@ -20,6 +20,12 @@ public actor ReplayLog {
     private let conn: SQLiteConnection
     private let clock: @Sendable () -> Date
     private let logger: Logger
+    /// ME-06: per-instance batch-window override for tests. Defaults to
+    /// `Self.batchWindowMs` (50ms) in production. Tests that want to assert
+    /// "buffer is unflushed at this moment" can pass a very large value
+    /// (e.g., 60_000ms) so the timer never fires within the test window —
+    /// removes the flaky "Task.sleep racing the timer" failure mode.
+    private let batchWindowMsValue: UInt64
 
     private struct Pending {
         let turnId: TurnID
@@ -39,11 +45,16 @@ public actor ReplayLog {
     private var consecutiveFlushFailures: Int = 0
     private static let flushFailureEscalationThreshold = 3
 
-    public init(databaseURL: URL, clock: @Sendable @escaping () -> Date = { Date() }) throws {
+    public init(
+        databaseURL: URL,
+        clock: @Sendable @escaping () -> Date = { Date() },
+        batchWindowMs: UInt64 = ReplayLog.batchWindowMs
+    ) throws {
         try ReplayPaths.ensureParentDirectory(of: databaseURL)
         self.conn = try SQLiteConnection.open(at: databaseURL)
         self.clock = clock
         self.logger = Logger(label: JarvisLogChannel.replay.rawValue)
+        self.batchWindowMsValue = batchWindowMs
 
         for sql in Schema.pragmas { try conn.execute(sql) }
         for sql in Schema.allStatements { try conn.execute(sql) }
@@ -117,8 +128,9 @@ public actor ReplayLog {
 
         if flushTask == nil {
             let myGen = flushGeneration
+            let waitNs = batchWindowMsValue * 1_000_000
             flushTask = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: Self.batchWindowMs * 1_000_000)
+                try? await Task.sleep(nanoseconds: waitNs)
                 guard let self else { return }
                 await self.windowFlushFired(generation: myGen)
             }
