@@ -28,9 +28,23 @@ import Foundation
 @MainActor
 public final class ConfirmationPresenter: ConfirmationPresenting {
 
-    /// Weak so the broker can deinit cleanly during process teardown
-    /// without a strong cycle through the presenter.
-    private weak var broker: ConfirmationBroker?
+    /// WR-02 (REVIEW 05): broker is held STRONGLY. Previously this was
+    /// `weak var broker` paired with `weak var inner` on
+    /// `ConfirmationPresenterHolder` — both could deinit during a pending
+    /// request, leaving the user staring at a panel whose Approve/Deny
+    /// buttons silently no-op'd until the 60s timeout fired.
+    ///
+    /// Lifecycle invariant (documented at MCPRuntime declaration site):
+    /// MCPRuntime — which OWNS broker, presenter, and holder — must be
+    /// held strongly by AppDelegate for the lifetime of the process. The
+    /// orchestrator must not outlive the runtime. Under that invariant,
+    /// strong-from-presenter-to-broker creates no cycle: the cycle that
+    /// motivated `weak` was broker → presenter → broker, but the holder
+    /// indirection broke that — broker holds the holder, holder now
+    /// holds the presenter strongly, and the presenter holds the broker
+    /// strongly. The chain is acyclic when read top-down because broker
+    /// does NOT hold the presenter directly.
+    private let broker: ConfirmationBroker
 
     /// One panel per pending confirmation id. The id key matches
     /// ConfirmationBroker's pending request id so dismiss(id:) can find
@@ -82,15 +96,20 @@ public final class ConfirmationPresenter: ConfirmationPresenting {
         panel.title = "Approve tool call"
         panel.isFloatingPanel = true
 
+        // WR-02 (REVIEW 05): capture broker by value (it's a sendable
+        // actor reference). Strong capture is intentional — the broker is
+        // the load-bearing component; if it's gone the panel button is a
+        // no-op anyway. Previously `[weak self]` + `self?.broker` could
+        // silently no-op if the broker deinit'd during a pending request,
+        // leaving the orchestrator awaiting until the 60s timeout fired.
+        let broker = self.broker
         let view = ConfirmationContent(
             toolName: toolName,
             argsPreview: argsPreview,
-            onApprove: { [weak self] in
-                guard let broker = self?.broker else { return }
+            onApprove: {
                 Task { await broker.response(id: id, outcome: .approve) }
             },
-            onDeny: { [weak self] in
-                guard let broker = self?.broker else { return }
+            onDeny: {
                 Task { await broker.response(id: id, outcome: .deny) }
             }
         )

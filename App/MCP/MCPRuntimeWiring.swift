@@ -42,6 +42,16 @@ import Replay
 /// process. The AgentOrchestrator (added in a later plan) consumes
 /// `dispatcher`; the broker / presenter / observer are kept alive here so
 /// they don't deinit while a confirmation is pending.
+///
+/// WR-02 (REVIEW 05) lifecycle invariant: AppDelegate MUST hold MCPRuntime
+/// strongly for the lifetime of the process. The orchestrator MUST NOT
+/// outlive MCPRuntime. The presenter ↔ broker reference graph (presenter
+/// holds broker strong, holder holds presenter strong) is acyclic only
+/// because broker holds the holder, not the presenter directly. If
+/// MCPRuntime is allowed to deinit while a confirmation is pending, the
+/// awaiter still observes a result (broker resolves with .timeout in the
+/// worst case), but the panel may flicker between states. Don't let it
+/// happen.
 @MainActor
 public struct MCPRuntime {
     public let client: MCPClient
@@ -178,9 +188,16 @@ public enum MCPRuntimeWiring {
 /// button handlers) is constructed afterwards. Without this, the broker
 /// would need a `var presenter` slot we'd assign post-init, which would
 /// require the broker to be a class. The holder keeps the broker an actor.
+///
+/// WR-02 (REVIEW 05): `inner` is held STRONGLY now. Previously it was
+/// `weak var inner` paired with `weak var broker` on
+/// `ConfirmationPresenter` — both could deinit during a pending request,
+/// silently breaking Approve/Deny button responses. The MCPRuntime owns
+/// broker + presenter + holder; under MCPRuntime's lifetime invariant
+/// (held strongly by AppDelegate) the strong reference creates no cycle.
 @MainActor
 public final class ConfirmationPresenterHolder: ConfirmationPresenting {
-    private weak var inner: ConfirmationPresenter?
+    private var inner: ConfirmationPresenter?
 
     public init() {}
 
@@ -189,7 +206,8 @@ public final class ConfirmationPresenterHolder: ConfirmationPresenting {
     public nonisolated func show(id: UUID, toolName: String, argsPreview: String) async {
         await MainActor.run { [weak self] in
             // Broker fires-and-forgets show; we re-dispatch into the
-            // presenter on MainActor.
+            // presenter on MainActor. self is weak (the holder is owned
+            // by MCPRuntime), but inner is strong inside the holder.
             if let inner = self?.inner {
                 Task { await inner.show(id: id, toolName: toolName, argsPreview: argsPreview) }
             }
