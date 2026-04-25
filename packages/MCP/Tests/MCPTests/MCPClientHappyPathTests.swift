@@ -86,4 +86,25 @@ final class MCPClientHappyPathTests: XCTestCase {
         XCTAssertEqual(meta?.requiresConfirmation, true)
         await client.shutdown()
     }
+
+    /// WR-06 (REVIEW 05): callTool's `arguments` parameter is now
+    /// optional matching the SDK signature. Calling without arguments
+    /// must compile AND reach the helper (which then returns the
+    /// "missing 'text' arg" isError because mock_echo requires text).
+    /// What this proves: the optional-argument signature works without
+    /// callers needing to pass `[:]`.
+    func test_callTool_withoutArguments_isAccepted() async throws {
+        let client = MCPClient()
+        try await client.register(
+            name: "mock-helper",
+            binaryURL: helperBinary,
+            requiresConfirmation: false
+        )
+        // No `arguments:` parameter at the call site — exercises the
+        // default `nil` value WR-06 introduced.
+        let result = try await client.callTool(name: "mock_echo")
+        XCTAssertEqual(result.isError, true,
+                       "mock_echo without text arg returns isError=true; the test asserts the call MAKES IT to the helper")
+        await client.shutdown()
+    }
 }

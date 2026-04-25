@@ -37,8 +37,10 @@ import MCP
 /// dispatcher's sanitize + observer behavior can be exercised without
 /// spawning helper subprocesses. Production conformance is the one-liner
 /// extension below.
+///
+/// WR-06 (REVIEW 05): `arguments` is optional matching the SDK signature.
 public protocol MCPClientCalling: Sendable {
-    func callTool(name: String, arguments: [String: Value]) async throws -> CallTool.Result
+    func callTool(name: String, arguments: [String: Value]?) async throws -> CallTool.Result
 }
 
 extension MCPClient: MCPClientCalling {}
@@ -87,7 +89,14 @@ public actor MCPToolDispatcher: ToolDispatcher {
     // MARK: ToolDispatcher conformance
 
     public func dispatch(toolUse: ToolUseRequest) async throws -> Data {
-        let arguments = Self.decodeArguments(toolUse.argsJSON)
+        // WR-06 (REVIEW 05): pass `nil` (rather than `[:]`) when the
+        // model emitted no args, preserving the JSON-RPC distinction
+        // between `arguments: null` and `arguments: {}`. Some MCP servers
+        // distinguish; the helper bundle today doesn't, but ride the
+        // SDK signature for protocol fidelity.
+        let arguments: [String: Value]? = toolUse.argsJSON.isEmpty
+            ? nil
+            : Self.decodeArguments(toolUse.argsJSON)
 
         // Forward to the real (or mocked) MCP client. Errors propagate.
         let result = try await client.callTool(name: toolUse.name, arguments: arguments)

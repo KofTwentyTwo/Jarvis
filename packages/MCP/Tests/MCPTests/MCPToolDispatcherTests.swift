@@ -39,7 +39,7 @@ private actor MockClient: MCPClientCalling {
 
     func setMode(_ m: Mode) { self.mode = m }
 
-    func callTool(name: String, arguments: [String: Value]) async throws -> CallTool.Result {
+    func callTool(name: String, arguments: [String: Value]?) async throws -> CallTool.Result {
         lastCallName = name
         lastCallArguments = arguments
         callCount += 1

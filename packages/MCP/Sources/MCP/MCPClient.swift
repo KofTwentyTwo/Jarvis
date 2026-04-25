@@ -94,7 +94,14 @@ public actor MCPClient {
     /// the slot is cleared so a subsequent call can attempt again. (We do not
     /// add backoff/retry here — RESEARCH A5: failed restart propagates;
     /// hardening is a future plan.)
-    public func callTool(name: String, arguments: [String: Value]) async throws -> CallTool.Result {
+    /// WR-06 (REVIEW 05): `arguments` is optional, matching the SDK's
+    /// `Client.callTool(name:arguments:)` signature. Tools registered with
+    /// empty `inputSchema.required` (get_time, get_clipboard) accept `null`
+    /// arguments per JSON-RPC; callers no longer need to pass `[:]`.
+    /// Some MCP servers distinguish `arguments: null` (no args provided)
+    /// from `arguments: {}` (empty arg dict); the wrapper preserves that
+    /// distinction now.
+    public func callTool(name: String, arguments: [String: Value]? = nil) async throws -> CallTool.Result {
         guard let serverName = toolToServer[name] else {
             throw JarvisMCPError.helperMissing(name: name)
         }
