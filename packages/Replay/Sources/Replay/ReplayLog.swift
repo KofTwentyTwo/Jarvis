@@ -31,6 +31,13 @@ public actor ReplayLog {
     private var pending: [Pending] = []
     private var flushTask: Task<Void, Never>?
     private var flushGeneration: UInt64 = 0
+    /// ME-05: count consecutive flush failures so chronic disk/WAL faults
+    /// escalate from quiet logs to a fatal-tier observation. Each successful
+    /// flush resets this. Threshold of 3 keeps transient I/O hiccups from
+    /// triggering the loud path while still surfacing real data-loss
+    /// conditions for the user.
+    private var consecutiveFlushFailures: Int = 0
+    private static let flushFailureEscalationThreshold = 3
 
     public init(databaseURL: URL, clock: @Sendable @escaping () -> Date = { Date() }) throws {
         try ReplayPaths.ensureParentDirectory(of: databaseURL)
@@ -197,12 +204,47 @@ public actor ReplayLog {
                 )
             }
             try conn.commit()
+            consecutiveFlushFailures = 0
         } catch {
+            // ME-05: rollback the in-flight transaction, then re-buffer the
+            // batch at the FRONT of `pending` so the next flush attempt can
+            // retry. Pre-fix this silently dropped events on transaction
+            // failure, violating OBS-02's durability claim.
             try? conn.rollback()
-            logger.error("replay flush failed", metadata: [
-                "batch_size": "\(batch.count)",
-                "error": "\(error)",
-            ])
+
+            // Capture the turn_ids so a forensic reader can identify which
+            // turns lost which events (the reviewer's required minimum).
+            let turnIds = Set(batch.map { $0.turnId.rawValue })
+                .sorted().joined(separator: ",")
+            // Redact the error message in case sqlite3_errmsg ever echoes
+            // any caller-supplied bytes; defense-in-depth alongside HI-01.
+            let errStr = JarvisLogging.Redact.apply(String(describing: error))
+
+            consecutiveFlushFailures += 1
+            let escalated = consecutiveFlushFailures >= Self.flushFailureEscalationThreshold
+
+            // Re-buffer at the head; subsequent records append after.
+            pending.insert(contentsOf: batch, at: 0)
+
+            if escalated {
+                // Chronic failure — surface as critical so the dev overlay
+                // / structured-log scrapers can flag it. Don't `fatalError`:
+                // OBS-02 says replay is best-effort and must never propagate
+                // into orchestrator turn semantics.
+                logger.critical("replay flush failing chronically (data-loss risk)", metadata: [
+                    "batch_size": "\(batch.count)",
+                    "turn_ids": "\(turnIds)",
+                    "consecutive_failures": "\(consecutiveFlushFailures)",
+                    "error": "\(errStr)",
+                ])
+            } else {
+                logger.error("replay flush failed; batch re-queued", metadata: [
+                    "batch_size": "\(batch.count)",
+                    "turn_ids": "\(turnIds)",
+                    "consecutive_failures": "\(consecutiveFlushFailures)",
+                    "error": "\(errStr)",
+                ])
+            }
         }
     }
 
