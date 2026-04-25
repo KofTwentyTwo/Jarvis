@@ -9,8 +9,10 @@
 /* Begin PBXBuildFile section */
 		0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF0892A5DFF2AD38A93834 /* BannerContent.swift */; };
 		07E7F32B3857ED215DE59FBE /* Keychain in Frameworks */ = {isa = PBXBuildFile; productRef = 1440CCDB2CC412B099BD0310 /* Keychain */; };
+		17072C84550FC4659C4810B9 /* MCPTimeMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCA2C937A1629F873729B75 /* MCPTimeMain.swift */; };
 		18CDCC4155A2604BC4D67147 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 467AE2D19D58325D227E2F89 /* Assets.xcassets */; };
 		1D281661B4A64095FF9FA8BA /* Bus in Frameworks */ = {isa = PBXBuildFile; productRef = FB642DDAD826E62BBE1B8623 /* Bus */; };
+		267515392F3978AA4A96EFA2 /* PasteboardReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D554BFB452EC88ECA9392A2E /* PasteboardReader.swift */; };
 		29CF0F24C5D0DD0A8F1A0AEE /* WizardState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B2103B1A123E512CC56B63 /* WizardState.swift */; };
 		2BCA466CFD785F3BC989C35F /* WizardStageAPIKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */; };
 		461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */; };
@@ -25,6 +27,7 @@
 		6A2D9DE01C3C53094A820DDF /* JarvisEntitlementProbeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36AC239C99B913A4767C0EE8 /* JarvisEntitlementProbeTests.swift */; };
 		7270A6A54B0DC1510EB9C56A /* WizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33A1960A6404CD790036C46 /* WizardView.swift */; };
 		78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF7206DB98EC02734975536 /* HudState.swift */; };
+		79991014825C2BF8E7226CF8 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 003ADC59F1F11095A80EAE32 /* MCP */; };
 		7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */; };
 		8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1517F151F3BA96803143692 /* AppDelegate.swift */; };
 		896984D88C412595C0F6F97E /* HudStateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511D7B2406F485ED0D4B9E0D /* HudStateIntent.swift */; };
@@ -36,6 +39,7 @@
 		A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */; };
 		A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */; };
 		A9F18AF7B16BEA1776F76321 /* HUDBannerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */; };
+		AA6FBB22D0352A50335801C1 /* MCPClipboardMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF983357F35F736ADCEF1D5 /* MCPClipboardMain.swift */; };
 		AC359FF68F49110FF9B6E6E5 /* WizardStageAPIKeyViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */; };
 		B64A0CAA46B3C146B54F9F85 /* HUDBannerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */; };
 		BBD8BBC82E0D3C57E0DB4ED0 /* HudStateEnumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */; };
@@ -51,9 +55,24 @@
 		E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */; };
 		EB07CD704A3568F27DD4D901 /* Shell in Frameworks */ = {isa = PBXBuildFile; productRef = 6FAD561608B0D1C402015E0D /* Shell */; };
 		F8E9590D40A0B88DD4FD712D /* JarvisLogging in Frameworks */ = {isa = PBXBuildFile; productRef = ED53153FE6F73137C23AD43B /* JarvisLogging */; };
+		F9CD3EC30A33CDBAFA274784 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = EFBD95BA85DEFC31F7583FF2 /* MCP */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		0C47860A5999E2D2FF3E2541 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 33E99CF1F5349721FD0BB40B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D0DD086DB85E343B69EB2E8;
+			remoteInfo = "mcp-time";
+		};
+		3712067C4D21682FCFB04AE1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 33E99CF1F5349721FD0BB40B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D7D11D4EF8FF2DD490BE1FA6;
+			remoteInfo = "mcp-clipboard";
+		};
 		AA51ED58F753D32E71E8C945 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 33E99CF1F5349721FD0BB40B /* Project object */;
@@ -77,11 +96,13 @@
 		0CF7206DB98EC02734975536 /* HudState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudState.swift; sourceTree = "<group>"; };
 		17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerPanel.swift; sourceTree = "<group>"; };
 		2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconControllerTests.swift; sourceTree = "<group>"; };
+		2857325F1F38B436FFA8AD8B /* mcp-time.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mcp-time.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E9C7A0B14B3AE5C9100CACF /* Config */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Config; path = packages/Config; sourceTree = SOURCE_ROOT; };
 		3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisHUDPanelTests.swift; sourceTree = "<group>"; };
 		36AC239C99B913A4767C0EE8 /* JarvisEntitlementProbeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisEntitlementProbeTests.swift; sourceTree = "<group>"; };
 		39DD53A4E2CCED58C85B63FC /* AnthropicKeyValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicKeyValidatorTests.swift; sourceTree = "<group>"; };
 		3EEB80F86BC4DE366810AB99 /* Shell */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Shell; path = packages/Shell; sourceTree = SOURCE_ROOT; };
+		3EF983357F35F736ADCEF1D5 /* MCPClipboardMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPClipboardMain.swift; sourceTree = "<group>"; };
 		43886353ECED823D4CB689D3 /* WizardStageTCCView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageTCCView.swift; sourceTree = "<group>"; };
 		4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisHUDPanel.swift; sourceTree = "<group>"; };
 		467AE2D19D58325D227E2F89 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -114,13 +135,32 @@
 		BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageAPIKeyView.swift; sourceTree = "<group>"; };
 		C1517F151F3BA96803143692 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWizardController.swift; sourceTree = "<group>"; };
+		D554BFB452EC88ECA9392A2E /* PasteboardReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardReader.swift; sourceTree = "<group>"; };
 		DE712EB628AF5CD6E935E8AF /* HudStateCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinator.swift; sourceTree = "<group>"; };
 		E5B2103B1A123E512CC56B63 /* WizardState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardState.swift; sourceTree = "<group>"; };
+		E9CF7C158A5A7699A9CA32DE /* mcp-clipboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mcp-clipboard.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jarvis.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FFBE24D9C8E23A56E1C1EF57 /* JarvisEntitlementProbeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisEntitlementProbeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FFCA2C937A1629F873729B75 /* MCPTimeMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPTimeMain.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		1F63B4089D7994428EDB5B42 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9CD3EC30A33CDBAFA274784 /* MCP in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		523B99889C81F48D09C76DBD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				79991014825C2BF8E7226CF8 /* MCP in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		886D43D159942AB5C149B33B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -136,6 +176,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		11046649A6D2E4DB9850EF1A /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				4D0A7580D059A7364F57697B /* mcp-time */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
 		146263771AC556A87FAB63A6 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -150,6 +198,15 @@
 				922FCD26000A64044B1FF187 /* Wizard */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		208C83303CC662AB2390C1C3 /* mcp-clipboard */ = {
+			isa = PBXGroup;
+			children = (
+				3EF983357F35F736ADCEF1D5 /* MCPClipboardMain.swift */,
+				D554BFB452EC88ECA9392A2E /* PasteboardReader.swift */,
+			);
+			path = "mcp-clipboard";
 			sourceTree = "<group>";
 		};
 		35E7CF3C8F80086AD447480E /* MenuBar */ = {
@@ -183,6 +240,14 @@
 			path = AppTests;
 			sourceTree = "<group>";
 		};
+		4D0A7580D059A7364F57697B /* mcp-time */ = {
+			isa = PBXGroup;
+			children = (
+				FFCA2C937A1629F873729B75 /* MCPTimeMain.swift */,
+			);
+			path = "mcp-time";
+			sourceTree = "<group>";
+		};
 		5CBAF02B001A7FF406642CCA /* Theme */ = {
 			isa = PBXGroup;
 			children = (
@@ -198,6 +263,8 @@
 				F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */,
 				6784683F2262D8AFA439668D /* JarvisAppTests.xctest */,
 				FFBE24D9C8E23A56E1C1EF57 /* JarvisEntitlementProbeTests.xctest */,
+				E9CF7C158A5A7699A9CA32DE /* mcp-clipboard.app */,
+				2857325F1F38B436FFA8AD8B /* mcp-time.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -209,6 +276,14 @@
 				A9211EAD35AE7E8ABF9B4CC6 /* JarvisEntitlementProbeTests */,
 			);
 			path = Tests;
+			sourceTree = "<group>";
+		};
+		8A023692CD0AAABE9D630843 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				208C83303CC662AB2390C1C3 /* mcp-clipboard */,
+			);
+			path = Sources;
 			sourceTree = "<group>";
 		};
 		922FCD26000A64044B1FF187 /* Wizard */ = {
@@ -225,6 +300,14 @@
 			path = Wizard;
 			sourceTree = "<group>";
 		};
+		A7065AE59E83DE43BF345747 /* mcp-time */ = {
+			isa = PBXGroup;
+			children = (
+				11046649A6D2E4DB9850EF1A /* Sources */,
+			);
+			path = "mcp-time";
+			sourceTree = "<group>";
+		};
 		A9211EAD35AE7E8ABF9B4CC6 /* JarvisEntitlementProbeTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -237,9 +320,19 @@
 			isa = PBXGroup;
 			children = (
 				146263771AC556A87FAB63A6 /* App */,
+				C27D8B6D46DD66A6D5D9AE1D /* mcp-servers */,
 				EBFF6C47A440673BFB3E17FB /* Packages */,
 				7370B301BC3824D8E135198C /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		C27D8B6D46DD66A6D5D9AE1D /* mcp-servers */ = {
+			isa = PBXGroup;
+			children = (
+				F008A8B896C0B896A6BEA1AA /* mcp-clipboard */,
+				A7065AE59E83DE43BF345747 /* mcp-time */,
+			);
+			path = "mcp-servers";
 			sourceTree = "<group>";
 		};
 		D80B1ECFB5748E20A6ADF0EB /* Resources */ = {
@@ -262,6 +355,14 @@
 			path = Packages;
 			sourceTree = "<group>";
 		};
+		F008A8B896C0B896A6BEA1AA /* mcp-clipboard */ = {
+			isa = PBXGroup;
+			children = (
+				8A023692CD0AAABE9D630843 /* Sources */,
+			);
+			path = "mcp-clipboard";
+			sourceTree = "<group>";
+		};
 		F76520C565169D7547EE9608 /* HUD */ = {
 			isa = PBXGroup;
 			children = (
@@ -280,6 +381,26 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		3D0DD086DB85E343B69EB2E8 /* mcp-time */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AB916DC2F5487D6404DC84EA /* Build configuration list for PBXNativeTarget "mcp-time" */;
+			buildPhases = (
+				72C49B7C0433B488122A9A3C /* Sources */,
+				523B99889C81F48D09C76DBD /* Frameworks */,
+				6B7F46C0E5B0E3F12717BC9B /* Copy mcp-time.entitlements into bundle Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "mcp-time";
+			packageProductDependencies = (
+				003ADC59F1F11095A80EAE32 /* MCP */,
+			);
+			productName = "mcp-time";
+			productReference = 2857325F1F38B436FFA8AD8B /* mcp-time.app */;
+			productType = "com.apple.product-type.application";
+		};
 		461D90920FCD8CAF83348871 /* Jarvis */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B6D5E915E8E9BDF0BF748745 /* Build configuration list for PBXNativeTarget "Jarvis" */;
@@ -293,6 +414,7 @@
 				C593366D9BBD0DC5F45EA023 /* Resources */,
 				886D43D159942AB5C149B33B /* Frameworks */,
 				DD1590A06D57152C1B673573 /* Create Contents/Helpers directory */,
+				45D1C390727A1C150595B1D8 /* Copy MCP helpers into Contents/Helpers/ */,
 				318A7B75FBCC334BEF639033 /* Verify entitlements (pre-codesign) */,
 				6B8296F9F78BB0FC4B3EC838 /* Codesign bundle (deepest-first) */,
 				F902CE3B015FE94FD67700D8 /* Verify entitlements (post-codesign) */,
@@ -301,6 +423,8 @@
 			buildRules = (
 			);
 			dependencies = (
+				054C62B25C6485E4E21A07FB /* PBXTargetDependency */,
+				3CDFB986AFD9C57D0FAC0AF3 /* PBXTargetDependency */,
 			);
 			name = Jarvis;
 			packageProductDependencies = (
@@ -332,6 +456,26 @@
 			productReference = 6784683F2262D8AFA439668D /* JarvisAppTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		D7D11D4EF8FF2DD490BE1FA6 /* mcp-clipboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6473F6964C9C476910464B1E /* Build configuration list for PBXNativeTarget "mcp-clipboard" */;
+			buildPhases = (
+				7624DFCC3E95875F83409C6F /* Sources */,
+				1F63B4089D7994428EDB5B42 /* Frameworks */,
+				9C0F129D1CD5A60C16660C62 /* Copy mcp-clipboard.entitlements into bundle Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "mcp-clipboard";
+			packageProductDependencies = (
+				EFBD95BA85DEFC31F7583FF2 /* MCP */,
+			);
+			productName = "mcp-clipboard";
+			productReference = E9CF7C158A5A7699A9CA32DE /* mcp-clipboard.app */;
+			productType = "com.apple.product-type.application";
+		};
 		F7B9CBCDAE3BC101ECD8F687 /* JarvisEntitlementProbeTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 10D20923AB792314B5DF876E /* Build configuration list for PBXNativeTarget "JarvisEntitlementProbeTests" */;
@@ -359,10 +503,16 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					3D0DD086DB85E343B69EB2E8 = {
+						ProvisioningStyle = Manual;
+					};
 					461D90920FCD8CAF83348871 = {
 						ProvisioningStyle = Manual;
 					};
 					93F20AEE91BB60C4ED0C0346 = {
+						ProvisioningStyle = Manual;
+					};
+					D7D11D4EF8FF2DD490BE1FA6 = {
 						ProvisioningStyle = Manual;
 					};
 					F7B9CBCDAE3BC101ECD8F687 = {
@@ -380,6 +530,7 @@
 			mainGroup = BC0DCAC9B7584481D8C65021;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				3C850EFCEBC3B4947F0F7AE1 /* XCRemoteSwiftPackageReference "swift-sdk" */,
 				C9F5C5BB642801B788644312 /* XCLocalSwiftPackageReference "packages/Bus" */,
 				EFF4B62688DB8BC3E515BD34 /* XCLocalSwiftPackageReference "packages/Config" */,
 				22F43C6F6F358E8483EC4DE0 /* XCLocalSwiftPackageReference "packages/Keychain" */,
@@ -394,6 +545,8 @@
 				461D90920FCD8CAF83348871 /* Jarvis */,
 				93F20AEE91BB60C4ED0C0346 /* JarvisAppTests */,
 				F7B9CBCDAE3BC101ECD8F687 /* JarvisEntitlementProbeTests */,
+				D7D11D4EF8FF2DD490BE1FA6 /* mcp-clipboard */,
+				3D0DD086DB85E343B69EB2E8 /* mcp-time */,
 			);
 		};
 /* End PBXProject section */
@@ -468,6 +621,25 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/scripts/verify-entitlements.sh\" --pre-codesign\n";
 		};
+		45D1C390727A1C150595B1D8 /* Copy MCP helpers into Contents/Helpers/ */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy MCP helpers into Contents/Helpers/";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Replace any prior copies wholesale so stale files don't linger after\n# a helper rename or removal. -R preserves the .app bundle structure.\nset -euo pipefail\nDEST=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers\"\nfor HELPER in mcp-time mcp-clipboard; do\n  SRC=\"${BUILT_PRODUCTS_DIR}/${HELPER}.app\"\n  if [ ! -d \"$SRC\" ]; then\n    echo \"error: helper bundle missing at $SRC (was the ${HELPER} target built first?)\" >&2\n    exit 1\n  fi\n  rm -rf \"${DEST}/${HELPER}.app\"\n  cp -R \"$SRC\" \"${DEST}/${HELPER}.app\"\ndone\n";
+		};
 		4B80D79B2A0254274258618C /* Build webview bundle */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -508,6 +680,25 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/scripts/check-bus-harness-parity.sh\"\n";
 		};
+		6B7F46C0E5B0E3F12717BC9B /* Copy mcp-time.entitlements into bundle Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy mcp-time.entitlements into bundle Resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "mkdir -p \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources\"\ncp \"${SRCROOT}/mcp-servers/mcp-time/Support/mcp-time.entitlements\" \\\n   \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources/mcp-time.entitlements\"\n";
+		};
 		6B8296F9F78BB0FC4B3EC838 /* Codesign bundle (deepest-first) */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -545,6 +736,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/scripts/verify-codesign-settings.sh\"\n";
+		};
+		9C0F129D1CD5A60C16660C62 /* Copy mcp-clipboard.entitlements into bundle Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy mcp-clipboard.entitlements into bundle Resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "mkdir -p \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources\"\ncp \"${SRCROOT}/mcp-servers/mcp-clipboard/Support/mcp-clipboard.entitlements\" \\\n   \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources/mcp-clipboard.entitlements\"\n";
 		};
 		A9F0578ECF5691986EE06B5B /* Check bus protocol version (Swift/TS parity) */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -616,6 +826,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		72C49B7C0433B488122A9A3C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				17072C84550FC4659C4810B9 /* MCPTimeMain.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7624DFCC3E95875F83409C6F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA6FBB22D0352A50335801C1 /* MCPClipboardMain.swift in Sources */,
+				267515392F3978AA4A96EFA2 /* PasteboardReader.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A5FA109B8186C9417E8AF319 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -669,6 +896,16 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		054C62B25C6485E4E21A07FB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3D0DD086DB85E343B69EB2E8 /* mcp-time */;
+			targetProxy = 0C47860A5999E2D2FF3E2541 /* PBXContainerItemProxy */;
+		};
+		3CDFB986AFD9C57D0FAC0AF3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D7D11D4EF8FF2DD490BE1FA6 /* mcp-clipboard */;
+			targetProxy = 3712067C4D21682FCFB04AE1 /* PBXContainerItemProxy */;
+		};
 		7DF6190F7FC7F658ED5FC678 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 461D90920FCD8CAF83348871 /* Jarvis */;
@@ -733,6 +970,34 @@
 			};
 			name = Debug;
 		};
+		4D0766B9ED0197CF4BCB3B20 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = "mcp-servers/mcp-clipboard/Support/mcp-clipboard.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = 7UC2HETAN9;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "mcp-servers/mcp-clipboard/Support/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CODE_SIGN_FLAGS = "--options=runtime --timestamp";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.koftwentytwo.jarvis.mcp-clipboard";
+				PRODUCT_NAME = "mcp-clipboard";
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 		79CB820AD9DBDFAC3BAD9AB2 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -755,6 +1020,33 @@
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Contents/MacOS/Jarvis";
 			};
 			name = Release;
+		};
+		880D5242E99CF972F0FA3BE1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = "mcp-servers/mcp-time/Support/mcp-time.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "mcp-servers/mcp-time/Support/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CODE_SIGN_FLAGS = "";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.koftwentytwo.jarvis.mcp-time";
+				PRODUCT_NAME = "mcp-time";
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
 		};
 		8A75D86FEE135E74011AB6D2 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -824,6 +1116,34 @@
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
+		};
+		9D360E33867B86D16BD78991 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = "mcp-servers/mcp-time/Support/mcp-time.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = 7UC2HETAN9;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "mcp-servers/mcp-time/Support/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CODE_SIGN_FLAGS = "--options=runtime --timestamp";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.koftwentytwo.jarvis.mcp-time";
+				PRODUCT_NAME = "mcp-time";
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
 		};
 		A5A5079A306E1695C2FCBC38 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -963,6 +1283,33 @@
 			};
 			name = Release;
 		};
+		E4071D1C931E74184FDE8FEC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_ENTITLEMENTS = "mcp-servers/mcp-clipboard/Support/mcp-clipboard.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "mcp-servers/mcp-clipboard/Support/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CODE_SIGN_FLAGS = "";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.koftwentytwo.jarvis.mcp-clipboard";
+				PRODUCT_NAME = "mcp-clipboard";
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -980,6 +1327,24 @@
 			buildConfigurations = (
 				8A75D86FEE135E74011AB6D2 /* Debug */,
 				CA2EDC6435E5128E90920A00 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6473F6964C9C476910464B1E /* Build configuration list for PBXNativeTarget "mcp-clipboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E4071D1C931E74184FDE8FEC /* Debug */,
+				4D0766B9ED0197CF4BCB3B20 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AB916DC2F5487D6404DC84EA /* Build configuration list for PBXNativeTarget "mcp-time" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				880D5242E99CF972F0FA3BE1 /* Debug */,
+				9D360E33867B86D16BD78991 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -1027,7 +1392,23 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		3C850EFCEBC3B4947F0F7AE1 /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk";
+			requirement = {
+				kind = exactVersion;
+				version = 0.12.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		003ADC59F1F11095A80EAE32 /* MCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3C850EFCEBC3B4947F0F7AE1 /* XCRemoteSwiftPackageReference "swift-sdk" */;
+			productName = MCP;
+		};
 		1440CCDB2CC412B099BD0310 /* Keychain */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Keychain;
@@ -1043,6 +1424,11 @@
 		ED53153FE6F73137C23AD43B /* JarvisLogging */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = JarvisLogging;
+		};
+		EFBD95BA85DEFC31F7583FF2 /* MCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3C850EFCEBC3B4947F0F7AE1 /* XCRemoteSwiftPackageReference "swift-sdk" */;
+			productName = MCP;
 		};
 		FB642DDAD826E62BBE1B8623 /* Bus */ = {
 			isa = XCSwiftPackageProductDependency;

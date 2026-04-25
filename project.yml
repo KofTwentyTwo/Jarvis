@@ -36,6 +36,12 @@ packages:
     path: packages/Shell
   Bus:
     path: packages/Bus
+  # MCP Swift SDK — consumed by both `mcp-time` and `mcp-clipboard` helper
+  # targets (Plan 05-02). Pinned at the same exact version as
+  # `packages/MCP/Package.swift` (Plan 05-01) to avoid dual-resolution drift.
+  swift-sdk:
+    url: https://github.com/modelcontextprotocol/swift-sdk
+    exactVersion: "0.12.0"
 targets:
   Jarvis:
     type: application
@@ -101,6 +107,14 @@ targets:
         product: Shell
       - package: Bus
         product: Bus
+      # Plan 05-02: build the helper apps before the Jarvis copyFiles phase
+      # consumes them. xcodegen orders target dependencies before copy phases.
+      - target: mcp-time
+        embed: false
+        link: false
+      - target: mcp-clipboard
+        embed: false
+        link: false
     preBuildScripts:
       # Three build-breaking pre-build phases — run BEFORE Compile Sources.
       # Ordered fastest-failing first so common authoring errors surface
@@ -136,14 +150,40 @@ targets:
           "${SRCROOT}/scripts/build-webview.sh"
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
-    copyFiles:
-      - destination: wrapper
-        subpath: Contents/Helpers
-        files: []
+    # Plan 05-02 (DEVIATION from plan): xcodegen's `copyFiles` phase doesn't
+    # resolve target products from BUILT_PRODUCTS_DIR — it expects file paths
+    # relative to SRCROOT. The plan's `files: [mcp-time.app, mcp-clipboard.app]`
+    # produced an empty Contents/Helpers/ at build time. Switched to a
+    # postBuildScript (`Copy MCP helpers into Contents/Helpers/`) that shells
+    # out to `cp -R` from BUILT_PRODUCTS_DIR — this matches the plan's
+    # deviation_rules clause #1 ("If xcodegen doesn't directly support nested
+    # .app bundles via Contents/Helpers/<Name>.app/, generate the helper
+    # bundles via separate xcodebuild targets and copy them in via a Build
+    # Phase script").
+    #
+    # Code Sign On Copy is NOT enabled anywhere — codesign.sh's deepest-first
+    # walker is the authoritative signer, preserving per-helper entitlements.
     postBuildScripts:
       - name: Create Contents/Helpers directory
         script: |
           mkdir -p "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+      - name: Copy MCP helpers into Contents/Helpers/
+        script: |
+          # Replace any prior copies wholesale so stale files don't linger after
+          # a helper rename or removal. -R preserves the .app bundle structure.
+          set -euo pipefail
+          DEST="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers"
+          for HELPER in mcp-time mcp-clipboard; do
+            SRC="${BUILT_PRODUCTS_DIR}/${HELPER}.app"
+            if [ ! -d "$SRC" ]; then
+              echo "error: helper bundle missing at $SRC (was the ${HELPER} target built first?)" >&2
+              exit 1
+            fi
+            rm -rf "${DEST}/${HELPER}.app"
+            cp -R "$SRC" "${DEST}/${HELPER}.app"
+          done
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
       - name: Verify entitlements (pre-codesign)
@@ -219,6 +259,100 @@ targets:
           CODE_SIGNING_REQUIRED: NO
     dependencies:
       - target: Jarvis
+
+  # =====================================================================
+  # MCP helper bundles (Plan 05-02)
+  # =====================================================================
+  # Each helper ships as a SEPARATELY codesigned nested .app under
+  # Jarvis.app/Contents/Helpers/<helper>.app/. Per-helper Info.plist +
+  # entitlements live under mcp-servers/<helper>/Support/. Codesigning is
+  # done by scripts/codesign.sh's deepest-first walker (NOT by xcodegen's
+  # "Code Sign On Copy" — that would strip per-helper entitlements). A
+  # postBuildScript on each target copies the source .entitlements into
+  # the bundle's Contents/Resources/<helper>.entitlements where codesign.sh
+  # expects to find it.
+  mcp-time:
+    type: application
+    platform: macOS
+    sources:
+      - path: mcp-servers/mcp-time/Sources/mcp-time
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.koftwentytwo.jarvis.mcp-time
+        PRODUCT_NAME: mcp-time
+        INFOPLIST_FILE: mcp-servers/mcp-time/Support/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: mcp-servers/mcp-time/Support/mcp-time.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+      configs:
+        Debug:
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGNING_REQUIRED: NO
+          ENABLE_HARDENED_RUNTIME: NO
+          OTHER_CODE_SIGN_FLAGS: ""
+        Release:
+          DEVELOPMENT_TEAM: 7UC2HETAN9
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGNING_REQUIRED: NO
+    dependencies:
+      - package: swift-sdk
+        product: MCP
+    postBuildScripts:
+      - name: Copy mcp-time.entitlements into bundle Resources
+        script: |
+          mkdir -p "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources"
+          cp "${SRCROOT}/mcp-servers/mcp-time/Support/mcp-time.entitlements" \
+             "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources/mcp-time.entitlements"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+
+  mcp-clipboard:
+    type: application
+    platform: macOS
+    sources:
+      - path: mcp-servers/mcp-clipboard/Sources/mcp-clipboard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.koftwentytwo.jarvis.mcp-clipboard
+        PRODUCT_NAME: mcp-clipboard
+        INFOPLIST_FILE: mcp-servers/mcp-clipboard/Support/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: mcp-servers/mcp-clipboard/Support/mcp-clipboard.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+      configs:
+        Debug:
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGNING_REQUIRED: NO
+          ENABLE_HARDENED_RUNTIME: NO
+          OTHER_CODE_SIGN_FLAGS: ""
+        Release:
+          DEVELOPMENT_TEAM: 7UC2HETAN9
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGNING_REQUIRED: NO
+    dependencies:
+      - package: swift-sdk
+        product: MCP
+    postBuildScripts:
+      - name: Copy mcp-clipboard.entitlements into bundle Resources
+        script: |
+          mkdir -p "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources"
+          cp "${SRCROOT}/mcp-servers/mcp-clipboard/Support/mcp-clipboard.entitlements" \
+             "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Resources/mcp-clipboard.entitlements"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+
 schemes:
   Jarvis:
     build:
