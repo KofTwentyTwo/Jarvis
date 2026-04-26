@@ -35,7 +35,10 @@ public struct WizardView: View {
             Divider()
             footer
         }
-        .frame(width: 560, height: 440)
+        // 440h was too short for the TCC stage (4 permission rows + descriptions
+        // + buttons ≈ 520h needed); SwiftUI compressed Text first, producing the
+        // tail-truncation visible on first-launch and clipping the Back row.
+        .frame(width: 600, height: 640)
     }
 
     private var header: some View {

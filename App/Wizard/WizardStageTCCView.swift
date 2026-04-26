@@ -21,8 +21,13 @@ struct WizardStageTCCView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Grant Permissions").font(.system(size: 17, weight: .semibold))
+            // `.fixedSize(horizontal: false, vertical: true)` opts into multi-
+            // line wrap instead of tail-truncation when the proposed width is
+            // narrower than the single-line natural width. Same idiom is
+            // applied below to each row's body text.
             Text("Jarvis needs a few system permissions to do its job. Only one is needed right now; the others will ask when the matching feature is added.")
                 .foregroundColor(Color(NSColor.secondaryLabelColor))
+                .fixedSize(horizontal: false, vertical: true)
 
             inputMonitoringRow
 
@@ -59,8 +64,10 @@ struct WizardStageTCCView: View {
                 Text("Input Monitoring (needed now)").font(.headline)
                 Text("Lets Jarvis see a global hotkey press even when another app is focused. Without this, Jarvis only responds when its window is frontmost.")
                     .foregroundColor(Color(NSColor.secondaryLabelColor))
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 16)
             if !state.inputMonitoringProbed {
                 Button("Grant Access") {
                     state.inputMonitoringGranted = onGrantInputMonitoring()
@@ -87,9 +94,12 @@ struct WizardStageTCCView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.headline)
-                Text(body).foregroundColor(Color(NSColor.secondaryLabelColor))
+                Text(body)
+                    .foregroundColor(Color(NSColor.secondaryLabelColor))
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 16)
             Text(ctaLabel).foregroundColor(Color(NSColor.linkColor))
         }
     }

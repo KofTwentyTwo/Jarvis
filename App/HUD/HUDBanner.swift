@@ -21,10 +21,17 @@ struct HUDBanner: View {
                         Text(content.title)
                             .font(.headline)
                             .foregroundColor(Color(NSColor.labelColor))
+                        // `.fixedSize(horizontal: false, vertical: true)` opts
+                        // into multi-line wrap instead of tail-truncation in
+                        // the 360pt-wide banner. `HUDBannerPanel.positionTopTrailing`
+                        // re-reads `contentView.fittingSize.height` on host, so
+                        // wrapping picks up extra rows in the panel sizing.
                         Text(content.body)
                             .font(.body)
                             .foregroundColor(Color(NSColor.secondaryLabelColor))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     Spacer(minLength: 8)
                     Button(action: onDismiss) {
                         Image(systemName: "xmark")
