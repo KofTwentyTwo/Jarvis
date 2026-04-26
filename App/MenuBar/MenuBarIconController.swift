@@ -98,11 +98,15 @@ public final class MenuBarIconController {
         let isRightClick = event.type == .rightMouseUp
             || event.modifierFlags.contains(.control)
         if isRightClick {
-            // Temporarily assign menu so the standard status-item popup renders,
-            // then clear it so left-click doesn't open the menu next time.
-            statusItem.menu = contextMenu
-            sender.performClick(nil)
-            statusItem.menu = nil
+            // Pop up the context menu directly via the status item without
+            // assigning it as `statusItem.menu`. The previous "temporarily
+            // assign + performClick + clear" pattern was racy: NSStatusItem
+            // can latch the menu on a later runloop pass, after which left-
+            // and right-clicks both surface the menu and the left-click
+            // action never fires. `popUpMenu(_:)` is documented (deprecated
+            // in 10.14, but still functional through Tahoe) and only
+            // displays the menu for the current click — no persistent state.
+            statusItem.popUpMenu(contextMenu)
         } else {
             onLeftClick?()
         }
