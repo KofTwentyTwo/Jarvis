@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import os
 
@@ -132,11 +133,15 @@ final class FileRotatingWriter: @unchecked Sendable {
         currentHandle = nil
 
         let fileURL = directory.appendingPathComponent("\(baseName).\(today).log")
-        if !FileManager.default.fileExists(atPath: fileURL.path) {
-            FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        // Open with O_CLOEXEC at creation time so this long-lived FD does not
+        // leak into spawned MCP helper processes — JarvisMCP/ChildSpawnGate
+        // fatal-errors in Debug on any FD missing FD_CLOEXEC. O_APPEND forces
+        // every write to end-of-file, removing the need for seekToEnd().
+        // O_CREAT handles the first-launch case in one syscall.
+        let fd = fileURL.path.withCString { path -> Int32 in
+            Darwin.open(path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0o644)
         }
-        currentHandle = try? FileHandle(forWritingTo: fileURL)
-        try? currentHandle?.seekToEnd()
+        currentHandle = fd >= 0 ? FileHandle(fileDescriptor: fd, closeOnDealloc: true) : nil
         currentDayString = today
 
         gcOldFiles(now: dateProvider.now())
