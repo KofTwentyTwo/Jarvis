@@ -7,13 +7,22 @@ import react from '@vitejs/plugin-react'
 // from the file:// null-origin in WKWebView, which silently fails the
 // resource load. With an IIFE bundle, a plain `<script src=>` is what we
 // want; the IIFE wraps everything in a self-executing function.
+//
+// Because plain `<script>` runs immediately (vs `type="module"` which is
+// deferred until DOMContentLoaded), the script in <head> would execute
+// before <body>'s `<div id="root">` exists — `document.getElementById('root')`
+// returns null and React mounts nothing. Adding `defer` restores the
+// deferred-until-parsed semantics modules had built in. Empirically
+// observed: without `defer`, the IIFE runs but #root stays empty
+// indefinitely (silent React no-op, no thrown error).
 function stripModuleAttrs(): Plugin {
   return {
     name: 'jarvis-strip-module-attrs',
     enforce: 'post',
     transformIndexHtml(html) {
       return html
-        .replace(/\s+type="module"/g, '')
+        .replace(/<script\s+type="module"\s+/g, '<script defer ')
+        .replace(/\s+type="module"/g, ' defer')
         .replace(/\s+crossorigin(="[^"]*")?/g, '')
     },
   }
