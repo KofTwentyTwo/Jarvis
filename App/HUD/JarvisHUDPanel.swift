@@ -57,9 +57,20 @@ public final class JarvisHUDPanel: NSPanel {
         if self.webView.responds(to: drawsBackgroundSelector) {
             self.webView.setValue(false, forKey: "drawsBackground")
         }
+        // Belt-and-braces: zero out layer-level backgrounds so a future macOS
+        // ignoring the `_drawsBackground` private SPI still gets transparency.
+        self.webView.wantsLayer = true
+        self.webView.layer?.backgroundColor = NSColor.clear.cgColor
+        // Enable Web Inspector so right-click → Inspect Element works in Debug
+        // builds. Available macOS 13.3+; the deployment target is 13.0, so the
+        // availability guard is required.
+        if #available(macOS 13.3, *) {
+            self.webView.isInspectable = true
+        }
 
         let container = NSView()
         container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.clear.cgColor
         container.addSubview(self.webView)
         NSLayoutConstraint.activate([
             self.webView.topAnchor.constraint(equalTo: container.topAnchor),
