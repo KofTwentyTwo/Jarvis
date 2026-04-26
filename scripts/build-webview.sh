@@ -38,6 +38,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# Xcode IDE GUI doesn't inherit the user's shell PATH (only `xcodebuild` from
+# a terminal does). Homebrew + corepack-managed pnpm live outside the default
+# /usr/bin:/bin minimal env Xcode uses for build phases. Prepend the common
+# locations so this script works identically from CLI and from Xcode IDE.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.nvm/versions/node:${PATH:-/usr/bin:/bin}"
+
+if ! command -v pnpm >/dev/null 2>&1; then
+    echo "[build-webview] FATAL: pnpm not found on PATH ($PATH)" >&2
+    echo "[build-webview]   Install: brew install pnpm  OR  npm i -g pnpm" >&2
+    exit 1
+fi
+
 cd "$REPO_ROOT/webview"
 
 # Content-hash sentinel: only pnpm install when pnpm-lock.yaml changed.
