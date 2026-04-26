@@ -14,7 +14,17 @@ set -euo pipefail
 APP="${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}"
 HELPERS_DIR="${APP}/Contents/Helpers"
 IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:-}"
-FLAGS="${OTHER_CODE_SIGN_FLAGS:---options=runtime --timestamp}"
+# Hardened Runtime + ad-hoc + restricted-entitlement-free Debug bundles
+# still get rejected by AMFI on launch because the kernel's
+# "non-platform Team IDs must match" rule fires when HR is on. Debug must
+# sign WITHOUT --options=runtime regardless of what OTHER_CODE_SIGN_FLAGS
+# inheritance produced (xcodegen Debug overrides don't always reach
+# this script's env). Explicit per-config branch is the clearest fix.
+if [ "${CONFIGURATION:-Release}" = "Debug" ]; then
+    FLAGS="--timestamp=none"
+else
+    FLAGS="${OTHER_CODE_SIGN_FLAGS---options=runtime --timestamp}"
+fi
 
 if [ -z "${IDENTITY:-}" ]; then
   echo "error: EXPANDED_CODE_SIGN_IDENTITY is empty — is CODE_SIGN_IDENTITY configured?" >&2

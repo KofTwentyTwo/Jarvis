@@ -111,6 +111,15 @@ targets:
           # OTHER_CODE_SIGN_FLAGS must not carry `--options=runtime` on Debug —
           # that flag enables HR regardless of ENABLE_HARDENED_RUNTIME. Strip it.
           OTHER_CODE_SIGN_FLAGS: ""
+          # Disable Swift 6 / Xcode 26 incremental-link `Jarvis.debug.dylib`
+          # artifact entirely on Debug. The dylib gets a Team-ID context
+          # (from how Xcode's compile cache signs it) that diverges from the
+          # ad-hoc outer bundle; dyld then aborts at __abort_with_payload
+          # when the app tries to load it. With NO, Swift links the binary
+          # statically and there's no separate dylib to load.
+          # Trade-off: ~5-15% slower incremental Debug compile, but the app
+          # actually launches from Xcode's Run scheme (⌘R).
+          SWIFT_ENABLE_DEBUG_DYLIB: NO
         Release:
           DEVELOPMENT_TEAM: 7UC2HETAN9
           CODE_SIGNING_ALLOWED: NO
