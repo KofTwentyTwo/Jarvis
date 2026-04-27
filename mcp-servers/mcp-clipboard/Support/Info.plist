@@ -2,31 +2,21 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key>
-    <string>com.koftwentytwo.jarvis.mcp-clipboard</string>
-    <key>CFBundleName</key>
-    <string>mcp-clipboard</string>
-    <key>CFBundleExecutable</key>
-    <string>mcp-clipboard</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <!--
-        CR-04 (REVIEW 05): the background-only LaunchServices key was
-        removed. macOS Sonoma+ silently denies NSPasteboard.general
-        access to background-only daemons (Apple feedback FB13402281
-        lineage). LSUIElement: true is enough — it suppresses the Dock
-        icon while still permitting pasteboard reads. The helper is a
-        subprocess spawned by the parent app, so neither key is strictly
-        needed for Dock-suppression, but LSUIElement is the safer of the
-        two on the Sequoia/Tahoe pasteboard threading rules.
-    -->
-    <key>LSUIElement</key>
-    <true/>
-    <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+	<key>CFBundleExecutable</key>
+	<string>mcp-clipboard</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.koftwentytwo.jarvis.mcp-clipboard</string>
+	<key>CFBundleName</key>
+	<string>mcp-clipboard</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>LSUIElement</key>
+	<true/>
 </dict>
 </plist>

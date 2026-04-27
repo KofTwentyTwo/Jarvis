@@ -2,25 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key>
-    <string>com.koftwentytwo.jarvis.mcp-applescript</string>
-    <key>CFBundleName</key>
-    <string>mcp-applescript</string>
-    <key>CFBundleExecutable</key>
-    <string>mcp-applescript</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>LSBackgroundOnly</key>
-    <true/>
-    <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
-    <key>NSAppleEventsUsageDescription</key>
-    <string>Jarvis runs AppleScript snippets you approve in the confirmation sheet to control other apps.</string>
+	<key>CFBundleExecutable</key>
+	<string>mcp-applescript</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.koftwentytwo.jarvis.mcp-applescript</string>
+	<key>CFBundleName</key>
+	<string>mcp-applescript</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSBackgroundOnly</key>
+	<true/>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Jarvis runs AppleScript snippets you approve in the confirmation sheet to control other apps.</string>
 </dict>
 </plist>
