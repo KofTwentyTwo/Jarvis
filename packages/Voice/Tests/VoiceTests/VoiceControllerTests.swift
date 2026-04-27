@@ -151,30 +151,27 @@ final class TestDeps: @unchecked Sendable {
 
 // MARK: - MockSTTForController
 //
-// Controllable STT mock: transcribe() returns a stream that hangs until
-// `complete()` is called. This lets V1 observe the .listening state
-// before the full cycle completes.
+// Controllable STT mock: transcribe() returns a stream that finishes when the
+// incoming audio chunk stream ends (i.e., when pttUp / endSTTSession closes the
+// chunk continuation). This preserves test isolation for V1 (we manually call
+// _testFireSpeechEnd instead of relying on the STT cycle completing).
 
 final class MockSTTForController: STTProvider, @unchecked Sendable {
     var finalResult: String = ""
-    // Stored continuation so tests can manually trigger finalization
-    var _partialCont: AsyncStream<PartialTranscript>.Continuation?
 
     func transcribe(stream: AsyncStream<AudioChunk>) -> AsyncStream<PartialTranscript> {
-        let (s, c) = AsyncStream<PartialTranscript>.makeStream()
-        _partialCont = c
-        // Do NOT auto-finish — hang until complete() is called
-        return s
+        let (partials, partialCont) = AsyncStream<PartialTranscript>.makeStream()
+        // Close the partial stream once the chunk stream ends.
+        // This lets pttUp() (which closes the chunk stream) trigger finalize().
+        Task {
+            for await _ in stream { /* drain chunk stream */ }
+            partialCont.finish()
+        }
+        return partials
     }
 
     func finalize() async throws -> String {
         return finalResult
-    }
-
-    /// Manually complete the partial stream (ends the drain loop, triggers finalize).
-    func complete() {
-        _partialCont?.finish()
-        _partialCont = nil
     }
 }
 
