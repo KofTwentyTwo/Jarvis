@@ -125,11 +125,15 @@ public actor AudioGraphOwner {
     /// `(@Sendable () async -> Void)?` — must be `nil`-safe.
     public var releaseORTSessions: (@Sendable () async -> Void)?
 
-    // MARK: - Internal test seam: override auth status probe
+    // MARK: - Internal test seams
 
     /// Test seam for mic-re-grant watcher.  In tests, inject a closure that
     /// simulates `AVCaptureDevice.authorizationStatus(for: .audio)` transitions.
     internal var authStatusProbe: (@Sendable () -> Bool)?   // returns true if authorized
+
+    /// Test seam: called after each graph is built successfully, providing access
+    /// to the fresh `AudioGraph` so tests can install recording hooks on it.
+    internal var _onGraphBuilt: ((AudioGraph) -> Void)?
 
     // MARK: - Private state
 
@@ -148,7 +152,9 @@ public actor AudioGraphOwner {
 
     private func buildGraph(preferAec: Bool) async throws -> AudioGraph {
         do {
-            return try AudioGraph(aec: preferAec, builder: graphBuilder)
+            let g = try AudioGraph(aec: preferAec, builder: graphBuilder)
+            _onGraphBuilt?(g)
+            return g
         } catch AudioGraphError.aecUnavailable {
             if preferAec {
                 // AEC-on failed — emit degradation BEFORE retry.
@@ -157,7 +163,9 @@ public actor AudioGraphOwner {
                 degradationCont.yield(.aecUnavailable)
                 // Retry with aec=false
                 do {
-                    return try AudioGraph(aec: false, builder: graphBuilder)
+                    let g = try AudioGraph(aec: false, builder: graphBuilder)
+                    _onGraphBuilt?(g)
+                    return g
                 } catch {
                     logger.error("AudioGraphOwner: aec=false fallback also failed: \(error)")
                     throw AudioGraphError.bothVariantsFailed
@@ -189,13 +197,16 @@ public actor AudioGraphOwner {
         await cancelInFlight?()
 
         // Step 2 — stop the engine
+        graph?._stopHook?()
         graph?.stop()
 
         // Step 3 — remove all taps
         graph?.removeAllTaps()
+        graph?._removeTapsHook?()
 
         // Step 4 — release ring buffers
         graph?.releaseRings()
+        graph?._releaseRingsHook?()
 
         // Step 5 — release ORT inference sessions (no-op stub until Plan 06-02/04)
         await releaseORTSessions?()

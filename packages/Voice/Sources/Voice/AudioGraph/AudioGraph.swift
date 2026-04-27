@@ -219,7 +219,10 @@ public final class AudioGraph: Sendable {
     }
 
     /// Removes all taps on the mixer node.  Step 3 of teardown.
+    /// Guards against the case where the mixer was never attached to an engine
+    /// (e.g. in test builders that no-op the `attach` step — mixer.engine is nil).
     func removeAllTaps() {
+        guard mixer.engine != nil else { return }
         mixer.removeTap(onBus: 0)
     }
 
@@ -229,7 +232,21 @@ public final class AudioGraph: Sendable {
     func releaseRings() {
         // Ring is reference-typed (class); the owner drops its reference
         // when `graph` is set to nil in AudioGraphOwner.  This method is a
-        // semantic hook for the teardown ordering test.
+        // semantic hook for the teardown ordering test (VOICE-10).
         _ = ringBuffer
     }
+
+    // MARK: - Test seams for teardown recording
+
+    /// Optional hook called BEFORE `stop()` (step 2) in teardown.
+    /// Populated by tests to record the stop event.  nil in production.
+    nonisolated(unsafe) internal var _stopHook: (() -> Void)?
+
+    /// Optional hook called AFTER `removeAllTaps()` (step 3) in teardown.
+    /// Populated by tests to record the remove-taps event.  nil in production.
+    nonisolated(unsafe) internal var _removeTapsHook: (() -> Void)?
+
+    /// Optional hook called AFTER `releaseRings()` (step 4) in teardown.
+    /// Populated by tests to record the release-rings event.  nil in production.
+    nonisolated(unsafe) internal var _releaseRingsHook: (() -> Void)?
 }
