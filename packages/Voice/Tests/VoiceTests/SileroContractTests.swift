@@ -183,7 +183,7 @@ final class SileroContractTests: XCTestCase {
 
 /// Test seam for SileroVAD — provides probabilities without real ONNX models.
 /// Thread-safe via nonisolated(unsafe) + caller-side test serialization.
-final class MockVADEngine: VADInferenceEngine, @unchecked Sendable {
+final class MockVADEngine: VADInferenceEngine, TestableVADOpset, @unchecked Sendable {
     nonisolated(unsafe) private var probabilities: [Float]
     nonisolated(unsafe) private var index: Int = 0
     nonisolated(unsafe) private var _failOpset16: Bool
