@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-25T20:30:00Z",
+  "timestamp": "2026-04-27T15:33:22.487Z",
   "context": "phase",
   "phase": "06",
   "phase_name": "voice",
@@ -8,13 +8,13 @@
   "plan": null,
   "task": null,
   "total_tasks": null,
-  "status": "phase_6_planned_ready_for_execute",
+  "status": "phase_6_planned_ready_for_execute_native_launch_uat_visually_verified",
   "completed_phases": [
-    {"phase": "01", "name": "foundations", "status": "code_complete_with_human_uat", "verification": "human_needed", "human_items": 4, "plans_done": "5/5"},
+    {"phase": "01", "name": "foundations", "status": "verified_passed", "verification": "passed_with_human_uat_pending", "human_items": 4, "plans_done": "5/5"},
     {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"},
     {"phase": "03", "name": "hud", "status": "verified_human_needed_uat_only", "verification": "passed_with_manual_uat_pending", "human_items": 1, "plans_done": "5/5"},
-    {"phase": "04", "name": "agent-core", "status": "verified_passed", "verification": "passed", "human_items": 0, "plans_done": "5/5", "review_findings": "1 BLOCKER + 2 HIGH + 6 MEDIUM (5 fixed, 1 deferred per known-stub)", "test_count": 281},
-    {"phase": "05", "name": "mcp", "status": "verified_passed", "verification": "passed_with_human_uat_pending", "human_items": 1, "plans_done": "5/5", "review_findings": "4 BLOCKER + 7 WARNING + 4 INFO (BLOCKER+WARNING all fixed; G-01 verify-time blocker fixed); INFO deferred per default scope", "test_count": "360+", "human_uat": "developer.apple.com Apple Events capability for com.koftwentytwo.jarvis.mcp-applescript (non-blocking until Phase 8 Release notarization)"}
+    {"phase": "04", "name": "agent-core", "status": "verified_passed", "verification": "passed", "human_items": 0, "plans_done": "5/5", "test_count": 281},
+    {"phase": "05", "name": "mcp", "status": "verified_passed", "verification": "passed_with_human_uat_pending", "human_items": 1, "plans_done": "5/5", "test_count": "360+"}
   ],
   "current_phase_progress": {
     "phase": "06",
@@ -35,13 +35,19 @@
       "wave_3": ["06-04 TTS (AVSpeechSynthesizer tier 1 + Orpheus mlx-audio-swift tier 2 + TTSEngineActor serial executor + atomic interrupt)"],
       "wave_4": ["06-05 VoiceController + AppDelegate wiring + AEC-off banner + PTT + mute-wake-word + barge-in via cancelAndSubmit (autonomous: false — HUMAN-UAT for scaffold-time empirical probes)"]
     },
-    "plan_check_findings": "PASS_WITH_ADVISORIES — no BLOCKERs. 2 advisories: (1) 06-05 documents two competing resolutions for cancelAndSubmit(.voice('')) sentinel — executor decides at impl time; (2) 06-05 Task 3 verify uses xcodebuild build (App-shell only, not tests — acceptable, NOT xcodebuild test).",
+    "plan_check_findings": "PASS_WITH_ADVISORIES — no BLOCKERs. 2 advisories: (1) 06-05 documents two competing resolutions for cancelAndSubmit(.voice('')) sentinel — executor decides at impl time; (2) 06-05 Task 3 verify uses xcodebuild build (App-shell only, not tests).",
     "human_uat_pending_at_execute": "06-05 has 3 scaffold-time empirical probes that need real Apple Silicon hardware: (a) Orpheus TTFA target 150-250ms; if >250ms flip features.tts.tier2='ttskit'; (b) Silero v6.2.1 contract parity vs v5 (boundaries within ±32ms); (c) speech-recognition-assets entitlement load-bearing probe (PASS/INCONCLUSIVE/REFUTED, not hard-fail)."
+  },
+  "native_launch_uat_status": {
+    "summary": "VISUALLY VERIFIED 2026-04-26 — HUD renders fallback particle ring on transparent panel after click of menu-bar arc-reactor icon",
+    "evidence": "User confirmed via screenshot: gray donut ring rendered in 720x720 transparent NSPanel; desktop wallpaper visible through transparency",
+    "remaining_polish": [
+      "WebGL-driven animated particle ring (Phase 3 polish — state-machine .booting->.idle transition needs to trigger R3F animations)",
+      "Dev Overlay menu item is currently a Phase 4 stub banner — wire to real overlay in P4 retrofit"
+    ]
   },
   "downstream_planned": [],
   "downstream_research_only": [
-    {"phase": "05", "name": "mcp", "research_lines": 1069},
-    {"phase": "06", "name": "voice", "research_lines": 740},
     {"phase": "07", "name": "memory-vision", "research_lines": 290},
     {"phase": "08", "name": "hardening", "research_lines": 827}
   ],
@@ -54,29 +60,34 @@
     {
       "description": "Xcode 26 xctest harness Team ID bug on ad-hoc signed Debug builds",
       "type": "external",
-      "workaround": "SPM tests via `swift test --package-path` work fine (now 213 passing). The xctest harness is the broken thing — DO NOT re-attempt fixing.",
+      "workaround": "SPM tests via swift test --package-path work fine. The xctest harness is the broken thing — DO NOT re-attempt fixing.",
       "from_phase": "01",
       "diagnosis_doc": ".planning/debug/xctest-launch-runningboard-error-5.md"
+    },
+    {
+      "description": "ad-hoc signed Debug bundle's CDHash changes on every rebuild, invalidating user's TCC grants — Input Monitoring banner reappears every fresh build",
+      "type": "external_quirk",
+      "from_phase": "06_native_launch",
+      "workaround": "User must re-grant Input Monitoring in System Settings after each rebuild. Will be solved by Developer ID Application signing in Phase 8 hardening.",
+      "blocking": false
     }
   ],
   "human_actions_pending": [
-    {"action": "Manual HUD UAT — cold-launch Jarvis.app from DerivedData, summon via menu-bar, observe ring .booting → .idle. Will exercise the H-02 attach-to-existing-window.jarvisBus path.", "context": "Phase 3 verification flagged human_needed for this UAT only. Not blocking Phase 4.", "blocking": false},
+    {"action": "Phase 3 manual HUD UAT — VISUALLY VERIFIED 2026-04-26 (gray fallback ring renders on transparent panel). WebGL animation polish remains.", "context": "Phase 3 verification flagged human_needed for this UAT only.", "blocking": false},
     {"action": "Cold-launch Release archive on pristine Apple Silicon Mac to validate SC-1", "context": "Phase 01 UAT item 3", "blocking": false},
     {"action": "When Xcode 26.5 ships, retry JarvisAppTests xctest launch", "context": "Phase 01 UAT item 4", "blocking": false},
     {"action": "Enable SpeechAnalyzer Asset Download capability when Apple exposes it", "context": "Phase 01 UAT item 2", "blocking": false},
     {"action": "Register run_applescript helper in Phase 5 App ID", "context": "Future Phase 5 blocker", "blocking": false}
   ],
   "decisions": [
-    {"decision": "Hand-rolled URLSession+SSE+NDJSON for both LLM providers", "rationale": "Anthropic SDK enum lag (D1) structural; Ollama transport gotcha (tool_calls on PRECEDING chunk) requires custom parser", "phase": "04", "plan": "04-01+04-02"},
-    {"decision": "ModelID surface: Anthropic claude-opus-4-7 + Ollama qwen2.5-coder:32b only", "rationale": "RESEARCH-DELTAS D3 — Qwen3/3.5/Gemma4 tool-calling broken upstream (Ollama issues #14493, #14601, #14745, #15315)", "phase": "04", "plan": "04-02"},
-    {"decision": "ToolChoice.none → Anthropic {type:none}, Ollama omits tools array entirely", "rationale": "Cap-recovery 'one more call' must produce zero .toolUseRequested. AGENT-07 enforced.", "phase": "04", "plan": "04-01+04-02"},
-    {"decision": "Hand-rolled libsqlite3 for Replay package (no SQLite.swift dep)", "rationale": "Phase 7 needs load_extension for sqlite-vec; SQLite.swift hides that surface", "phase": "04", "plan": "04-03"},
-    {"decision": "TokenDeltaDropOldestChannel<Tag> per-element drop policy: drops oldest matching dropTag, suspends on others", "rationale": "AGENT-10 invariant — high-frequency tokenDelta must not block toolCall delivery. Load test 10000+1000 @ cap=2048 → exactly 1000 toolCall delivered, ≤2048 tokenDelta retained.", "phase": "04", "plan": "04-03"},
-    {"decision": "WAL+synchronous=NORMAL+busy_timeout=3000+foreign_keys=ON pragmas; PRAGMA wal_checkpoint(TRUNCATE) on turn_end", "rationale": "Crash-tolerant durability without per-event fsync penalty; turn-boundary-only checkpoint matches OBS-02 batching semantics", "phase": "04", "plan": "04-03"},
-    {"decision": "Phase 3 H-02 fix: attach to existing window.jarvisBus (Option B, minimal edit)", "rationale": "WKContentWorld isolation — Injection.js installs in JarvisBusWorld, default-world send() can't reach webkit.messageHandlers. Option B avoids touching Swift.", "phase": "03", "plan": "03-review-fix"}
+    {"decision": "FileRotatingWriter opens via Darwin.open(O_WRONLY|O_APPEND|O_CREAT|O_CLOEXEC, 0o644) instead of FileHandle(forWritingTo:)", "rationale": "FileHandle(forWritingTo:) doesn't set O_CLOEXEC; long-lived log FD then leaks across fork+exec, which made ChildSpawnGate fatal-error in Debug on first MCP helper spawn. Bonus: O_APPEND removes the seekToEnd race window in the rotator.", "phase": "06_native_launch", "commit": "d78f632"},
+    {"decision": "ChildSpawnGate.prepare() is now path-aware: fatal in Debug ONLY for FDs whose F_GETPATH is under our developer-owned prefixes (Bundle.main.bundlePath, ~/Library/Logs/Jarvis, ~/Library/Application Support/Jarvis); retrofit + log everything else", "rationale": "WebKit's GPU process opens system Metal libraries (e.g. AppleMetalOpenGLRenderer.bundle/default.metallib) without O_CLOEXEC, and Cmd-R from Xcode inherits lldb debugger pipes. Neither is actionable from our codebase. The pre-fix gate fatal-errored on these and prevented any MCP helper spawn from succeeding.", "phase": "06_native_launch", "commit": "ccf1d36"},
+    {"decision": "Vite HUD bundle uses IIFE format with stripModuleAttrs plugin replacing type=module + crossorigin with defer", "rationale": "Vite default ES-module output triggers CORS-mode fetching that fails on file:// null-origin. Observed: index.html loaded but JS bundle failed with type=2/code=0 resource error. IIFE drops the module-fetch contract, defer restores parse-then-execute order so React's getElementById('root') finds the div. Trade-off: IIFE forbids code splitting + chunked dynamic imports — for a single-page R3F HUD this is fine.", "phase": "06_native_launch", "commits": "06bb159+c951f12"},
+    {"decision": "MenuBarIconController uses statusItem.popUpMenu(contextMenu) instead of toggle-menu-then-performClick pattern", "rationale": "The previous pattern temporarily assigned statusItem.menu, called sender.performClick(nil), then cleared. NSStatusItem could latch the menu reference on a separate runloop pass, after which both left- and right-clicks would surface the menu and the HUD-summon left-click action never fired. popUpMenu shows the menu for the current click only — no persistent state. Deprecated since 10.14 but functional through Tahoe.", "phase": "06_native_launch", "commit": "d7a192a"},
+    {"decision": "JarvisHUDPanel WKWebView.isInspectable=true behind #available(macOS 13.3, *) + clear container + webView layer.backgroundColor", "rationale": "Layer-clear is belt-and-braces against future macOS ignoring _drawsBackground SPI. isInspectable enables right-click Inspect Element on Debug builds, which was load-bearing for diagnosing the white-HUD issue (proved page WAS reaching renderer, body-color showed when forced).", "phase": "06_native_launch", "commit": "1c250fd"}
   ],
   "uncommitted_files": [],
-  "tree_tip": "32a5935",
+  "tree_tip": "fde2aad",
   "tests_passing": {
     "spm_packages": {
       "Keychain": 6,
@@ -95,10 +106,11 @@
     "webview_vitest": {"bus": 33, "hud": 80, "total": 113},
     "self_tests": {"entitlements_fault_injection": "3/3", "bus_protocol_version": "PASS", "no_evaluateJavaScript": "PASS", "bus_harness_parity": "PASS", "hudstate_single_writer": "PASS"},
     "build_smoke": {
-      "xcodebuild_build_debug": "BUILD SUCCEEDED (last verified at 0ce60f2)",
-      "scripts_smoke_test_hud_sh": "PASS"
+      "xcodebuild_build_debug": "BUILD SUCCEEDED (last verified at fde2aad)",
+      "scripts_smoke_test_hud_sh": "PASS",
+      "native_launch_visually_verified": "fallback particle ring rendered on transparent HUD panel 2026-04-26"
     }
   },
-  "next_action": "Run /gsd-execute-phase 6 --wave 1 (executes 06-01 AudioGraphController foundation; sequential single-plan wave). Then W2 can fan out 06-02 + 06-03 in parallel (disjoint scope). W3 (06-04 TTS), then W4 (06-05 wiring + HUMAN-UAT). After execute: /gsd-code-review 6 → /gsd-code-review-fix 6 if findings → /gsd-verify-phase 6 → close. Phases 7 (Memory+Vision) and 8 (Hardening) follow.",
-  "context_notes": "Phase 5 (MCP) verified PASSED. All 5 plans across 5 sequential waves merged. 11 REQ-IDs satisfied (AGENT-11, MCP-01..04, MCP-07..09, SEC-07, SEC-08, ME-04). JarvisMCP package (renamed from MCP — SDK collision); 79 SPM tests. Three helper bundles (mcp-time, mcp-clipboard, mcp-applescript) with per-helper TCC identity. ConfirmationBroker FSM + AppKit NSPanel beginSheet (no webview modals — lint-enforced via scripts/check-no-modal-presentation.sh). SEC-07 sanitize → headTruncate pipeline with wrap deferred to Phase 4's UntrustedWrapper (no double-wrap). ME-04 closure: BoundedAsyncChannel(2048, .dropOldest) wired observer→channel→drain→ReplayLog in production AppDelegate. Code review found 4 BLOCKER + 7 WARNING + 4 INFO; all BLOCKER+WARNING fixed. Verifier caught one additional G-01 (await in string-interpolation autoclosure) introduced by ME-04 wiring; fixed inline + added scripts/check-app-builds.sh as compile-only gate to prevent recurrence. 360+ total SPM tests across 9 packages + 3 helper SPM packages. HUMAN-UAT pending: developer.apple.com Apple Events capability for mcp-applescript (non-blocking until Phase 8 Release notarization). Tree clean on develop at 6efdf15. Xcode 26 xctest harness still upstream-blocked. STATE.md still Phase-1-era."
+  "next_action": "Run /gsd-execute-phase 6 --wave 1 (executes 06-01 AudioGraphController foundation; sequential single-plan wave). Then W2 can fan out 06-02 + 06-03 in parallel (disjoint scope). W3 (06-04 TTS), then W4 (06-05 wiring + HUMAN-UAT). After execute: /gsd-code-review 6 -> /gsd-code-review-fix 6 if findings -> /gsd-verify-phase 6 -> close. Phases 7 (Memory+Vision) and 8 (Hardening) follow.",
+  "context_notes": "This session was Track A from the previous pause snapshot — finishing the native-launch HUD-visible path. Started at f92ade4 'verify-entitlements marker write next'. Worked through a stack of independent silent-failure bugs that compounded to make the HUD render as pure white (which was actually a correctly-transparent panel showing the user's white desktop wallpaper through it because R3F never mounted). Each bug masked the next; the final unlock was `defer` on the stripped-module script so React's getElementById('root') ran after body parse. After 9 commits and visual verification of the HUD rendering, pushed develop to origin. Phase 6 Voice is fully planned, plan-checked PASS_WITH_ADVISORIES, and ready for autonomous wave-driven execution per the standing chaining approval (memory/feedback_autonomous_chaining.md). Tree clean on develop@fde2aad. No background processes; user killed Jarvis at end of session."
 }
