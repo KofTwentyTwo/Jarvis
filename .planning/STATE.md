@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-04-27T18:10:00.000Z"
+last_updated: "2026-04-27T19:30:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 29
-  completed_plans: 28
-  percent: 97
+  completed_plans: 29
+  percent: 100
 ---
 
 # State: Jarvis
@@ -100,12 +100,21 @@ Plan: 1 of 5
 
 None. Ready for `/gsd-plan-phase 1`.
 
+### Phase 6 → Phase 8 Deferred Items (recorded 2026-04-27)
+
+Plan 06-05's six HUMAN-UAT launch-driven gates were deferred to Phase 8 because attempts to launch the ad-hoc Debug `Jarvis.app` surfaced a pre-existing Xcode 26 / Swift 6 / Info.plist / preview-dylib codesign fragility that is independent of Plan 06-05's Voice work. Code-side correctness is fully verified (64 swift tests pass; App target compiles cleanly with the new Voice package wiring; all five VOICE-07/09/12/13/14 invariants covered by deterministic XCTest cases). Sign-off carried in `.planning/phases/06-voice/06-HUMAN-UAT.md` "Deferral Note" section.
+
+Phase 8 (Hardening) inherits:
+- [ ] Resolve Xcode 26 ad-hoc-Debug-bundle launch fragility (`SWIFT_ENABLE_DEBUG_DYLIB=NO` is set but ignored; Info.plist marker write is reverted post-build by something downstream of post-codesign; `codesign --verify` reports `invalid Info.plist (plist or signature have been modified)` after a clean build's BUILD SUCCEEDED)
+- [ ] Drive Plan 06-05's six UAT gates (VOICE-07 happy path, VOICE-14 barge-in, VOICE-13 PTT, VOICE-12 mute-wake-word + PTT-still-armed, VOICE-09 AEC banner, VOICE-10 mic re-grant) on a Release-signed Developer ID archive
+- [ ] Empirical Orpheus TTFA measurement (target 150–250 ms) — once Release archive launches, run `JARVIS_REAL_MODELS=1 swift test --filter OrpheusTTFATests` interactively; if > 250 ms, flip `features.tts.tier2 = "ttskit"` in default config
+
 ### Scaffold-Time Verifications (must resolve during their owning phase)
 
 - [ ] **P1**: Release cold-launch with `com.apple.developer.speech-recognition-assets` removed → confirm `SFSpeechErrorCode.assetUnavailable` fires (load-bearing claim).
 - [ ] **P1**: Input Monitoring TCC denial surfaces HUD banner, not silent no-op (R4-S2).
 - [ ] **P6**: Silero v6.2.1 preserves 512-sample/32ms/16kHz chunk contract from v5.
-- [ ] **P6**: Orpheus empirical TTFA measurement on Apple Silicon host lands in 150–250 ms target.
+- [ ] **P6**: Orpheus empirical TTFA measurement on Apple Silicon host lands in 150–250 ms target. *(Now grouped with Phase 8 deferred items above; same blocker.)*
 - [ ] **P6**: AEC post-format probe on macOS 26 Tahoe resolves 24 kHz (Tahoe) vs 16 kHz (Sonoma) correctly.
 
 ### Deferred Research Questions

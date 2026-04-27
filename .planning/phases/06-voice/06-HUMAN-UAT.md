@@ -115,18 +115,42 @@ Complete all pre-flight items before beginning the UAT session.
 
 | Gate | Result | Notes |
 |------|--------|-------|
-| Pre-flight | | |
-| Gate 1: Happy path (VOICE-07) | | |
-| Gate 2: Barge-in (VOICE-14) | | |
-| Gate 3: Push-to-talk (VOICE-13) | | |
-| Gate 4: Mute wake word (VOICE-12) | | |
-| Gate 5: AEC banner (VOICE-09) | | |
-| Gate 6: Mic re-grant (VOICE-10) | | |
+| Pre-flight (swift test + scripts) | **PASS** | `swift test` 64/3-skipped/0-failed; `bash scripts/check-app-builds.sh` PASS (compile-only). Model fetch + TTFA probes deferred to Phase 8 (require physical-Mac launch) |
+| Gate 1: Happy path (VOICE-07) | **DEFERRED → Phase 8** | Blocked by Xcode 26 ad-hoc-Debug bundle launch fragility; see deferral note below |
+| Gate 2: Barge-in (VOICE-14) | **DEFERRED → Phase 8** | Same blocker — code-side correctness covered by `BargeInTests` 4/4 + structural assertion of single `cancelAndSubmit` call site |
+| Gate 3: Push-to-talk (VOICE-13) | **DEFERRED → Phase 8** | Same blocker — code-side covered by `PTTTests` 3/3 + `NSEvent.addGlobalMonitorForEvents` wiring assertion |
+| Gate 4: Mute wake word (VOICE-12) | **DEFERRED → Phase 8** | Same blocker — code-side covered by `MuteWakeWordTests` 3/3 + UserDefaults persistence test |
+| Gate 5: AEC banner (VOICE-09) | **DEFERRED → Phase 8** | Same blocker — code-side covered by `AECFallbackBannerTests` 4/4 + structural reuse of `HUDBannerCoordinator` (modal-lint enforced from Phase 5) |
+| Gate 6: Mic re-grant (VOICE-10) | **DEFERRED → Phase 8** | Same blocker — additionally couples to AudioGraph rebuildStream which is Phase 1 territory |
 
-**Overall result:** [ ] PASS (all blocking gates pass)  [ ] PARTIAL (non-blocking gates failed or skipped)  [ ] FAIL
+**Overall result:** **PARTIAL — code-side correctness verified, physical-Mac launch UAT deferred to Phase 8**
 
-**Tester signature:** _____________  
-**Date:** _____________
+**Tester signature:** Orchestrator (J.M. session 2026-04-27, agreed via interactive decision)  
+**Date:** 2026-04-27
+
+---
+
+## Deferral Note: Why the launch-driven gates ship to Phase 8
+
+During Plan 06-05 post-wave validation, attempts to launch the Debug-built `Jarvis.app` revealed a **pre-existing Xcode 26 / Swift 6 / ad-hoc-Debug-codesign fragility** that is independent of any Plan 06-05 code:
+
+1. Even with `SWIFT_ENABLE_DEBUG_DYLIB: NO` set in the Debug config (commit `fde2aad` from the prior session), Xcode 26 still produces `Jarvis.debug.dylib` and `__preview.dylib` next to the main exec.
+2. After the build's post-codesign step succeeds, `codesign --verify` reports `invalid Info.plist (plist or signature have been modified)` — something downstream of post-codesign (likely Xcode 26's preview-mode dylib generation OR Info.plist re-stamping for incremental dependencies) is invalidating the bundle after the build claims success.
+3. The pre-codesign script writes `JarvisEntitlementsVerified=YES` correctly into the built bundle's Info.plist, but the marker is observed as `false` post-build — same downstream mechanism.
+4. Manual re-codesign of the bundle's main exec breaks `Jarvis.debug.dylib`'s Team-ID match, causing dyld to refuse to load the dylib.
+
+**This is Phase 8 (Hardening) territory.** Phase 8 explicitly owns Developer ID Application signing, notarization, and codesign chain stability per `.planning/ROADMAP.md`. The pre-existing CDHash drift on ad-hoc Debug bundles (noted in `.planning/STATE.md`'s Decisions/context section from the prior session) is the same class of issue. Continuing to debug this in Phase 6 is scope creep.
+
+**What IS verified for Phase 6 close-out:**
+- `swift test --package-path packages/Voice` — 64 cases / 3 env-gated skips / 0 failed (20 new tests from Plan 06-05: VoiceController, BargeIn, PTT, MuteWakeWord, AECFallbackBanner, VoiceWiring)
+- `bash scripts/check-app-builds.sh` — App target compiles cleanly with the new Voice-package wiring
+- All five Plan 06-05 invariants (VOICE-07/09/12/13/14) covered structurally by deterministic XCTest cases
+- `OrpheusTTFATests` env-gated probe ships and is runnable interactively (`JARVIS_REAL_MODELS=1`) once Phase 8's signing chain unblocks Release-archive launch
+
+**What ships to Phase 8:**
+- Resolve Xcode 26 ad-hoc-Debug-bundle launch fragility (Info.plist marker stability + dylib Team-ID consistency)
+- Drive the six gates above on a Release-signed archive
+- Sign back here with PASS / FAIL / NOTES per gate
 
 ---
 
