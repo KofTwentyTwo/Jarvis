@@ -11,7 +11,10 @@ import AVFoundation
 ///
 /// These tests use `AudioGraph`'s `GraphBuilder` injection point to record
 /// the call sequence without needing a live audio device.
-@Suite("VpioOrderingTests")
+///
+/// `.serialized` is required because V2 and V3 set `InputFormatProbe._probeOverride`
+/// (a global test seam) and must not run concurrently with other tests that use it.
+@Suite("VpioOrderingTests", .serialized)
 struct VpioOrderingTests {
 
     // MARK: V1 — vpioNotEnabled guard
@@ -27,14 +30,7 @@ struct VpioOrderingTests {
 
     @Test("V2: aec=true builds call setVoiceProcessingEnabled before attach/connect/installTap")
     func vpioCalledFirstInAecOnBuild() throws {
-        var callOrder: [String] = []
-
-        let builder = RecordingGraphBuilder(
-            flipVPIO: { _ in callOrder.append("flipVPIO") },
-            attach: { callOrder.append("attach") },
-            connect: { callOrder.append("connect") },
-            installTap: { callOrder.append("installTap") }
-        )
+        let recorder = CallRecorder()
 
         let fmt16k = try #require(
             AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -42,11 +38,11 @@ struct VpioOrderingTests {
                           channels: 1,
                           interleaved: false)
         )
-        InputFormatProbe._probeOverride = { _ in fmt16k }
-        defer { InputFormatProbe._probeOverride = nil }
+        let builder = RecordingGraphBuilder(recorder: recorder, injectedFormat: fmt16k)
 
         _ = try AudioGraph(aec: true, builder: builder)
 
+        let callOrder = recorder.calls
         // flipVPIO must be call index 0
         #expect(callOrder.first == "flipVPIO",
                 "Expected flipVPIO to be first call, got: \(callOrder)")
@@ -61,14 +57,7 @@ struct VpioOrderingTests {
 
     @Test("V3: aec=false build skips setVoiceProcessingEnabled; variant is aecOff")
     func aecFalseSkipsVpio() throws {
-        var callOrder: [String] = []
-
-        let builder = RecordingGraphBuilder(
-            flipVPIO: { _ in callOrder.append("flipVPIO") },
-            attach: { callOrder.append("attach") },
-            connect: { callOrder.append("connect") },
-            installTap: { callOrder.append("installTap") }
-        )
+        let recorder = CallRecorder()
 
         let fmt16k = try #require(
             AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -76,12 +65,11 @@ struct VpioOrderingTests {
                           channels: 1,
                           interleaved: false)
         )
-        InputFormatProbe._probeOverride = { _ in fmt16k }
-        defer { InputFormatProbe._probeOverride = nil }
+        let builder = RecordingGraphBuilder(recorder: recorder, injectedFormat: fmt16k)
 
         let graph = try AudioGraph(aec: false, builder: builder)
 
-        #expect(!callOrder.contains("flipVPIO"),
+        #expect(!recorder.calls.contains("flipVPIO"),
                 "flipVPIO should NOT be called for aec=false build")
         if case .aecOff(_) = graph.variant {
             // Expected
@@ -93,35 +81,30 @@ struct VpioOrderingTests {
 
 // MARK: - Test Support
 
-/// A `GraphBuilder` that records call names for ordering assertions.
-struct RecordingGraphBuilder: GraphBuilder {
-    let _flipVPIO: (AVAudioInputNode) throws -> Void
-    let _attach: () -> Void
-    let _connect: () -> Void
-    let _installTap: () -> Void
+/// Thread-safe call recorder used by test builders.
+/// `@unchecked Sendable` because the array is only mutated from the
+/// single-threaded test set-up phase (before AudioGraph.init races).
+final class CallRecorder: @unchecked Sendable {
+    private(set) var calls: [String] = []
+    func record(_ call: String) { calls.append(call) }
+}
 
-    init(
-        flipVPIO: @escaping (AVAudioInputNode) throws -> Void,
-        attach: @escaping () -> Void,
-        connect: @escaping () -> Void,
-        installTap: @escaping () -> Void
-    ) {
-        _flipVPIO = flipVPIO
-        _attach = attach
-        _connect = connect
-        _installTap = installTap
-    }
+/// A `GraphBuilder` that records call names into a shared `CallRecorder`
+/// and returns an injected format for `probeFormat`.
+struct RecordingGraphBuilder: GraphBuilder {
+    let recorder: CallRecorder
+    let injectedFormat: AVAudioFormat
 
     func flipVPIO(_ inputNode: AVAudioInputNode) throws {
-        try _flipVPIO(inputNode)
+        recorder.record("flipVPIO")
     }
 
     func attach(_ engine: AVAudioEngine, _ node: AVAudioNode) {
-        _attach()
+        recorder.record("attach")
     }
 
     func connect(_ engine: AVAudioEngine, _ src: AVAudioNode, to dst: AVAudioNode, format: AVAudioFormat?) {
-        _connect()
+        recorder.record("connect")
     }
 
     func installTap(
@@ -131,6 +114,10 @@ struct RecordingGraphBuilder: GraphBuilder {
         format: AVAudioFormat?,
         block: @escaping AVAudioNodeTapBlock
     ) {
-        _installTap()
+        recorder.record("installTap")
+    }
+
+    func probeFormat(_ inputNode: AVAudioInputNode) -> AVAudioFormat {
+        injectedFormat
     }
 }
