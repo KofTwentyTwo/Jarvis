@@ -42,7 +42,7 @@ public final class AudioSink: @unchecked Sendable {
     // (sync) and Swift async tasks (via sync { } blocks on the queue).
     private let queue = DispatchQueue(label: "com.jarvis.AudioSink", attributes: [])
     private var pendingBuffers: Int = 0
-    private var completionContinuations: [CheckedContinuation<Void, Never>] = []
+    private var completionBoxes: [ContinuationBox] = []
     private var _isStopped: Bool = false
 
     // MARK: - Init
@@ -74,16 +74,16 @@ public final class AudioSink: @unchecked Sendable {
 
         playerNode.scheduleBuffer(buffer) { [weak self] in
             guard let self else { return }
-            var contsToResume: [CheckedContinuation<Void, Never>] = []
+            var boxesToResume: [ContinuationBox] = []
             self.queue.sync {
                 self.pendingBuffers -= 1
                 if self.pendingBuffers == 0 {
-                    contsToResume = self.completionContinuations
-                    self.completionContinuations = []
+                    boxesToResume = self.completionBoxes
+                    self.completionBoxes = []
                 }
             }
-            for cont in contsToResume {
-                cont.resume()
+            for box in boxesToResume {
+                box.tryResume()
             }
         }
     }
@@ -125,15 +125,15 @@ public final class AudioSink: @unchecked Sendable {
 
     /// Synchronously stops the player node (halts scheduling).
     public func stop() {
-        var contsToResume: [CheckedContinuation<Void, Never>] = []
+        var boxesToResume: [ContinuationBox] = []
         queue.sync {
             self._isStopped = true
-            contsToResume = self.completionContinuations
-            self.completionContinuations = []
+            boxesToResume = self.completionBoxes
+            self.completionBoxes = []
         }
         playerNode.stop()
-        for cont in contsToResume {
-            cont.resume()
+        for box in boxesToResume {
+            box.tryResume()
         }
     }
 
@@ -151,37 +151,37 @@ public final class AudioSink: @unchecked Sendable {
             + Double(timeout.components.attoseconds) * 1e-18
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            var shouldEnqueue = true
+            // The box owns the continuation. Both the drain path (enqueue's
+            // completion handler / stop()) and the timeout path call
+            // `box.tryResume()`; whichever wins first resumes, the loser is a
+            // no-op. This is the load-bearing guarantee against
+            // SWIFT TASK CONTINUATION MISUSE on overlapping drain + timeout.
+            let box = ContinuationBox(continuation)
+
+            var shouldArmTimeout = true
             queue.sync {
-                // Re-check under lock
+                // Re-check under lock — drain may have completed between the
+                // fast-path check above and acquiring the queue.
                 if self.pendingBuffers == 0 || self._isStopped {
-                    shouldEnqueue = false
+                    shouldArmTimeout = false
                 } else {
-                    self.completionContinuations.append(continuation)
+                    self.completionBoxes.append(box)
                 }
             }
-            if !shouldEnqueue {
-                continuation.resume()
+
+            if !shouldArmTimeout {
+                box.tryResume()
                 return
             }
 
-            // Timeout task — uses a separate reference to resume the continuation
-            let box = ContinuationBox(continuation)
-            Task {
+            Task { [weak self] in
                 try? await Task.sleep(for: .seconds(timeoutSeconds))
-                let didClaim = box.claim()
-                if didClaim {
-                    // Remove from pending continuations and resume
-                    self.queue.sync {
-                        self.completionContinuations.removeAll { _ in
-                            // We can't directly compare continuations; remove one entry
-                            // (they are FIFO ordered — the timeout removes the oldest).
-                            // Safe because ContinuationBox prevents double-resume.
-                            false
-                        }
-                    }
-                    continuation.resume()
+                // Remove our box from the pending list (by identity) before
+                // resuming, so the drain path doesn't race against this resume.
+                self?.queue.sync {
+                    self?.completionBoxes.removeAll { $0 === box }
                 }
+                box.tryResume()
             }
         }
     }
@@ -204,22 +204,31 @@ public final class AudioSink: @unchecked Sendable {
 
 // MARK: - ContinuationBox
 
-/// One-shot claim guard to prevent double-resume of a CheckedContinuation.
+/// One-shot owner of a `CheckedContinuation<Void, Never>` whose `tryResume()`
+/// is idempotent. The drain path and the timeout path both race to resume the
+/// same waiter; whichever calls `tryResume()` first wins, the other becomes a
+/// no-op. Without this, both paths would call `cont.resume()` directly and
+/// `CheckedContinuation` would trap with SWIFT TASK CONTINUATION MISUSE.
 private final class ContinuationBox: @unchecked Sendable {
     private let lock = NSLock()
-    private var claimed = false
+    private var continuation: CheckedContinuation<Void, Never>?
 
     init(_ continuation: CheckedContinuation<Void, Never>) {
-        // continuation is stored implicitly via the caller's capture; this box
-        // only tracks whether the timeout has "claimed" the right to resume it.
+        self.continuation = continuation
     }
 
-    /// Returns true if this is the first claim (caller should resume).
-    func claim() -> Bool {
+    /// Resume the held continuation iff this is the first call. Returns true
+    /// if the resume actually happened.
+    @discardableResult
+    func tryResume() -> Bool {
         lock.lock()
-        defer { lock.unlock() }
-        if claimed { return false }
-        claimed = true
+        guard let cont = continuation else {
+            lock.unlock()
+            return false
+        }
+        continuation = nil
+        lock.unlock()
+        cont.resume()
         return true
     }
 }
