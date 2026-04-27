@@ -10,7 +10,7 @@ import OnnxRuntimeBindings  // product: onnxruntime from microsoft/onnxruntime-s
 /// ## Hysteresis (VOICE-01)
 /// `feed` returns `.fired` only after `framesRequired` consecutive frames exceed
 /// `threshold`. A single below-threshold frame resets the counter to zero.
-/// Default framesRequired=4 ≈ 320 ms at 80 ms/frame (RESEARCH §1, CLAUDE.md voice stack).
+/// Default framesRequired: 4 ≈ 320 ms at 80 ms/frame (RESEARCH §1, CLAUDE.md voice stack).
 ///
 /// ## Anti-patterns (RESEARCH §1)
 /// - DO NOT share a single ORTSession across mel/embedding/classifier stages.
@@ -51,7 +51,6 @@ public actor OpenWakeWordSession {
 
         self.threshold = threshold
         self.framesRequired = framesRequired
-        self.consecutive = 0
         self.scriptedClassifier = nil
     }
 
@@ -74,7 +73,6 @@ public actor OpenWakeWordSession {
         self.classifierSession = nil
         self.threshold = threshold
         self.framesRequired = framesRequired
-        self.consecutive = 0
         self.scriptedClassifier = scriptedClassifier
     }
 
@@ -85,13 +83,9 @@ public actor OpenWakeWordSession {
     /// The caller is responsible for providing 1280 samples (80 ms at 16 kHz —
     /// one mel frame). The scripted path ignores buffer contents.
     ///
-    /// Hysteresis logic:
-    /// ```
-    /// if prob >= threshold { consecutive += 1
-    ///   if consecutive >= framesRequired { consecutive = 0; return .fired }
-    /// } else { consecutive = 0 }
-    /// return .none
-    /// ```
+    /// Hysteresis logic (see `runHysteresis` for implementation):
+    /// - above threshold: counter++ → if counter >= framesRequired: reset+fire
+    /// - below threshold: counter resets to zero
     ///
     /// - Parameter pcm16k: Float32 mono samples at 16 kHz.
     /// - Returns: `.fired` after `framesRequired` consecutive above-threshold frames.
@@ -117,7 +111,7 @@ public actor OpenWakeWordSession {
 
     private let threshold: Float
     private let framesRequired: Int     // default: 4 — VOICE-01 ≥4-frame hysteresis
-    private var consecutive: Int        // count of consecutive above-threshold frames
+    private var consecutive: Int = 0   // count of consecutive above-threshold frames
 
     // ORT sessions — one per stage (RESEARCH §1: NO sharing)
     private let melSession: ORTSession?
@@ -140,7 +134,7 @@ public actor OpenWakeWordSession {
             prob = try runORT(pcmSamples: pcmSamples)
         }
 
-        // Hysteresis: consecutive += 1; reset on dip; fire at threshold
+        // Hysteresis counter logic (VOICE-01: framesRequired: 4 ≈ 320 ms)
         if prob >= threshold {
             consecutive += 1
             if consecutive >= framesRequired {
