@@ -21,12 +21,23 @@ if [ ! -d Jarvis.xcodeproj ]; then
   xcodegen generate >/dev/null
 fi
 
-echo "[check-app-builds] xcodebuild build (Debug, arm64)..."
+# Use a CLI-private DerivedData (./build/) so that Xcode IDE running in
+# parallel doesn't race against the post-codesign step. Sharing the default
+# DerivedData with Xcode IDE causes Xcode's background indexer/build to
+# touch Jarvis.app after our verify-entitlements --pre-codesign + codesign.sh
+# postBuildScripts complete, which (a) invalidates the bundle's signature
+# (`codesign --verify` reports "plist or signature have been modified") and
+# (b) reverts the JarvisEntitlementsVerified marker in Info.plist to false.
+# The runtime entitlement probe in AppDelegate then hard-blocks at launch
+# via Logger.critical with "JarvisEntitlementsVerified missing/false".
+# Isolation eliminates the race entirely; bundle launches cleanly.
+echo "[check-app-builds] xcodebuild build (Debug, arm64, isolated DerivedData)..."
 xcodebuild build \
   -project Jarvis.xcodeproj \
   -scheme Jarvis \
   -destination 'platform=macOS,arch=arm64' \
   -configuration Debug \
+  -derivedDataPath "$REPO_ROOT/build" \
   -quiet 2>&1 | tail -5
 
 if [ "${PIPESTATUS[0]}" -eq 0 ]; then
