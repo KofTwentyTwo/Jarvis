@@ -1147,6 +1147,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.koftwentytwo.jarvis;
 				PRODUCT_NAME = Jarvis;
 				SDKROOT = macosx;
+				SWIFT_ENABLE_DEBUG_DYLIB = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
