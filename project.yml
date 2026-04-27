@@ -4,7 +4,7 @@ options:
   generateEmptyDirectories: true
   minimumXcodeGenVersion: "2.40.0"
   deploymentTarget:
-    macOS: "13.0"
+    macOS: "14.0"
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -14,7 +14,7 @@ settings:
     CODE_SIGN_IDENTITY: "-"
     OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
     LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
-    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
   configs:
     # DEVELOPMENT_TEAM intentionally unset for Debug.
     # With ad-hoc signing (CODE_SIGN_IDENTITY="-") and DEVELOPMENT_TEAM set,
@@ -46,6 +46,12 @@ packages:
     path: packages/MCP
   Replay:
     path: packages/Replay
+  # Plan 06-05: App-level voice wiring (App/AppDelegate.installVoice + the
+  # Voice typealias in App/HUD/HudStateIntent.swift) consumes the Voice
+  # package's VoiceController, VoiceState, VoiceHudIntent, PushToTalk,
+  # MuteWakeWord, and AudioLevelEmitter surfaces.
+  Voice:
+    path: packages/Voice
   # MCP Swift SDK — consumed by `mcp-time`, `mcp-clipboard` (Plan 05-02), and
   # `mcp-applescript` (Plan 05-03) helper targets. Pinned at the same exact
   # version as `packages/MCP/Package.swift` (Plan 05-01) to avoid
@@ -95,7 +101,7 @@ targets:
         OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_VERSION: "6.0"
-        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
         LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
       configs:
         Debug:
@@ -153,6 +159,10 @@ targets:
       # AgentCore, JarvisMCP) so the dep needs to be explicit.
       - package: swift-log
         product: Logging
+      # Plan 06-05: AppDelegate.installVoice + HudStateIntent.swift
+      # `import Voice` for the VoiceController + VoiceHudIntent typealias.
+      - package: Voice
+        product: Voice
       # Plan 05-02 / 05-03: build the helper apps before the Jarvis copyFiles
       # phase consumes them. xcodegen orders target dependencies before copy
       # phases.
@@ -279,7 +289,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_VERSION: "6.0"
-        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
         BUNDLE_LOADER: "$(TEST_HOST)"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Contents/MacOS/Jarvis"
         CODE_SIGN_IDENTITY: "-"
@@ -316,6 +326,11 @@ targets:
         product: Shell
       - package: Logging
         product: JarvisLogging
+      # Plan 06-05: VoiceWiringTests (App/Tests/AppTests/VoiceWiringTests.swift)
+      # asserts AppDelegate's voice wiring graph; needs the Voice product to
+      # @testable import the App target's voice integration code.
+      - package: Voice
+        product: Voice
   JarvisEntitlementProbeTests:
     type: bundle.unit-test
     platform: macOS
@@ -331,7 +346,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_VERSION: "6.0"
-        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
         BUNDLE_LOADER: "$(TEST_HOST)"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Jarvis.app/Contents/MacOS/Jarvis"
         CODE_SIGN_IDENTITY: "-"
@@ -373,7 +388,7 @@ targets:
         OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_VERSION: "6.0"
-        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
       configs:
         Debug:
           CODE_SIGNING_ALLOWED: NO
@@ -414,7 +429,7 @@ targets:
         OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_VERSION: "6.0"
-        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
       configs:
         Debug:
           CODE_SIGNING_ALLOWED: NO
@@ -468,7 +483,7 @@ targets:
         OTHER_CODE_SIGN_FLAGS: "--options=runtime --timestamp"
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_VERSION: "6.0"
-        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
       configs:
         Debug:
           CODE_SIGNING_ALLOWED: NO
