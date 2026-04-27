@@ -1,0 +1,21 @@
+{
+  "version": "6.2.1",
+  "models": {
+    "silero_vad.onnx": {
+      "description": "Silero VAD v6.2.1 opset-16 model",
+      "url": "https://github.com/snakers4/silero-vad/raw/v6.2.1/src/silero_vad/data/silero_vad.onnx",
+      "sha256": "PLACEHOLDER_run_scripts_fetch-silero-models.sh_to_populate"
+    },
+    "silero_vad_16k_op15.onnx": {
+      "description": "Silero VAD v6.2.1 opset-15 fallback for older ORT runtimes",
+      "url": "https://github.com/snakers4/silero-vad/raw/v6.2.1/src/silero_vad/data/silero_vad_16k_op15.onnx",
+      "sha256": "PLACEHOLDER_run_scripts_fetch-silero-models.sh_to_populate"
+    }
+  },
+  "chunk_contract": {
+    "samples": 512,
+    "sample_rate_hz": 16000,
+    "duration_ms": 32,
+    "note": "RESEARCH-DELTAS A1: chunk contract preserved between v5 and v6.2.1"
+  }
+}

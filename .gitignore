@@ -17,6 +17,6 @@ Package.resolved
 # GSD worktrees (ephemeral agent sandboxes)
 .claude/worktrees/
 
-# ML model weights — large binaries, downloaded by fetch scripts
+# ML model weights — large binaries, fetched by scripts/fetch-*-models.sh
 Resources/models/openwakeword/*.onnx
 Resources/models/silero/*.onnx

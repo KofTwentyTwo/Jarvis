@@ -39,13 +39,17 @@ let package = Package(
         .target(
             name: "Voice",
             dependencies: [
-                // Added by Plan 06-02 (WakeWord): ORT inference for mel/embedding/classifier.
+                // Added by Plan 06-02 (WakeWord) + 06-03 (SileroVAD): ORT inference
+                // for mel/embedding/classifier (06-02) and Silero VAD (06-03).
                 .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
+                // Added by Plan 06-03 (WhisperKit STT fallback).
+                .product(name: "WhisperKit", package: "argmax-oss-swift"),
             ],
             path: "Sources/Voice",
             swiftSettings: [.swiftLanguageMode(.v6)],
             linkerSettings: [
                 .linkedFramework("AVFoundation"),
+                .linkedFramework("Speech"),
             ]
         ),
         .testTarget(
