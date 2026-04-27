@@ -14,7 +14,7 @@ import PackageDescription
 
 let package = Package(
     name: "Voice",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v14)],
     products: [
         .library(name: "Voice", targets: ["Voice"]),
     ],
@@ -39,13 +39,16 @@ let package = Package(
         .target(
             name: "Voice",
             dependencies: [
-                // No external deps used in this plan's source files.
-                // 06-02 will add ORT product; 06-04 will add mlx-audio-swift product.
+                // Added by Plan 06-03 (VAD/STT): ORT for SileroVAD + argmax-oss-swift for WhisperKit.
+                // Plan 06-02 (WakeWord) also needs ORT — merge expected to coalesce these additions.
+                .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
+                .product(name: "WhisperKit", package: "argmax-oss-swift"),
             ],
             path: "Sources/Voice",
             swiftSettings: [.swiftLanguageMode(.v6)],
             linkerSettings: [
                 .linkedFramework("AVFoundation"),
+                .linkedFramework("Speech"),
             ]
         ),
         .testTarget(
