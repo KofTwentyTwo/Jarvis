@@ -15,7 +15,8 @@ import QuartzCore
 @MainActor
 public final class MenuBarIconController {
     public let statusItem: NSStatusItem
-    private let contextMenu: NSMenu
+    /// The context menu. Exposed so voice subsystem can add the mute-wake-word toggle (Plan 06-05).
+    public private(set) var contextMenu: NSMenu
     private var currentState: HudState = .idle
     private var onLeftClick: (() -> Void)?
     private var lastAccessibilityAnnouncement: Date = .distantPast
