@@ -28,6 +28,7 @@ key_files:
     - packages/Voice/Sources/Voice/TTS/TTSInterrupt.swift
     - packages/Voice/Tests/VoiceTests/AVSpeechSmokeTests.swift
     - packages/Voice/Tests/VoiceTests/OrpheusSerializationTests.swift
+    - packages/Voice/Tests/VoiceTests/OrpheusTTFATests.swift
     - packages/Voice/Tests/VoiceTests/TTSInterruptTests.swift
   modified:
     - packages/Voice/Package.swift (added MLXAudioTTS + TTSKit product deps)
@@ -165,7 +166,22 @@ Tests `T1`/`T2` in `OrpheusTTFATests` are gated by `JARVIS_REAL_MODELS=1` (requi
 - **Issue:** Original `cancel()` called `_ = try? await taskToCancel?.value` before `await orpheus.cancel()`. Since `TTSEngineActor.currentTask` awaits an actor-isolated `OrpheusTTS.synthesize` call, and Swift task cancellation does NOT propagate across actor-isolated calls, this deadlocked.
 - **Fix:** Reordered to: `taskToCancel.cancel()` → `await orpheus.cancel()` → `_ = try? await taskToCancel?.value` (concurrent cancel signals before awaiting drain)
 - **Files modified:** `TTSEngineActor.swift`
-- **Commit:** `4d7bd76`
+- **Commit:** `3881fb5` (post-execute fixup — see "Orchestrator Fixups" below; the executor's working-tree edit was inadvertently left uncommitted before plan exit)
+
+## Orchestrator Fixups (post-execute)
+
+The orchestrator caught two issues during post-wave validation that the executor's self-check missed:
+
+**F1. [Critical] AudioSink continuation double-resume race (commit `a97ec42`)**
+- **Found via:** SourceKit diagnostic + `swift test` aborting mid-suite with `SWIFT TASK CONTINUATION MISUSE: awaitCompletion(timeout:) tried to resume its continuation more than once`. The XCTest harness was crashing in `TTSInterruptTests.testI3_completionTimeoutRespected` and stopping all subsequent suites.
+- **Root cause:** The original `ContinuationBox` only guarded the timeout path. The drain path (`enqueue` completion handler / `stop()`) walked `completionContinuations` and called `resume()` directly, bypassing the box. The "removeAll { _ in false }" line in the timeout path was a no-op so the array kept stale references.
+- **Fix:** `ContinuationBox` now owns the continuation and exposes idempotent `tryResume()`. Both drain path and timeout path call `box.tryResume()`; whichever wins resumes, the loser is a no-op. Timeout path also removes its box from the array by `===` identity before resuming.
+- **Validation:** Full suite now runs to completion. XCTest 44 cases / 3 skipped / 0 failed; Swift Testing 17/17 pass. `TTSInterruptTests` 5/5 pass (was crashing).
+
+**F2. [Plan compliance] OrpheusTTFATests.swift extracted to its own file (commit `37f7243`)**
+- **Found via:** `files_modified` frontmatter listed `OrpheusTTFATests.swift` as a separate file; the executor had bundled the class inline inside `OrpheusSerializationTests.swift`.
+- **Fix:** Moved the unchanged `OrpheusTTFATests` XCTestCase (T1 TTFA probe + T2 TTSKit functional smoke) into its own file. No behavior change — both tests remain `JARVIS_REAL_MODELS=1`-gated and skip in CI.
+- **Why it matters:** Plan 06-05 reads `06-04-SUMMARY.md` for the empirical TTFA signal; keeping the probe in its declared file makes the source-of-truth obvious to grep gates and downstream readers.
 
 ## Known Stubs
 
@@ -191,12 +207,17 @@ Files verified present:
 - `packages/Voice/Sources/Voice/TTS/TTSInterrupt.swift` ✓
 - `packages/Voice/Tests/VoiceTests/AVSpeechSmokeTests.swift` ✓
 - `packages/Voice/Tests/VoiceTests/OrpheusSerializationTests.swift` ✓
+- `packages/Voice/Tests/VoiceTests/OrpheusTTFATests.swift` ✓
 - `packages/Voice/Tests/VoiceTests/TTSInterruptTests.swift` ✓
 
 Commits verified:
 - `f1e1363` (Task 1) ✓
 - `f9e7701` (Task 2) ✓
 - `4d7bd76` (Task 3) ✓
+- `3881fb5` (Orchestrator F0 — TTSEngineActor.cancel deadlock fix recovery) ✓
+- `a97ec42` (Orchestrator F1 — AudioSink continuation race fix) ✓
+- `37f7243` (Orchestrator F2 — OrpheusTTFATests file extraction) ✓
 
-All 12 TTS tests pass (AVSpeechSmokeTests A1-A4, OrpheusSerializationTests O1-O3, TTSInterruptTests I1-I5).
+All 12 in-CI TTS tests pass (AVSpeechSmokeTests A1-A4, OrpheusSerializationTests O1-O3, TTSInterruptTests I1-I5). Plus 2 scaffold-time probes (OrpheusTTFATests T1+T2) gated behind `JARVIS_REAL_MODELS=1` — skip in CI per plan spec ("does NOT hard-fail").
+Full Voice package: 44 XCTest / 3 skipped / 0 failed + 17 Swift Testing / 0 failed.
 Build: `swift build -c debug` — clean.
