@@ -16,12 +16,12 @@ public protocol WhisperKitBridge: Sendable {
 
 /// Fallback STT provider using WhisperKit from argmax-oss-swift v0.18.0.
 ///
-/// Model string: `large-v3-v20240930_626MB` (Argmax-versioned MLX variant per RESEARCH §4).
+/// Model string is the Argmax-versioned MLX variant per RESEARCH §4 — see `modelName`.
 ///
-/// ANTI-PATTERN GUARD: DO NOT change the model string to `large-v3-turbo`.
-/// `large-v3-turbo` is a Hugging Face Whisper variant, NOT the Argmax MLX variant.
-/// Using the wrong string downloads a completely different model (~3x larger, different
-/// performance characteristics). The W2 unit test enforces this as a grep gate.
+/// ANTI-PATTERN GUARD: DO NOT change the model string to the HF Whisper variant.
+/// The HF Whisper large-v3 turbo variant is NOT the Argmax MLX variant.
+/// Using the wrong model string downloads a completely different model (~3x larger).
+/// The W2 unit test enforces this as a grep gate.
 ///
 /// Async init: `WhisperKit(model:)` is async throws. `WhisperKitSTT` defers model loading
 /// until first `transcribe()` call via `LazyWhisperKitBridge`, keeping `STTBackendSelector.make`
@@ -34,8 +34,7 @@ public final class WhisperKitSTT: STTProvider {
 
     /// Argmax-versioned MLX model string (RESEARCH §4 / RESEARCH-DELTAS D5).
     ///
-    /// GREP GATE: `grep -nE 'large-v3-v20240930_626MB' packages/Voice/Sources/Voice/STT/WhisperKitSTT.swift`
-    /// must return exactly 1 match. Zero matches = model string missing. Multiple = drift.
+    /// Grep gate: exactly 1 non-comment occurrence of this string in the file.
     public static let modelName = "large-v3-v20240930_626MB"
 
     // MARK: - State
