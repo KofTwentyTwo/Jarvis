@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: milestone
-status: planning
-last_updated: "2026-04-26T12:14:49.822Z"
+status: executing
+last_updated: "2026-04-27T15:57:43.613Z"
 progress:
   total_phases: 8
   completed_phases: 5
@@ -25,15 +25,17 @@ progress:
 
 **v1 definition:** "Usable Jarvis" — week-one skeleton + full voice loop + vision first pass + memory first pass.
 
-**Current focus:** Phase 1 — Foundations. Scaffold Xcode project, wire entitlement pair from day one, establish codesign layout + TCC envelope, Keychain, config snapshot split, structured logs.
+**Current focus:** Phase 06 — voice
 
 ---
 
 ## Current Position
 
+Phase: 06 (voice) — EXECUTING
+Plan: 1 of 5
 **Phase:** 03
 **Plan:** Not started
-**Status:** Ready to plan
+**Status:** Executing Phase 06
 
 **Progress:**
 
