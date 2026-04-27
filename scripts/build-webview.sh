@@ -42,11 +42,15 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 # a terminal does). Homebrew + corepack-managed pnpm live outside the default
 # /usr/bin:/bin minimal env Xcode uses for build phases. Prepend the common
 # locations so this script works identically from CLI and from Xcode IDE.
-export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.nvm/versions/node:${PATH:-/usr/bin:/bin}"
+# Nix profile paths are included so users on nix-darwin / home-manager /
+# multi-user nix find pnpm regardless of which profile owns the symlink.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.nvm/versions/node:$HOME/.nix-profile/bin:/etc/profiles/per-user/$USER/bin:/run/current-system/sw/bin:${PATH:-/usr/bin:/bin}"
 
 if ! command -v pnpm >/dev/null 2>&1; then
     echo "[build-webview] FATAL: pnpm not found on PATH ($PATH)" >&2
-    echo "[build-webview]   Install: brew install pnpm  OR  npm i -g pnpm" >&2
+    echo "[build-webview]   Install: brew install pnpm" >&2
+    echo "[build-webview]            OR  npm i -g pnpm" >&2
+    echo "[build-webview]            OR  Nix:  add 'pkgs.pnpm' to environment.systemPackages / home.packages" >&2
     exit 1
 fi
 
