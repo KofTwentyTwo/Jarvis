@@ -152,11 +152,23 @@ public actor TTSEngineActor {
     // MARK: - Cancel
 
     /// Cancel any in-flight synthesis.
+    ///
+    /// Cancellation is two-pronged:
+    ///   1. Cancel the TTSEngineActor's own Task (which is awaiting OrpheusTTS.synthesize).
+    ///   2. Concurrently call orpheus.cancel() to cancel the inner stream task.
+    ///
+    /// Both must fire concurrently — cancelling only the outer task does not propagate
+    /// through actor-isolated async calls to OrpheusTTS. Waiting for the outer task
+    /// before calling orpheus.cancel() would deadlock if OrpheusTTS is blocked on
+    /// its stream.
     public func cancel() async {
-        currentTask?.cancel()
-        _ = try? await currentTask?.value
+        let taskToCancel = currentTask
         currentTask = nil
         _hasSynthInFlight = false
+
+        // Fire both cancellations concurrently, then wait.
+        taskToCancel?.cancel()
         await orpheus.cancel()
+        _ = try? await taskToCancel?.value
     }
 }
