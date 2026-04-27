@@ -149,14 +149,17 @@ final class WhisperKitSTTTests: XCTestCase {
 }
 
 // MARK: - STTBackendSelector Tests (Task 3)
+//
+// STTBackendSelector.make(backend:) accepts the backend string directly so the
+// Voice package doesn't need to import Config. The app layer passes
+// snapshot.stt.backend when calling the selector.
 
 final class STTBackendSelectorTests: XCTestCase {
 
     // MARK: - B1: speech_analyzer backend
 
     func testB1_speechAnalyzerBackendReturnsSpeechAnalyzerSTT() {
-        let snapshot = makeSnapshot(backend: "speech_analyzer")
-        let stt = STTBackendSelector.make(snapshot: snapshot)
+        let stt = STTBackendSelector.make(backend: "speech_analyzer")
         XCTAssertTrue(stt is SpeechAnalyzerSTT,
                       "Expected SpeechAnalyzerSTT for backend='speech_analyzer', got \(type(of: stt))")
     }
@@ -164,8 +167,7 @@ final class STTBackendSelectorTests: XCTestCase {
     // MARK: - B2: whisperkit backend
 
     func testB2_whisperKitBackendReturnsWhisperKitSTT() {
-        let snapshot = makeSnapshot(backend: "whisperkit")
-        let stt = STTBackendSelector.make(snapshot: snapshot)
+        let stt = STTBackendSelector.make(backend: "whisperkit")
         XCTAssertTrue(stt is WhisperKitSTT,
                       "Expected WhisperKitSTT for backend='whisperkit', got \(type(of: stt))")
     }
@@ -174,54 +176,27 @@ final class STTBackendSelectorTests: XCTestCase {
 
     func testB3_unknownBackendFallsBackToSpeechAnalyzerWithWarning() {
         let testLogger = TestWarningLogger()
-        let snapshot = makeSnapshot(backend: "garbage")
-        let stt = STTBackendSelector.make(snapshot: snapshot, warningLogger: testLogger)
+        let stt = STTBackendSelector.make(backend: "garbage", warningLogger: testLogger)
         XCTAssertTrue(stt is SpeechAnalyzerSTT,
                       "Unknown backend should fall back to SpeechAnalyzerSTT")
         XCTAssertTrue(testLogger.lastWarning?.contains("garbage") == true,
                       "Warning log should mention the unknown backend value")
     }
 
-    // MARK: - B4: default (no backend in featureFlags) → speech_analyzer
+    // MARK: - B4: default (empty string) → speech_analyzer
 
-    func testB4_defaultBackendReturnsSpeechAnalyzerSTT() {
-        // Default PerTurnSnapshot has no stt feature flag set → defaults to speech_analyzer
-        let snapshot = makeSnapshotWithNoSTTFlag()
-        let stt = STTBackendSelector.make(snapshot: snapshot)
+    func testB4_defaultEmptyBackendReturnsSpeechAnalyzerSTT() {
+        // When the backend string is empty (e.g. not set in config), default to speech_analyzer
+        let stt = STTBackendSelector.make(backend: "")
         XCTAssertTrue(stt is SpeechAnalyzerSTT,
-                      "Default (no backend flag) should return SpeechAnalyzerSTT")
-    }
-
-    // MARK: - Helpers
-
-    private func makeSnapshot(backend: String) -> PerTurnSnapshot {
-        // SEC-05: backend is pinned at submit() time via PerTurnSnapshot
-        // This plan adds sttBackend to STTConfig (Rule 3 deviation from Phase 1)
-        return PerTurnSnapshot(
-            schemaVersion: 1,
-            provider: .anthropic,
-            tts: TTSConfig(tier: "tier1"),
-            stt: STTConfig(whisperKitFallback: backend == "whisperkit",
-                           backend: backend),
-            featureFlags: FeatureFlags([:])
-        )
-    }
-
-    private func makeSnapshotWithNoSTTFlag() -> PerTurnSnapshot {
-        return PerTurnSnapshot(
-            schemaVersion: 1,
-            provider: .anthropic,
-            tts: TTSConfig(tier: "tier1"),
-            stt: STTConfig(),  // default: whisperKitFallback=false, backend="speech_analyzer"
-            featureFlags: FeatureFlags([:])
-        )
+                      "Empty backend string should return SpeechAnalyzerSTT (default)")
     }
 }
 
 // MARK: - Test doubles
 
-/// Captures warning log calls from STTBackendSelector.
-final class TestWarningLogger: @unchecked Sendable {
+/// Captures warning log calls from STTBackendSelector (test seam).
+final class TestWarningLogger: STTWarningLogger, @unchecked Sendable {
     var lastWarning: String?
     func warn(_ message: String) { lastWarning = message }
 }
