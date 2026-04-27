@@ -44,6 +44,10 @@ let package = Package(
                 .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
                 // Added by Plan 06-03 (WhisperKit STT fallback).
                 .product(name: "WhisperKit", package: "argmax-oss-swift"),
+                // Added by Plan 06-04 (Orpheus TTS tier 2 via LlamaTTSModel).
+                .product(name: "MLXAudioTTS", package: "mlx-audio-swift"),
+                // Added by Plan 06-04 (TTSKit fallback, feature-flag gated).
+                .product(name: "TTSKit", package: "argmax-oss-swift"),
             ],
             path: "Sources/Voice",
             swiftSettings: [.swiftLanguageMode(.v6)],
