@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "_comment": "SHA-256 hashes are populated by scripts/fetch-openwakeword-models.sh on first run. The ONNX files themselves are gitignored (large + license-pinned to upstream). Run the script before first use to download and pin the weights.",
+  "models": [
+    {
+      "filename": "melspectrogram.onnx",
+      "sha256": "PLACEHOLDER_RUN_scripts/fetch-openwakeword-models.sh"
+    },
+    {
+      "filename": "embedding_model.onnx",
+      "sha256": "PLACEHOLDER_RUN_scripts/fetch-openwakeword-models.sh"
+    },
+    {
+      "filename": "hey_jarvis_v0.1.onnx",
+      "sha256": "PLACEHOLDER_RUN_scripts/fetch-openwakeword-models.sh"
+    }
+  ]
+}

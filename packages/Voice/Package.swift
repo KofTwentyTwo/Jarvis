@@ -14,7 +14,7 @@ import PackageDescription
 
 let package = Package(
     name: "Voice",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v14)],  // ORT 1.24.2 requires macOS 14+
     products: [
         .library(name: "Voice", targets: ["Voice"]),
     ],
@@ -39,8 +39,8 @@ let package = Package(
         .target(
             name: "Voice",
             dependencies: [
-                // No external deps used in this plan's source files.
-                // 06-02 will add ORT product; 06-04 will add mlx-audio-swift product.
+                // Added by Plan 06-02 (WakeWord): ORT inference for mel/embedding/classifier.
+                .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
             ],
             path: "Sources/Voice",
             swiftSettings: [.swiftLanguageMode(.v6)],

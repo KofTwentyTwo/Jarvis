@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "models": [
+    {"filename": "melspectrogram.onnx", "sha256": "da85af631b9600c527f6d990b528f38902de25e18ff848a607eb80afcba2d261"},
+    {"filename": "embedding_model.onnx", "sha256": "6b0d784ef74315f894a559a47cb2e4efdc3e47211e7ec7318e64aef3aca1e9cb"},
+    {"filename": "hey_jarvis_v0.1.onnx", "sha256": "0d5169f50470cba55c60f9caeb32fc5f4bbc90a56e91652a14ecffcf038117f3"}
+  ]
+}
