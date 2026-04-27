@@ -4,6 +4,7 @@ import Config
 import Keychain
 import JarvisLogging
 import Shell
+import Voice           // Plan 06-05: VoiceController + PTT + MuteWakeWord
 import WebKit
 import Logging   // swift-log — `Logger` here is `Logging.Logger`
 import AgentCore       // Plan 05-05: BoundedAsyncChannel for ME-04 closure
@@ -133,6 +134,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// no producer either, so ME-04's contract was structurally
     /// unverifiable in production code.
     var orchToReplayDrainTask: Task<Void, Never>?
+
+    // MARK: - Voice subsystem (Plan 06-05)
+    //
+    // Strong properties ensure voice subsystem outlives `applicationWillFinishLaunching`.
+    // `voiceController` is wired in `installVoice()` which runs on the async background
+    // after launch. The `dormantVoiceContinuation` is replaced with the real producer
+    // once VoiceController is live.
+
+    /// The end-to-end voice pipeline actor (Plan 06-05).
+    var voiceController: VoiceController?
+
+    /// Push-to-talk hotkey binding (Plan 06-05 / VOICE-13).
+    var pushToTalk: PushToTalk?
+
+    /// Menu-bar wake-word mute toggle (Plan 06-05 / VOICE-12).
+    var muteWakeWord: MuteWakeWord?
+
+    /// Task spawned in `applicationWillFinishLaunching` that constructs and
+    /// starts the voice subsystem. Held strongly so the async setup isn't
+    /// cancelled prematurely.
+    var voiceInstallTask: Task<Void, Never>?
 
     /// Plan 03-05 test seam. Default production value is `"index"` (the R3F
     /// bundle entry). `installBus()` assigns this once when it resolves the
@@ -297,6 +319,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.systemLogger?.warning("MCPRuntime build failed (helpers absent or unsigned?): \(String(describing: error))")
             }
         }
+
+        // 11. Plan 06-05: install voice subsystem asynchronously.
+        //     Model files (ORT sessions, Orpheus MLX weights) may be absent
+        //     on first launch — failure is non-fatal (voice degrades gracefully).
+        //     The dormantVoiceContinuation is replaced with the real producer
+        //     once VoiceController is live and started.
+        voiceInstallTask = Task { @MainActor [weak self] in
+            await self?.installVoice()
+        }
     }
 
     /// CR-02 (REVIEW 05): on-disk replay log path. Lives next to
@@ -310,6 +341,108 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Plan 05-05 / ME-04: tear down the orch→replay drain so the Task
         // doesn't outlive the process.
         orchToReplayDrainTask?.cancel()
+        // Plan 06-05: shut down voice subsystem.
+        voiceInstallTask?.cancel()
+        if let vc = voiceController {
+            Task { await vc.shutdown() }
+        }
+    }
+
+    // MARK: - Voice install (Plan 06-05)
+
+    /// Constructs and starts the voice subsystem.
+    ///
+    /// Called from a background Task in `applicationWillFinishLaunching` (step 11).
+    /// Model files and hardware are required — failure is logged and voice degrades
+    /// gracefully (banner + silent mode). PTT and mute-wake-word are set up after
+    /// VoiceController is live.
+    ///
+    /// Production wiring:
+    ///   1. Build `VoiceController` using `dormantVoiceContinuation` as the
+    ///      `voiceHudCont` parameter — this replaces the dormant placeholder
+    ///      that `HudStateCoordinator` is already consuming.
+    ///   2. Replace `dormantVoiceContinuation` with `nil` so it no longer holds
+    ///      the continuation (VoiceController now owns it).
+    ///   3. Wire `PushToTalk` (binds PTT hotkey, VOICE-13).
+    ///   4. Wire `MuteWakeWord` (menu-bar toggle, VOICE-12).
+    ///   5. Call `voiceController.start()` to open the audio graph and begin
+    ///      the wake-word / VAD / STT / TTS loop.
+    @MainActor
+    private func installVoice() async {
+        // Require dormant continuation — it's our connection to HudStateCoordinator.
+        guard let voiceCont = dormantVoiceContinuation else {
+            systemLogger?.warning("installVoice: dormantVoiceContinuation is nil — voice subsystem not installed")
+            return
+        }
+
+        // Model directories from the app bundle's Resources/Models/ directory.
+        // These are absent in Debug builds without the model download step.
+        let bundleModels = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Resources/Models", isDirectory: true)
+
+        let openWakeWordModelDir = bundleModels.appendingPathComponent("openWakeWord", isDirectory: true)
+        let sileroModelDir = bundleModels.appendingPathComponent("silero", isDirectory: true)
+
+        // Construct OpenWakeWordSession (requires ORT model files).
+        let wakeWordSession: OpenWakeWordSession
+        do {
+            wakeWordSession = try OpenWakeWordSession(modelDir: openWakeWordModelDir)
+        } catch {
+            systemLogger?.warning("installVoice: OpenWakeWordSession init failed (models absent?): \(String(describing: error))")
+            // Non-fatal: voice subsystem skipped; dormant continuation retained.
+            return
+        }
+
+        // Construct SileroVAD (requires ORT model files).
+        let sileroVAD: SileroVAD
+        do {
+            sileroVAD = try SileroVAD(modelDir: sileroModelDir)
+        } catch {
+            systemLogger?.warning("installVoice: SileroVAD init failed: \(String(describing: error))")
+            return
+        }
+
+        // Construct WakeWordDAG.
+        let wakeWordDAG = WakeWordDAG(session: wakeWordSession)
+
+        // Construct VoiceController.
+        // NullBannerAdapter bridges VoiceBannerInterface → HUDBannerCoordinator.
+        // NullOrchestratorAdapter is a placeholder until Phase 7 wires the real orchestrator.
+        // NullBusAdapter is a placeholder until Phase 6+Bus wiring is finalized.
+        let bannerAdapter = AppDelegateBannerAdapter(coordinator: bannerCoordinator)
+        let orchestratorAdapter = NullOrchestratorAdapter()
+        let busAdapter = NullBusEmitterAdapter()
+
+        let vc = VoiceController(
+            wakeWordStream: wakeWordDAG.wakeWordStream,
+            vadFactory: { sileroVAD },
+            sttFactory: { STTBackendSelector.make(backend: "speech_analyzer") },
+            tts: NullTTSAdapter(),
+            orchestrator: orchestratorAdapter,
+            bannerCoordinator: bannerAdapter,
+            bus: busAdapter,
+            voiceHudCont: voiceCont
+        )
+        voiceController = vc
+
+        // Transfer ownership of the continuation to VoiceController.
+        // The coordinator's subscriber task continues to drain; VoiceController
+        // is now the producer.
+        dormantVoiceContinuation = nil
+
+        // Wire PushToTalk (VOICE-13).
+        let ptt = PushToTalk(controller: vc)
+        // PTT hotkey binding is deferred to the wizard / user preference; unbound at launch.
+        pushToTalk = ptt
+
+        // Wire MuteWakeWord (VOICE-12).
+        if let menu = menuBarController?.contextMenu {
+            muteWakeWord = MuteWakeWord(controller: vc, wakeWordDAG: wakeWordDAG, menuBarMenu: menu)
+        }
+
+        // Start the voice loop.
+        await vc.start()
+        systemLogger?.info("installVoice: VoiceController started")
     }
 
     // MARK: - Test-host detection
@@ -646,4 +779,86 @@ struct NoopBusGateway: BusGateway {
     func emitToolCallStart(toolUseId: String, name: String, argsPreview: String) async {}
     func updateArgsPreview(toolUseId: String, name: String, argsPreview: String) async {}
     func emitToolCallEnd(toolUseId: String, name: String, ok: Bool, previewOrError: String) async {}
+}
+
+// MARK: - Voice subsystem adapters (Plan 06-05)
+//
+// These thin adapters bridge the Voice package protocol seams to App-target types.
+// Phase 7 (orchestrator wiring) replaces NullOrchestratorAdapter with a real adapter.
+
+/// Bridges `VoiceBannerInterface` → `HUDBannerCoordinator`.
+///
+/// `HUDBannerCoordinator` is `@MainActor`. The bridge hops to MainActor internally
+/// so `VoiceController` (non-MainActor actor) can call `showBanner` / `dismissBanner`.
+/// `@unchecked Sendable` + `nonisolated(unsafe)` because coordinator is a `@MainActor`
+/// reference; both `showBanner` and `dismissBanner` dispatch to `@MainActor` via Task.
+final class AppDelegateBannerAdapter: VoiceBannerInterface, @unchecked Sendable {
+    nonisolated(unsafe) private weak var coordinator: HUDBannerCoordinator?
+    init(coordinator: HUDBannerCoordinator?) { self.coordinator = coordinator }
+
+    func showBanner(message: String) {
+        let coordinator = coordinator
+        Task { @MainActor in
+            coordinator?.enqueue(BannerContent(
+                id: "voice-aec-banner",
+                priority: 10,
+                title: "Voice Warning",
+                body: message,
+                action: nil
+            ))
+        }
+    }
+
+    func dismissBanner() {
+        let coordinator = coordinator
+        Task { @MainActor in
+            coordinator?.dismissCurrent()
+        }
+    }
+}
+
+/// Placeholder orchestrator adapter. Phase 7 wires the real `AgentOrchestrator`.
+actor NullOrchestratorAdapter: VoiceOrchestratorInterface {
+    nonisolated let voiceEvents: AsyncStream<VoiceOrchestratorEvent>
+    private nonisolated let eventsCont: AsyncStream<VoiceOrchestratorEvent>.Continuation
+
+    init() {
+        let (stream, cont) = AsyncStream<VoiceOrchestratorEvent>.makeStream()
+        voiceEvents = stream
+        eventsCont = cont
+    }
+
+    func submit(text: String) async {
+        // Phase 7: forward to AgentOrchestrator.submit(TurnInput.voice(text))
+    }
+
+    func cancelAndSubmit(text: String) async {
+        eventsCont.yield(.cancelled)
+        // Phase 7: forward to AgentOrchestrator.cancelAndSubmit(TurnInput.voice(text))
+    }
+}
+
+/// Placeholder TTS adapter. Phase 7 wires the real `TTSEngineActor`.
+actor NullTTSAdapter: VoiceTTSInterface {
+    var hasSynthInFlight: Bool { false }
+
+    func synthesize(_ text: String) async {
+        // Phase 7: forward to TTSEngineActor.synthesize(_:tier:voice:)
+    }
+
+    func cancelTTS() async {
+        // Phase 7: forward to TTSEngineActor.cancel()
+    }
+}
+
+/// Bridges `BusOutboundEmitter` → `OutboundBatcher` from the Bus package.
+///
+/// `OutboundBatcher.postAudio(_:)` already exists from Phase 2 Bus wiring.
+/// This adapter routes the 30 Hz RMS values to the batcher's `postAudio` method.
+/// Phase 6+Bus wiring provides the real `OutboundBatcher` instance; for now,
+/// this is a no-op until the Bus phase integration is finalized.
+struct NullBusEmitterAdapter: BusOutboundEmitter {
+    func postAudio(_ rms: Float) async {
+        // Phase 7: forward to OutboundBatcher.postAudio(rms) for RingMesh pulse
+    }
 }
