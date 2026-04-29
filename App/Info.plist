@@ -20,24 +20,24 @@
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>JarvisEntitlementsVerified</key>
+	<false/>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSUIElement</key>
 	<true/>
-	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2026. Personal use.</string>
-	<key>NSSpeechRecognitionAssetsUsageDescription</key>
-	<string>Jarvis uses on-device speech recognition to listen to your voice commands. Audio never leaves your Mac.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Jarvis listens for voice commands when the voice loop is active. Audio is processed on-device and never leaves your Mac.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Jarvis uses the camera only when vision features are active and only at your request.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Jarvis uses AppleScript automation only after you approve each request in a confirmation dialog.</string>
-	<key>JarvisEntitlementsVerified</key>
-	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>Jarvis uses your camera to detect when you are at the desk and to attach a single frame to a turn when you ask. Both features are local-only and never auto-trigger.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026. Personal use.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Jarvis listens for voice commands when the voice loop is active. Audio is processed on-device and never leaves your Mac.</string>
+	<key>NSSpeechRecognitionAssetsUsageDescription</key>
+	<string>Jarvis uses on-device speech recognition to listen to your voice commands. Audio never leaves your Mac.</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
 </dict>

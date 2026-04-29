@@ -1,9 +1,18 @@
 import Foundation
 import SQLite3
 import Darwin
+import AgentCore
 import JarvisLogging
 import Logging
 import Replay
+
+/// Test seam over `Replay.ReplayLog`. The Memory module deliberately does NOT
+/// depend on a concrete `ReplayLog` instance — `AppDelegate.installMemory`
+/// (Plan 07-06) hands a wrapper through `setReplayLog`. Tests inject a
+/// mock conforming to this protocol.
+public protocol MemoryReplaySink: Sendable {
+    func record(_ event: ReplayEvent, forTriggerTurnId triggerTurnId: Int64)
+}
 
 /// Actor-owned SQLite handle for the memory subsystem (jarvis.db).
 ///
@@ -66,6 +75,161 @@ public actor MemoryStore {
     /// Direct connection access for downstream Memory plans (07-02 supersede transaction,
     /// 07-03 hybrid search). Internal — leaks ConnHandle access only within Memory module.
     internal var connection: SQLiteConnection { conn }
+
+    // MARK: - Replay log injection (set by AppDelegate.installMemory in 07-06)
+
+    private var replayLog: (any MemoryReplaySink)?
+
+    public func setReplayLog(_ sink: any MemoryReplaySink) {
+        self.replayLog = sink
+    }
+
+    // MARK: - applyOp (MEM-05 + MEM-06 single emission site)
+
+    /// Apply a single mem0 operation. The ONLY emission site for
+    /// `ReplayEvent.memoryMutation` (MEM-06).
+    @discardableResult
+    public func applyOp(_ op: MemoryOp, sourceTurnId: Int64) throws -> Fact? {
+        switch op {
+        case .noop:
+            logger.debug("memory NOOP for turnId=\(sourceTurnId)")
+            return nil
+        case .add(let subject, let predicate, let object, _):
+            return try insertNewFact(
+                subject: subject,
+                predicate: predicate,
+                object: object,
+                supersedesFactId: nil,
+                sourceTurnId: sourceTurnId
+            )
+        case .update(let supersedes, let subject, let predicate, let object, _):
+            return try insertNewFact(
+                subject: subject,
+                predicate: predicate,
+                object: object,
+                supersedesFactId: supersedes,
+                sourceTurnId: sourceTurnId
+            )
+        }
+    }
+
+    /// RESEARCH §6 supersede transaction. NEVER calls DELETE.
+    private func insertNewFact(
+        subject: String,
+        predicate: String,
+        object: String,
+        supersedesFactId: Int64?,
+        sourceTurnId: Int64
+    ) throws -> Fact {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        do {
+            try conn.beginTransaction()
+
+            try conn.exec("""
+                INSERT INTO facts(
+                    subject, predicate, object, source_turn_id,
+                    valid_from, valid_to, superseded_by, forgotten_at, created_at
+                ) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?);
+                """,
+                bindings: [
+                    .text(subject),
+                    .text(predicate),
+                    .text(object),
+                    .int(sourceTurnId),
+                    .int(now),
+                    .int(now),
+                ]
+            )
+            let newId = try conn.query("SELECT last_insert_rowid();", bindings: []) { stmt in
+                stmt.columnInt(at: 0)
+            }.first ?? 0
+            guard newId > 0 else {
+                throw MemoryError.applyOpFailed(underlying: NSError(
+                    domain: "MemoryStore", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "last_insert_rowid returned 0"]
+                ))
+            }
+
+            if let priorId = supersedesFactId {
+                try conn.exec("""
+                    UPDATE facts
+                       SET valid_to = ?, superseded_by = ?
+                     WHERE id = ? AND valid_to IS NULL;
+                    """,
+                    bindings: [
+                        .int(now),
+                        .int(newId),
+                        .int(priorId),
+                    ]
+                )
+                let changes = try conn.query("SELECT changes();", bindings: []) { stmt in
+                    stmt.columnInt(at: 0)
+                }.first ?? 0
+                guard changes == 1 else {
+                    throw MemoryError.applyOpFailed(underlying: NSError(
+                        domain: "MemoryStore", code: 2,
+                        userInfo: [NSLocalizedDescriptionKey: "UPDATE supersede affected \(changes) rows (expected 1) for priorId=\(priorId)"]
+                    ))
+                }
+            }
+
+            try conn.commit()
+
+            let fact = Fact(
+                id: newId,
+                subject: subject,
+                predicate: predicate,
+                object: object,
+                sourceTurnId: sourceTurnId,
+                validFrom: now,
+                validTo: nil,
+                supersededBy: nil,
+                forgottenAt: nil,
+                createdAt: now
+            )
+
+            recordMemoryMutation(
+                op: supersedesFactId == nil ? "ADD" : "UPDATE",
+                fact: fact,
+                supersedesFactId: supersedesFactId,
+                triggerTurnId: sourceTurnId
+            )
+
+            return fact
+        } catch let mem as MemoryError {
+            try? conn.rollback()
+            throw mem
+        } catch {
+            try? conn.rollback()
+            throw MemoryError.applyOpFailed(underlying: error)
+        }
+    }
+
+    private func recordMemoryMutation(
+        op: String,
+        fact: Fact,
+        supersedesFactId: Int64?,
+        triggerTurnId: Int64
+    ) {
+        guard let sink = replayLog else { return }
+        var payload: [String: Any] = [
+            "op": op,
+            "subject": fact.subject,
+            "predicate": fact.predicate,
+            "object": fact.object,
+            "factId": fact.id,
+            "triggerTurnId": triggerTurnId,
+            "triggerSource": "memoryExtraction",
+            "timestamp": fact.validFrom,
+        ]
+        if let sup = supersedesFactId {
+            payload["supersedesFactId"] = sup
+        } else {
+            payload["supersedesFactId"] = NSNull()
+        }
+        let bytes = (try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])) ?? Data()
+        sink.record(.memoryMutation(bytes), forTriggerTurnId: triggerTurnId)
+    }
 
     // MARK: - vec0 extension load
 
