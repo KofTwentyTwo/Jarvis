@@ -43,6 +43,16 @@ public enum ReplayEvent: Sendable {
     case turnEnd
     case hudEvent(Data)
     case error(Data)
+    /// MEM-08 / D-05 surface: emitted by `MemoryStore.applyOp` (Plan 07-02).
+    /// Payload is JSON-encoded with shape:
+    /// `{"op":"ADD"|"UPDATE","subject","predicate","object","factId",
+    ///   "supersedesFactId","triggerTurnId","triggerSource","timestamp"}`.
+    /// NOOPs are NOT recorded (debug-log only per RESEARCH §13).
+    ///
+    /// Single-emission-site invariant: `MemoryStore.applyOp` is the only
+    /// production code that records this event. Enforced by
+    /// `SingleEmissionSiteGrepTests` in the Memory test target.
+    case memoryMutation(Data)
 }
 
 extension ReplayEvent {
@@ -92,6 +102,8 @@ extension ReplayEvent {
             return (ReplayEventKind.hudEvent.rawValue, data)
         case .error(let data):
             return (ReplayEventKind.error.rawValue, data)
+        case .memoryMutation(let data):
+            return (ReplayEventKind.memoryMutation.rawValue, data)
         }
     }
 }

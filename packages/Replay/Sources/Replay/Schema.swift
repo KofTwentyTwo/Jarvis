@@ -87,4 +87,7 @@ public enum ReplayEventKind: String, Sendable {
     case turnEnd = "turn_end"
     case hudEvent = "hud_event"
     case error = "error"
+    /// Added in Plan 07-02 — single-emission-site memory mutation event
+    /// recorded only by `MemoryStore.applyOp`.
+    case memoryMutation = "memory_mutation"
 }

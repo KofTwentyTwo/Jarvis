@@ -18,4 +18,14 @@ public enum MemoryError: Error, Sendable {
     case applyOpFailed(underlying: any Error)
     /// Session has been finished/cancelled.
     case cancelled
+    /// EmbeddingClient was constructed with a non-loopback baseURL — refused
+    /// at init time. Network-sandbox invariant (CONTEXT.md MEM-04 enforcement).
+    case embeddingNonLoopbackHost(String)
+    /// Extractor parsed a tool call but the JSON did not match the
+    /// apply_memory_ops schema (missing required fields, wrong types).
+    case extractorInvalidArgs(String)
+    /// Extractor stream completed without emitting a single toolUseRequested
+    /// event — model produced free-form text instead of a structured call.
+    /// Treated as NOOP by callers.
+    case extractorMissingTool
 }
