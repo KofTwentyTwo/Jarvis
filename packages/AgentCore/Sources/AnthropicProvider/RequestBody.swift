@@ -23,6 +23,33 @@ enum RequestBody {
         maxOutputTokens: Int,
         cacheHints: CacheHints?
     ) throws -> Data {
+        try encodeMultimodal(
+            messages: messages,
+            images: [],
+            tools: tools,
+            toolChoice: toolChoice,
+            model: model,
+            maxOutputTokens: maxOutputTokens,
+            cacheHints: cacheHints
+        )
+    }
+
+    /// Plan 07-05 / D-18: encode a multimodal request body for the Anthropic
+    /// Vision API. When `images` is non-empty, the trailing user message's
+    /// content array is augmented with `image_block` entries (text first,
+    /// images after — Anthropic accepts either order; we test the chosen one).
+    ///
+    /// SOLE PRODUCER of the Anthropic image_block JSON shape:
+    ///   `{type:image, source:{type:base64, media_type:..., data:...}}`
+    static func encodeMultimodal(
+        messages: [LLMMessage],
+        images: [ImageBlock],
+        tools: [ToolSchema],
+        toolChoice: ToolChoice,
+        model: ModelID,
+        maxOutputTokens: Int,
+        cacheHints: CacheHints?
+    ) throws -> Data {
         // Split system message off the front if present.
         var systemMessages: [LLMMessage] = []
         var conversationMessages: [LLMMessage] = []
@@ -34,13 +61,31 @@ enum RequestBody {
             }
         }
 
+        var encodedConv = conversationMessages.map(encodeConversationMessage)
+        // Inject image content blocks into the LAST user message in the
+        // conversation. If there is no user message, append a fresh one
+        // carrying only the images (defensive — should not happen because
+        // FrameAttachController always pairs a frame with user text).
+        if !images.isEmpty {
+            let imageBlocks = images.map(encodeImageContentBlock)
+            if let lastIdx = encodedConv.lastIndex(where: { $0.role == "user" }) {
+                let existing = encodedConv[lastIdx]
+                encodedConv[lastIdx] = EncodedMessage(
+                    role: existing.role,
+                    content: existing.content + imageBlocks
+                )
+            } else {
+                encodedConv.append(EncodedMessage(role: "user", content: imageBlocks))
+            }
+        }
+
         let body = AnthropicRequestBody(
             model: model.rawValue,
             maxTokens: maxOutputTokens,
             system: systemMessages.isEmpty
                 ? nil
                 : encodeSystem(systemMessages, cacheHints: cacheHints),
-            messages: conversationMessages.map(encodeConversationMessage),
+            messages: encodedConv,
             tools: tools.isEmpty ? nil : try tools.map(encodeTool),
             toolChoice: encodeToolChoice(toolChoice)
         )
@@ -48,6 +93,27 @@ enum RequestBody {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return try encoder.encode(body)
+    }
+
+    // MARK: - image_block (Anthropic Vision API)
+    //
+    // Reference: https://docs.anthropic.com/en/docs/build-with-claude/vision
+    //   {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"<b64>"}}
+    static func encodeImageContentBlock(_ image: ImageBlock) -> EncodedContentBlock {
+        EncodedContentBlock(
+            type: "image",
+            text: nil,
+            id: nil,
+            name: nil,
+            input: nil,
+            toolUseId: nil,
+            content: nil,
+            source: EncodedImageSource(
+                type: "base64",
+                mediaType: image.mediaType,
+                data: image.data.base64EncodedString()
+            )
+        )
     }
 
     // MARK: - tool_choice
@@ -119,7 +185,7 @@ enum RequestBody {
             return EncodedContentBlock(
                 type: "text", text: text,
                 id: nil, name: nil, input: nil,
-                toolUseId: nil, content: nil
+                toolUseId: nil, content: nil, source: nil
             )
         case .toolUse(let id, let name, let argsJSON):
             // Decode argsJSON bytes to a JSON object and re-emit inline.
@@ -128,13 +194,13 @@ enum RequestBody {
             return EncodedContentBlock(
                 type: "tool_use", text: nil,
                 id: id, name: name, input: inputObject,
-                toolUseId: nil, content: nil
+                toolUseId: nil, content: nil, source: nil
             )
         case .toolResult(let toolUseId, let content):
             return EncodedContentBlock(
                 type: "tool_result", text: nil,
                 id: nil, name: nil, input: nil,
-                toolUseId: toolUseId, content: content
+                toolUseId: toolUseId, content: content, source: nil
             )
         }
     }
@@ -232,11 +298,14 @@ struct EncodedContentBlock: Encodable {
     let input: JSONValue?
     let toolUseId: String?
     let content: String?
+    /// Plan 07-05 / D-18: present only when `type == "image"` (Anthropic
+    /// Vision API image_block).
+    let source: EncodedImageSource?
 
     enum CodingKeys: String, CodingKey {
         case type, text, id, name, input
         case toolUseId = "tool_use_id"
-        case content
+        case content, source
     }
 
     func encode(to encoder: Encoder) throws {
@@ -248,6 +317,21 @@ struct EncodedContentBlock: Encodable {
         if let input { try container.encode(input, forKey: .input) }
         if let toolUseId { try container.encode(toolUseId, forKey: .toolUseId) }
         if let content { try container.encode(content, forKey: .content) }
+        if let source { try container.encode(source, forKey: .source) }
+    }
+}
+
+/// Plan 07-05 / D-18: Anthropic Vision API image_block source field.
+/// Reference: https://docs.anthropic.com/en/docs/build-with-claude/vision
+struct EncodedImageSource: Encodable, Equatable {
+    let type: String       // always "base64" for now; URL-source is a future option
+    let mediaType: String  // e.g. "image/jpeg"
+    let data: String       // base64-encoded image bytes
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case mediaType = "media_type"
+        case data
     }
 }
 

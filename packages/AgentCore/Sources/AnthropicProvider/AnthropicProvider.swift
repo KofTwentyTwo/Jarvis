@@ -54,6 +54,36 @@ public actor AnthropicProvider: LLMProvider {
             let task = Task {
                 await self.run(
                     messages: messages,
+                    images: [],
+                    tools: tools,
+                    toolChoice: toolChoice,
+                    model: model,
+                    maxOutputTokens: maxOutputTokens,
+                    cacheHints: cacheHints,
+                    continuation: continuation
+                )
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    /// Plan 07-05 / D-18 — Anthropic Vision API multimodal stream override.
+    public nonisolated func stream(
+        messages: [LLMMessage],
+        images: [ImageBlock],
+        tools: [ToolSchema],
+        toolChoice: ToolChoice,
+        model: ModelID,
+        maxOutputTokens: Int,
+        cacheHints: CacheHints?
+    ) -> AsyncThrowingStream<LLMEvent, Error> {
+        AsyncThrowingStream<LLMEvent, Error> { continuation in
+            let task = Task {
+                await self.run(
+                    messages: messages,
+                    images: images,
                     tools: tools,
                     toolChoice: toolChoice,
                     model: model,
@@ -88,6 +118,7 @@ public actor AnthropicProvider: LLMProvider {
 
     private func run(
         messages: [LLMMessage],
+        images: [ImageBlock],
         tools: [ToolSchema],
         toolChoice: ToolChoice,
         model: ModelID,
@@ -102,8 +133,9 @@ public actor AnthropicProvider: LLMProvider {
         do {
             let body: Data
             do {
-                body = try RequestBody.encode(
+                body = try RequestBody.encodeMultimodal(
                     messages: messages,
+                    images: images,
                     tools: tools,
                     toolChoice: toolChoice,
                     model: model,
