@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-04-27T21:57:03.723Z"
+last_updated: "2026-04-28T00:00:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 6
@@ -127,6 +127,10 @@ Phase 8 (Hardening) inherits:
 ---
 
 ## Session Continuity
+
+**Resumed 2026-04-28** from `.planning/phases/07-memory-vision/.continue-here.md` (last_commit `6d79d9b`, snapshot `530130d`). User chose Path A — proceed to `/gsd-plan-phase 7`. Tree clean on `develop@530130d` (pushed). Stale `HANDOFF.json` (15:33Z, pre-supersession) flagged but not deleted; `.continue-here.md` is authoritative resume target. Body below is Phase-1-era — refresh deferred.
+
+---
 
 **Next action when work resumes (including cross-machine pickup):**
 

@@ -1,116 +1,56 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-27T15:33:22.487Z",
+  "timestamp": "2026-04-29T13:24:08.501Z",
   "context": "phase",
-  "phase": "06",
-  "phase_name": "voice",
-  "phase_dir": ".planning/phases/06-voice",
+  "phase": "07",
+  "phase_name": "memory-vision",
+  "phase_dir": ".planning/phases/07-memory-vision",
   "plan": null,
   "task": null,
   "total_tasks": null,
-  "status": "phase_6_planned_ready_for_execute_native_launch_uat_visually_verified",
-  "completed_phases": [
-    {"phase": "01", "name": "foundations", "status": "verified_passed", "verification": "passed_with_human_uat_pending", "human_items": 4, "plans_done": "5/5"},
-    {"phase": "02", "name": "bus", "status": "passed_clean", "verification": "passed", "human_items": 0, "plans_done": "4/4"},
-    {"phase": "03", "name": "hud", "status": "verified_human_needed_uat_only", "verification": "passed_with_manual_uat_pending", "human_items": 1, "plans_done": "5/5"},
-    {"phase": "04", "name": "agent-core", "status": "verified_passed", "verification": "passed", "human_items": 0, "plans_done": "5/5", "test_count": 281},
-    {"phase": "05", "name": "mcp", "status": "verified_passed", "verification": "passed_with_human_uat_pending", "human_items": 1, "plans_done": "5/5", "test_count": "360+"}
+  "status": "paused",
+  "workflow": "gsd-plan-phase",
+  "workflow_step": "8 — gsd-planner spawn (interrupted by stream idle timeout)",
+  "completed_tasks": [
+    {"id": "step-1", "name": "Init plan-phase context (gsd-sdk query init.plan-phase 7)", "status": "done"},
+    {"id": "step-4", "name": "Load 07-CONTEXT.md (21 KB, D-01..D-18 locked)", "status": "done"},
+    {"id": "step-5", "name": "Use existing 07-RESEARCH.md (290 lines, exists from prior session)", "status": "done"},
+    {"id": "step-5.5", "name": "Nyquist VALIDATION.md gate — warn-and-continue (no Validation Architecture in RESEARCH; matches Phase 6 precedent)", "status": "done"},
+    {"id": "step-5.6", "name": "UI-SPEC gate cleared via --skip-ui (false positive: regex matched 'ui' inside 'reqUIrements')", "status": "done"},
+    {"id": "step-5.7", "name": "Schema-push detection — no ORM patterns matched (SQLite is direct via sqlite3_load_extension)", "status": "done"},
+    {"id": "step-7.8", "name": "gsd-pattern-mapper produced 07-PATTERNS.md (63 KB / 1,423 lines / 23 new + 7 modified surfaces / 5 highest-risk scaffolds flagged)", "status": "done", "artifact": ".planning/phases/07-memory-vision/07-PATTERNS.md"},
+    {"id": "step-8a", "name": "gsd-planner spawned with full prompt; wrote 07-01-PLAN.md (43 KB) before stream idle timeout", "status": "partial", "artifact": ".planning/phases/07-memory-vision/07-01-PLAN.md", "agent_id": "a904f050f84a65617"}
   ],
-  "current_phase_progress": {
-    "phase": "06",
-    "name": "voice",
-    "plans_authored": true,
-    "wave_1_complete": false,
-    "wave_2_complete": false,
-    "wave_3_complete": false,
-    "wave_4_complete": false,
-    "all_plans_complete": false,
-    "code_review_passed": false,
-    "phase_verified": false,
-    "plans_completed": [],
-    "plans_remaining": ["06-01", "06-02", "06-03", "06-04", "06-05"],
-    "wave_layout": {
-      "wave_1": ["06-01 AudioGraphController + VPIO ordering + post-AEC format probe + canonical 6-step teardown"],
-      "wave_2": ["06-02 WakeWord (openWakeWord ONNX hey_jarvis)", "06-03 VAD (Silero v6.2.1) + STT (SpeechAnalyzer primary, WhisperKit fallback)"],
-      "wave_3": ["06-04 TTS (AVSpeechSynthesizer tier 1 + Orpheus mlx-audio-swift tier 2 + TTSEngineActor serial executor + atomic interrupt)"],
-      "wave_4": ["06-05 VoiceController + AppDelegate wiring + AEC-off banner + PTT + mute-wake-word + barge-in via cancelAndSubmit (autonomous: false — HUMAN-UAT for scaffold-time empirical probes)"]
-    },
-    "plan_check_findings": "PASS_WITH_ADVISORIES — no BLOCKERs. 2 advisories: (1) 06-05 documents two competing resolutions for cancelAndSubmit(.voice('')) sentinel — executor decides at impl time; (2) 06-05 Task 3 verify uses xcodebuild build (App-shell only, not tests).",
-    "human_uat_pending_at_execute": "06-05 has 3 scaffold-time empirical probes that need real Apple Silicon hardware: (a) Orpheus TTFA target 150-250ms; if >250ms flip features.tts.tier2='ttskit'; (b) Silero v6.2.1 contract parity vs v5 (boundaries within ±32ms); (c) speech-recognition-assets entitlement load-bearing probe (PASS/INCONCLUSIVE/REFUTED, not hard-fail)."
-  },
-  "native_launch_uat_status": {
-    "summary": "VISUALLY VERIFIED 2026-04-26 — HUD renders fallback particle ring on transparent panel after click of menu-bar arc-reactor icon",
-    "evidence": "User confirmed via screenshot: gray donut ring rendered in 720x720 transparent NSPanel; desktop wallpaper visible through transparency",
-    "remaining_polish": [
-      "WebGL-driven animated particle ring (Phase 3 polish — state-machine .booting->.idle transition needs to trigger R3F animations)",
-      "Dev Overlay menu item is currently a Phase 4 stub banner — wire to real overlay in P4 retrofit"
-    ]
-  },
-  "downstream_planned": [],
-  "downstream_research_only": [
-    {"phase": "07", "name": "memory-vision", "research_lines": 290},
-    {"phase": "08", "name": "hardening", "research_lines": 827}
+  "remaining_tasks": [
+    {"id": "step-8b", "name": "Recover or rerun planner for plans 07-02..07-06 (5 plans missing). Suggested decomposition from original prompt: 07-02 Embedder+Extractor+Background orchestrator (MEM-03/04/05/06); 07-03 Memory retrieval+MCP tools+DevOverlay+chat panel (MEM-07/08, TEXT-03); 07-04 Vision capture+Presence+SignalBus+menu-bar toggle (VISION-01/02/03); 07-05 FrameAttach+multimodal LLMProvider+T1/T2/T3 routing (VISION-04); 07-06 AppDelegate wiring + regression-test corpus", "status": "not_started"},
+    {"id": "step-9", "name": "Handle planner return (PLANNING COMPLETE / SOURCE AUDIT / SPLIT)", "status": "not_started"},
+    {"id": "step-10", "name": "Spawn gsd-plan-checker against full plan set", "status": "not_started"},
+    {"id": "step-11-12", "name": "Revision loop (≤3 iterations) if checker reports issues", "status": "not_started"},
+    {"id": "step-13", "name": "Requirements coverage gate (13 REQ-IDs must each appear in ≥1 plan)", "status": "not_started"},
+    {"id": "step-13a", "name": "Decision coverage gate (D-01..D-18 from CONTEXT.md must each be referenced)", "status": "not_started"},
+    {"id": "step-13b-d", "name": "Record planning completion in STATE.md, annotate ROADMAP wave deps, commit plans+STATE+ROADMAP", "status": "not_started"},
+    {"id": "step-13e", "name": "Post-planning gap analysis (REQ-ID + D-ID coverage table)", "status": "not_started"}
   ],
   "blockers": [
     {
-      "description": "Apple Developer Portal does not yet expose com.apple.developer.speech-recognition-assets capability",
-      "type": "external",
-      "from_phase": "01"
-    },
-    {
-      "description": "Xcode 26 xctest harness Team ID bug on ad-hoc signed Debug builds",
-      "type": "external",
-      "workaround": "SPM tests via swift test --package-path work fine. The xctest harness is the broken thing — DO NOT re-attempt fixing.",
-      "from_phase": "01",
-      "diagnosis_doc": ".planning/debug/xctest-launch-runningboard-error-5.md"
-    },
-    {
-      "description": "ad-hoc signed Debug bundle's CDHash changes on every rebuild, invalidating user's TCC grants — Input Monitoring banner reappears every fresh build",
-      "type": "external_quirk",
-      "from_phase": "06_native_launch",
-      "workaround": "User must re-grant Input Monitoring in System Settings after each rebuild. Will be solved by Developer ID Application signing in Phase 8 hardening.",
-      "blocking": false
+      "description": "gsd-planner Task() hit a stream idle timeout (~19 min wall-clock; tool_uses=45) after writing 1 of ~6 plans to disk. Cause: large prompt (~3,500 lines of context across CONTEXT/RESEARCH/PATTERNS) + sonnet model + ambitious 6-plan scope in a single agent invocation.",
+      "type": "technical",
+      "workaround": "Switch to chunked planner mode (--chunked flag). Outline phase produces 07-PLAN-OUTLINE.md (~2 min), then per-plan Tasks (~3-5 min each, committed individually for crash resilience). Resume detection skips 07-01-PLAN.md if the YAML frontmatter is intact — which it is."
     }
   ],
-  "human_actions_pending": [
-    {"action": "Phase 3 manual HUD UAT — VISUALLY VERIFIED 2026-04-26 (gray fallback ring renders on transparent panel). WebGL animation polish remains.", "context": "Phase 3 verification flagged human_needed for this UAT only.", "blocking": false},
-    {"action": "Cold-launch Release archive on pristine Apple Silicon Mac to validate SC-1", "context": "Phase 01 UAT item 3", "blocking": false},
-    {"action": "When Xcode 26.5 ships, retry JarvisAppTests xctest launch", "context": "Phase 01 UAT item 4", "blocking": false},
-    {"action": "Enable SpeechAnalyzer Asset Download capability when Apple exposes it", "context": "Phase 01 UAT item 2", "blocking": false},
-    {"action": "Register run_applescript helper in Phase 5 App ID", "context": "Future Phase 5 blocker", "blocking": false}
-  ],
+  "human_actions_pending": [],
   "decisions": [
-    {"decision": "FileRotatingWriter opens via Darwin.open(O_WRONLY|O_APPEND|O_CREAT|O_CLOEXEC, 0o644) instead of FileHandle(forWritingTo:)", "rationale": "FileHandle(forWritingTo:) doesn't set O_CLOEXEC; long-lived log FD then leaks across fork+exec, which made ChildSpawnGate fatal-error in Debug on first MCP helper spawn. Bonus: O_APPEND removes the seekToEnd race window in the rotator.", "phase": "06_native_launch", "commit": "d78f632"},
-    {"decision": "ChildSpawnGate.prepare() is now path-aware: fatal in Debug ONLY for FDs whose F_GETPATH is under our developer-owned prefixes (Bundle.main.bundlePath, ~/Library/Logs/Jarvis, ~/Library/Application Support/Jarvis); retrofit + log everything else", "rationale": "WebKit's GPU process opens system Metal libraries (e.g. AppleMetalOpenGLRenderer.bundle/default.metallib) without O_CLOEXEC, and Cmd-R from Xcode inherits lldb debugger pipes. Neither is actionable from our codebase. The pre-fix gate fatal-errored on these and prevented any MCP helper spawn from succeeding.", "phase": "06_native_launch", "commit": "ccf1d36"},
-    {"decision": "Vite HUD bundle uses IIFE format with stripModuleAttrs plugin replacing type=module + crossorigin with defer", "rationale": "Vite default ES-module output triggers CORS-mode fetching that fails on file:// null-origin. Observed: index.html loaded but JS bundle failed with type=2/code=0 resource error. IIFE drops the module-fetch contract, defer restores parse-then-execute order so React's getElementById('root') finds the div. Trade-off: IIFE forbids code splitting + chunked dynamic imports — for a single-page R3F HUD this is fine.", "phase": "06_native_launch", "commits": "06bb159+c951f12"},
-    {"decision": "MenuBarIconController uses statusItem.popUpMenu(contextMenu) instead of toggle-menu-then-performClick pattern", "rationale": "The previous pattern temporarily assigned statusItem.menu, called sender.performClick(nil), then cleared. NSStatusItem could latch the menu reference on a separate runloop pass, after which both left- and right-clicks would surface the menu and the HUD-summon left-click action never fired. popUpMenu shows the menu for the current click only — no persistent state. Deprecated since 10.14 but functional through Tahoe.", "phase": "06_native_launch", "commit": "d7a192a"},
-    {"decision": "JarvisHUDPanel WKWebView.isInspectable=true behind #available(macOS 13.3, *) + clear container + webView layer.backgroundColor", "rationale": "Layer-clear is belt-and-braces against future macOS ignoring _drawsBackground SPI. isInspectable enables right-click Inspect Element on Debug builds, which was load-bearing for diagnosing the white-HUD issue (proved page WAS reaching renderer, body-color showed when forced).", "phase": "06_native_launch", "commit": "1c250fd"}
+    {"decision": "Skip UI-SPEC for Phase 7 via --skip-ui flag", "rationale": "Regex hit on 'ui' inside the word 'reQUIrements' was a false positive. UI surfaces in P7 are extensions to existing P3 (HUD ring), P4 (chat panel), P6 (menu-bar toggle pattern), with two genuinely new small affordances (camera-icon button + confirmation thumbnail) explicitly granted to Claude's Discretion in CONTEXT.md. Matches Phase 6 precedent.", "phase": "07"},
+    {"decision": "Skip AI-SPEC for Phase 7", "rationale": "Phases 4 (Agent Core) and 6 (Voice) both planned without AI-SPEC. Continuing the convention. Phase 7's AI work (qwen2.5-coder extractor, nomic-embed-text embeddings, Gemma 4 / Qwen 3.5 / Opus vision routing) is fully specified in CONTEXT.md D-01..D-18.", "phase": "07"},
+    {"decision": "Continue without VALIDATION.md (warn-and-continue)", "rationale": "07-RESEARCH.md does not have a `## Validation Architecture` section header (only Phase 1 had one). Per workflow §5.5 the absence triggers warn-and-continue. Phase 6 followed the same path. Plans must embed test commands directly to satisfy Dimension 8.", "phase": "07"},
+    {"decision": "Use --chunked on resume instead of monolithic planner", "rationale": "The single Task() invocation timed out at tool_uses=45 with only 1/6 plans written. Chunked mode bounds each subagent to 3-5 min and commits per-plan, surviving any future timeouts. Plan 07-01 will be skipped on resume (frontmatter intact = treated as completed work).", "phase": "07"}
   ],
-  "uncommitted_files": [],
-  "tree_tip": "fde2aad",
-  "tests_passing": {
-    "spm_packages": {
-      "Keychain": 6,
-      "Config": 16,
-      "Logging": 17,
-      "Shell": "20+1skipped",
-      "Bus": 47,
-      "AgentCore": 134,
-      "Replay": 27,
-      "DevOverlay": 14,
-      "JarvisMCP": 79,
-      "mcp-helpers": "6+4 (mcp-clipboard PasteboardReader 6 + mcp-applescript Runner 4); mcp-time runs at build only",
-      "total": "360+"
-    },
-    "app_xctest": "compile-clean; runtime blocked by upstream Xcode 26 harness",
-    "webview_vitest": {"bus": 33, "hud": 80, "total": 113},
-    "self_tests": {"entitlements_fault_injection": "3/3", "bus_protocol_version": "PASS", "no_evaluateJavaScript": "PASS", "bus_harness_parity": "PASS", "hudstate_single_writer": "PASS"},
-    "build_smoke": {
-      "xcodebuild_build_debug": "BUILD SUCCEEDED (last verified at fde2aad)",
-      "scripts_smoke_test_hud_sh": "PASS",
-      "native_launch_visually_verified": "fallback particle ring rendered on transparent HUD panel 2026-04-26"
-    }
-  },
-  "next_action": "Run /gsd-execute-phase 6 --wave 1 (executes 06-01 AudioGraphController foundation; sequential single-plan wave). Then W2 can fan out 06-02 + 06-03 in parallel (disjoint scope). W3 (06-04 TTS), then W4 (06-05 wiring + HUMAN-UAT). After execute: /gsd-code-review 6 -> /gsd-code-review-fix 6 if findings -> /gsd-verify-phase 6 -> close. Phases 7 (Memory+Vision) and 8 (Hardening) follow.",
-  "context_notes": "This session was Track A from the previous pause snapshot — finishing the native-launch HUD-visible path. Started at f92ade4 'verify-entitlements marker write next'. Worked through a stack of independent silent-failure bugs that compounded to make the HUD render as pure white (which was actually a correctly-transparent panel showing the user's white desktop wallpaper through it because R3F never mounted). Each bug masked the next; the final unlock was `defer` on the stripped-module script so React's getElementById('root') ran after body parse. After 9 commits and visual verification of the HUD rendering, pushed develop to origin. Phase 6 Voice is fully planned, plan-checked PASS_WITH_ADVISORIES, and ready for autonomous wave-driven execution per the standing chaining approval (memory/feedback_autonomous_chaining.md). Tree clean on develop@fde2aad. No background processes; user killed Jarvis at end of session."
+  "uncommitted_files": [
+    ".claude/settings.local.json",
+    ".planning/STATE.md",
+    ".planning/phases/07-memory-vision/07-01-PLAN.md",
+    ".planning/phases/07-memory-vision/07-PATTERNS.md"
+  ],
+  "next_action": "Resume with `/gsd-plan-phase 7 --skip-ui --chunked`. The chunked planner spawns an outline Task first (~2 min) then per-plan Tasks (~3-5 min each). Resume detection will skip 07-01-PLAN.md (already on disk with valid frontmatter) and pick up from 07-02 onward.",
+  "context_notes": "The planner produced a high-quality 07-01-PLAN.md (4 tasks, full frontmatter incl. must_haves with truths/artifacts/key_links, verification, success_criteria). The pattern-mapper output (07-PATTERNS.md, 63 KB) is dense and provides strong analog citations that the remaining plans will benefit from. The stream timeout is a duration issue, not a quality issue — chunked mode is the correct response. Do NOT re-run the pattern-mapper on resume — its artifact is current and committed-pending."
 }
