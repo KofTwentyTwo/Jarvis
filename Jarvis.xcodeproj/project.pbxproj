@@ -58,6 +58,7 @@
 		AC359FF68F49110FF9B6E6E5 /* WizardStageAPIKeyViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */; };
 		B2072C6FF5589D00A8B19613 /* AgentOrchestrator in Frameworks */ = {isa = PBXBuildFile; productRef = 955423140BB4EC27191C4FA7 /* AgentOrchestrator */; };
 		B64A0CAA46B3C146B54F9F85 /* HUDBannerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */; };
+		B72852E1EF52C0E6F8170852 /* Memory in Frameworks */ = {isa = PBXBuildFile; productRef = 59F56604A76635EC59D2671B /* Memory */; };
 		BBD8BBC82E0D3C57E0DB4ED0 /* HudStateEnumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */; };
 		BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */; };
 		C336B40332A148A5A1F2DDC8 /* WebviewBundleLoadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16929275D5323F505DF12E9 /* WebviewBundleLoadTests.swift */; };
@@ -154,6 +155,7 @@
 		6784683F2262D8AFA439668D /* JarvisAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageHotkeyView.swift; sourceTree = "<group>"; };
 		756AA19AD01796D665A09094 /* MCP */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MCP; path = packages/MCP; sourceTree = SOURCE_ROOT; };
+		76EB1FE552FF4A0447691898 /* Memory */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Memory; path = packages/Memory; sourceTree = SOURCE_ROOT; };
 		77C5BF4E4B659B0A3325E647 /* AnthropicKeyValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicKeyValidator.swift; sourceTree = "<group>"; };
 		8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinatorTests.swift; sourceTree = "<group>"; };
 		8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardTCCStageTests.swift; sourceTree = "<group>"; };
@@ -244,6 +246,7 @@
 				92BBF98C9A7B9B7835FC0949 /* Replay in Frameworks */,
 				F340ACA6D0AD06E8ACF65010 /* Logging in Frameworks */,
 				3649FFF2495A8C4DDDB3B65B /* Voice in Frameworks */,
+				B72852E1EF52C0E6F8170852 /* Memory in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -456,6 +459,7 @@
 				00C01D284ECCFC986C7F2E16 /* Keychain */,
 				5DE981947E40847F9BAF5641 /* Logging */,
 				756AA19AD01796D665A09094 /* MCP */,
+				76EB1FE552FF4A0447691898 /* Memory */,
 				960E9FC636D6FF3DD68E5FE9 /* Replay */,
 				3EEB80F86BC4DE366810AB99 /* Shell */,
 				396A767CA8ECD9BE6168EBF8 /* Voice */,
@@ -558,6 +562,7 @@
 				8E74C5DEAD36FEDB6342A54D /* Replay */,
 				D5E0D943EBC768ADB9C87F13 /* Logging */,
 				254100776001B345FD91877C /* Voice */,
+				59F56604A76635EC59D2671B /* Memory */,
 			);
 			productName = Jarvis;
 			productReference = F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */;
@@ -698,6 +703,7 @@
 				22F43C6F6F358E8483EC4DE0 /* XCLocalSwiftPackageReference "packages/Keychain" */,
 				984FAE3C0A7E82CA2D8C6CB0 /* XCLocalSwiftPackageReference "packages/Logging" */,
 				6F782D2F097AA8CC6D055E24 /* XCLocalSwiftPackageReference "packages/MCP" */,
+				D11689767F7244640A017EC8 /* XCLocalSwiftPackageReference "packages/Memory" */,
 				A5DF717817FCDA729574DE60 /* XCLocalSwiftPackageReference "packages/Replay" */,
 				041A479A331602AEDB682446 /* XCLocalSwiftPackageReference "packages/Shell" */,
 				6C5461AE3754FA04CB6DE44C /* XCLocalSwiftPackageReference "packages/Voice" */,
@@ -1689,6 +1695,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = packages/Bus;
 		};
+		D11689767F7244640A017EC8 /* XCLocalSwiftPackageReference "packages/Memory" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = packages/Memory;
+		};
 		EFF4B62688DB8BC3E515BD34 /* XCLocalSwiftPackageReference "packages/Config" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = packages/Config;
@@ -1743,6 +1753,10 @@
 		4CB4DC60ABEBF2DC7A7FFE4C /* AgentCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AgentCore;
+		};
+		59F56604A76635EC59D2671B /* Memory */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Memory;
 		};
 		61127935D1430B78A6FEACB0 /* Config */ = {
 			isa = XCSwiftPackageProductDependency;

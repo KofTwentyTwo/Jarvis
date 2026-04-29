@@ -52,6 +52,12 @@ packages:
   # MuteWakeWord, and AudioLevelEmitter surfaces.
   Voice:
     path: packages/Voice
+  # Plan 07-01: App-level memory wiring (future: AppDelegate.installMemory in
+  # Plan 07-06) consumes the Memory package's MemoryStore actor + schema.
+  # Plan 07-01 only stands up the package; the App→Memory edge is exercised
+  # via Bus events / DevOverlay rows in Plan 07-03 + 07-06.
+  Memory:
+    path: packages/Memory
   # MCP Swift SDK — consumed by `mcp-time`, `mcp-clipboard` (Plan 05-02), and
   # `mcp-applescript` (Plan 05-03) helper targets. Pinned at the same exact
   # version as `packages/MCP/Package.swift` (Plan 05-01) to avoid
@@ -163,6 +169,12 @@ targets:
       # `import Voice` for the VoiceController + VoiceHudIntent typealias.
       - package: Voice
         product: Voice
+      # Plan 07-01: package wiring for downstream Phase 7 plans
+      # (AppDelegate.installMemory lands in 07-06). Declaring the dependency
+      # here so xcodegen picks it up at the same time as the Memory package
+      # path entry above.
+      - package: Memory
+        product: Memory
       # Plan 05-02 / 05-03: build the helper apps before the Jarvis copyFiles
       # phase consumes them. xcodegen orders target dependencies before copy
       # phases.
