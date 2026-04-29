@@ -82,6 +82,195 @@ enum OllamaRequestBody {
         return try encoder.encode(body)
     }
 
+    // MARK: - Multimodal encoders (Plan 07-05 / D-18)
+    //
+    // The OpenAI vision request shape:
+    //   {"role":"user","content":[
+    //     {"type":"text","text":"..."},
+    //     {"type":"image_url","image_url":{"url":"data:image/jpeg;base64,..."}}
+    //   ]}
+    // Both `gemma4:31b` via Ollama and `Qwen3.5-35B-A3B-VL` via vllm-mlx
+    // accept this shape; vllm-mlx is OpenAI-compat at the wire level.
+    //
+    // These encoders pivot the trailing user message from the string-content
+    // form to the array-of-content-blocks form when `images` is non-empty.
+
+    /// Native /api/chat multimodal encoder. When images is empty, falls back
+    /// to the existing `encodeNative` path byte-for-byte.
+    static func encodeNativeMultimodal(
+        messages: [LLMMessage],
+        images: [ImageBlock],
+        tools: [ToolSchema],
+        toolChoice: ToolChoice,
+        model: ModelID,
+        maxOutputTokens: Int,
+        stream: Bool = true
+    ) throws -> Data {
+        if images.isEmpty {
+            return try encodeNative(
+                messages: messages, tools: tools, toolChoice: toolChoice,
+                model: model, maxOutputTokens: maxOutputTokens, stream: stream
+            )
+        }
+        return try encodeMultimodalCommon(
+            messages: messages,
+            images: images,
+            tools: tools,
+            toolChoice: toolChoice,
+            model: model,
+            maxOutputTokens: maxOutputTokens,
+            stream: stream,
+            isOpenAICompat: false
+        )
+    }
+
+    /// OpenAI-compat /v1/chat/completions multimodal encoder. When images is
+    /// empty, falls back to the existing `encodeOpenAICompat` path byte-for-byte.
+    static func encodeOpenAICompatMultimodal(
+        messages: [LLMMessage],
+        images: [ImageBlock],
+        tools: [ToolSchema],
+        toolChoice: ToolChoice,
+        model: ModelID,
+        maxOutputTokens: Int,
+        stream: Bool = true
+    ) throws -> Data {
+        if images.isEmpty {
+            return try encodeOpenAICompat(
+                messages: messages, tools: tools, toolChoice: toolChoice,
+                model: model, maxOutputTokens: maxOutputTokens, stream: stream
+            )
+        }
+        return try encodeMultimodalCommon(
+            messages: messages,
+            images: images,
+            tools: tools,
+            toolChoice: toolChoice,
+            model: model,
+            maxOutputTokens: maxOutputTokens,
+            stream: stream,
+            isOpenAICompat: true
+        )
+    }
+
+    private static func encodeMultimodalCommon(
+        messages: [LLMMessage],
+        images: [ImageBlock],
+        tools: [ToolSchema],
+        toolChoice: ToolChoice,
+        model: ModelID,
+        maxOutputTokens: Int,
+        stream: Bool,
+        isOpenAICompat: Bool
+    ) throws -> Data {
+        // Encode the messages with the multimodal content shape — the trailing
+        // user message gets array-of-content-blocks instead of a flat string.
+        var encoded = messages.map(encodeMultimodalMessage)
+        // Inject image blocks into the last user message.
+        if let lastIdx = encoded.lastIndex(where: { $0.role == "user" }) {
+            let existing = encoded[lastIdx]
+            let extraBlocks = images.map(encodeOpenAIVisionImageBlock)
+            encoded[lastIdx] = EncodedMultimodalMessage(
+                role: existing.role,
+                content: existing.content + extraBlocks,
+                toolCalls: existing.toolCalls,
+                toolCallId: existing.toolCallId
+            )
+        } else {
+            // Defensive fallback — append a fresh user message.
+            encoded.append(EncodedMultimodalMessage(
+                role: "user",
+                content: images.map(encodeOpenAIVisionImageBlock),
+                toolCalls: nil,
+                toolCallId: nil
+            ))
+        }
+
+        if isOpenAICompat {
+            let encodedTools = tools.isEmpty ? nil : try tools.map(encodeOpenAITool)
+            let body = OllamaOpenAICompatMultimodalBody(
+                model: model.rawValue,
+                messages: encoded,
+                tools: encodedTools,
+                toolChoice: encodeOpenAIToolChoice(toolChoice),
+                stream: stream,
+                maxTokens: maxOutputTokens
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            return try encoder.encode(body)
+        } else {
+            // Native /api/chat path: drop tools on .none (AGENT-07).
+            let encodedTools: [EncodedNativeTool]?
+            switch toolChoice {
+            case .none: encodedTools = nil
+            case .auto, .any, .tool:
+                encodedTools = tools.isEmpty ? nil : try tools.map(encodeNativeTool)
+            }
+            // Append .tool(name) hint message if applicable, mirroring single-modal.
+            if case .tool(let name) = toolChoice {
+                encoded.append(EncodedMultimodalMessage(
+                    role: "system",
+                    content: [.text("Please use the \(name) tool.")],
+                    toolCalls: nil,
+                    toolCallId: nil
+                ))
+            }
+            let body = OllamaNativeMultimodalRequestBody(
+                model: model.rawValue,
+                messages: encoded,
+                tools: encodedTools,
+                stream: stream,
+                options: OllamaOptions(numPredict: maxOutputTokens)
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            return try encoder.encode(body)
+        }
+    }
+
+    private static func encodeMultimodalMessage(_ msg: LLMMessage) -> EncodedMultimodalMessage {
+        let role: String
+        switch msg.role {
+        case .user: role = "user"
+        case .assistant: role = "assistant"
+        case .system: role = "system"
+        case .tool: role = "tool"
+        }
+        var blocks: [EncodedOpenAIVisionContentBlock] = []
+        var toolCalls: [EncodedNativeToolCall] = []
+        var toolCallId: String? = nil
+        for block in msg.content {
+            switch block {
+            case .text(let t):
+                blocks.append(.text(t))
+            case .toolUse(let id, let name, let argsJSON):
+                let args: JSONValue = (try? JSONSerialization.jsonObject(with: argsJSON))
+                    .flatMap(JSONValue.init(any:)) ?? .object([:])
+                toolCalls.append(EncodedNativeToolCall(
+                    id: id,
+                    type: "function",
+                    function: EncodedNativeToolCallFunction(name: name, arguments: args)
+                ))
+            case .toolResult(let id, let content):
+                blocks.append(.text(content))
+                toolCallId = id
+            }
+        }
+        return EncodedMultimodalMessage(
+            role: role,
+            content: blocks,
+            toolCalls: toolCalls.isEmpty ? nil : toolCalls,
+            toolCallId: toolCallId
+        )
+    }
+
+    /// SOLE producer of the OpenAI-compat data-URL image_url block.
+    /// Reference: OpenAI Vision API request shape.
+    private static func encodeOpenAIVisionImageBlock(_ image: ImageBlock) -> EncodedOpenAIVisionContentBlock {
+        .imageURL(url: "data:\(image.mediaType);base64,\(image.data.base64EncodedString())")
+    }
+
     // MARK: - Native (/api/chat) encoders
 
     private static func encodeNativeTool(_ schema: ToolSchema) throws -> EncodedNativeTool {
@@ -191,7 +380,7 @@ private struct OllamaNativeRequestBody: Encodable {
     }
 }
 
-private struct OllamaOptions: Encodable {
+struct OllamaOptions: Encodable {
     let numPredict: Int
     enum CodingKeys: String, CodingKey { case numPredict = "num_predict" }
 }
@@ -217,26 +406,123 @@ private struct EncodedNativeMessage: Encodable {
     }
 }
 
-private struct EncodedNativeToolCall: Encodable {
+struct EncodedNativeToolCall: Encodable {
     let id: String
     let type: String
     let function: EncodedNativeToolCallFunction
 }
 
-private struct EncodedNativeToolCallFunction: Encodable {
+struct EncodedNativeToolCallFunction: Encodable {
     let name: String
     let arguments: JSONValue
 }
 
-private struct EncodedNativeTool: Encodable {
+struct EncodedNativeTool: Encodable {
     let type: String
     let function: EncodedNativeToolFunction
 }
 
-private struct EncodedNativeToolFunction: Encodable {
+struct EncodedNativeToolFunction: Encodable {
     let name: String
     let description: String
     let parameters: JSONValue
+}
+
+// MARK: - Multimodal body shapes (Plan 07-05 / D-18)
+
+/// User-message content block in OpenAI-vision format. Either a text-only
+/// block or a data-URL image_url block.
+enum EncodedOpenAIVisionContentBlock: Encodable {
+    case text(String)
+    case imageURL(url: String)
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .text(let t):
+            try c.encode("text", forKey: .type)
+            try c.encode(t, forKey: .text)
+        case .imageURL(let url):
+            try c.encode("image_url", forKey: .type)
+            try c.encode(ImageURLEnvelope(url: url), forKey: .imageURL)
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type, text
+        case imageURL = "image_url"
+    }
+
+    private struct ImageURLEnvelope: Encodable {
+        let url: String
+    }
+}
+
+struct EncodedMultimodalMessage: Encodable {
+    let role: String
+    let content: [EncodedOpenAIVisionContentBlock]
+    let toolCalls: [EncodedNativeToolCall]?
+    let toolCallId: String?
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(role, forKey: .role)
+        try c.encode(content, forKey: .content)
+        if let toolCalls { try c.encode(toolCalls, forKey: .toolCalls) }
+        if let toolCallId { try c.encode(toolCallId, forKey: .toolCallId) }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case role, content
+        case toolCalls = "tool_calls"
+        case toolCallId = "tool_call_id"
+    }
+}
+
+struct OllamaNativeMultimodalRequestBody: Encodable {
+    let model: String
+    let messages: [EncodedMultimodalMessage]
+    let tools: [EncodedNativeTool]?
+    let stream: Bool
+    let options: OllamaOptions
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(model, forKey: .model)
+        try c.encode(messages, forKey: .messages)
+        if let tools { try c.encode(tools, forKey: .tools) }
+        try c.encode(stream, forKey: .stream)
+        try c.encode(options, forKey: .options)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case model, messages, tools, stream, options
+    }
+}
+
+struct OllamaOpenAICompatMultimodalBody: Encodable {
+    let model: String
+    let messages: [EncodedMultimodalMessage]
+    let tools: [EncodedNativeTool]?
+    let toolChoice: EncodedOpenAIToolChoice
+    let stream: Bool
+    let maxTokens: Int
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(model, forKey: .model)
+        try c.encode(messages, forKey: .messages)
+        if let tools { try c.encode(tools, forKey: .tools) }
+        try c.encode(toolChoice, forKey: .toolChoice)
+        try c.encode(stream, forKey: .stream)
+        try c.encode(maxTokens, forKey: .maxTokens)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case model, messages, tools, stream
+        case toolChoice = "tool_choice"
+        case maxTokens = "max_tokens"
+    }
 }
 
 // MARK: - OpenAI-compat body
