@@ -443,3 +443,9 @@ public actor MemoryStore {
         logger.info("vec_version: \(v)")
     }
 }
+
+// MARK: - HybridSearch + SessionHistory conformance (Plan 07-03 Task 2)
+
+extension MemoryStore: MemoryReadStore {}
+extension MemoryStore: SessionHistoryReading {}
+extension OllamaEmbeddingClient: EmbeddingProviding {}
