@@ -227,6 +227,11 @@ public final class SQLiteStatement {
         return sqlite3_column_int64(h, index)
     }
 
+    public func columnDouble(at index: Int32) -> Double {
+        guard let h = handle else { return 0 }
+        return sqlite3_column_double(h, index)
+    }
+
     public func columnText(at index: Int32) -> String? {
         guard let h = handle else { return nil }
         guard let cstr = sqlite3_column_text(h, index) else { return nil }

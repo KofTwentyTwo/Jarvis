@@ -28,4 +28,8 @@ public enum MemoryError: Error, Sendable {
     /// event — model produced free-form text instead of a structured call.
     /// Treated as NOOP by callers.
     case extractorMissingTool
+    /// forget_fact was called with an id that does not match any non-forgotten
+    /// active fact. Reserved for downstream tools that surface a strict-failure
+    /// path; current MemoryStore.forgetFact returns Bool rather than throwing.
+    case forgetTargetNotFound(factId: Int64)
 }

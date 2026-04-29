@@ -90,4 +90,7 @@ public enum ReplayEventKind: String, Sendable {
     /// Added in Plan 07-02 — single-emission-site memory mutation event
     /// recorded only by `MemoryStore.applyOp`.
     case memoryMutation = "memory_mutation"
+    /// Added in Plan 07-03 — single-emission-site memory retrieval event
+    /// recorded only by `MemoryStore.recordRetrieval`.
+    case memoryRetrieval = "memory_retrieval"
 }

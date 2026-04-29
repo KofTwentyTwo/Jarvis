@@ -10,7 +10,12 @@ import Foundation
 ///
 /// Strict equality is enforced at runtime by the handshake. Additive-only
 /// relaxation (match on `MAJOR` alone) is deferred to a later phase.
-public let BUS_PROTOCOL_VERSION: String = "2.0.0"
+///
+/// Bumped in Plan 07-03 task 3 — additive case `sessionHistory(turns:)` for
+/// TEXT-03 chat-panel hydration. The TS mirror in webview/packages/bus must
+/// add the matching case before integration goes live (Plan 07-06 closes the
+/// loop; check-bus-protocol-version.sh will fail until the TS mirror lands).
+public let BUS_PROTOCOL_VERSION: String = "2.1.0"
 
 /// UI states the HUD can occupy. Encoded as its `rawValue` inside
 /// `BusOutbound.hudState(_:)` — see `BusOutbound.encode(to:)`.
