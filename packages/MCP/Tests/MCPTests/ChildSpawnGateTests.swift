@@ -8,7 +8,7 @@
 // Plan: 05-01 (MCP-08)
 
 import XCTest
-@testable import JarvisMCP
+@testable import JarvisChildSpawn
 
 final class ChildSpawnGateTests: XCTestCase {
     func test_minimalEnvironment_isPathOnly() {
