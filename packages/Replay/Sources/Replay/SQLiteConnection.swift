@@ -101,6 +101,22 @@ public final class SQLiteConnection: @unchecked Sendable {
         handle = nil
     }
 
+    /// Closure-based accessor for the raw SQLite handle.
+    ///
+    /// The OpaquePointer cannot escape the closure (Swift's noescape
+    /// inference + `body` is non-`@escaping`). Plan 07-01 uses this to call
+    /// sqlite3_enable_load_extension + sqlite3_load_extension from
+    /// MemoryStore without leaking the handle out of the connection actor's
+    /// ownership boundary.
+    ///
+    /// - Throws: SQLiteError.stepFailed(SQLITE_MISUSE) if the handle is closed.
+    public func withHandle<T>(_ body: (OpaquePointer) throws -> T) throws -> T {
+        guard let h = handle else {
+            throw SQLiteError.stepFailed(code: SQLITE_MISUSE, message: "closed")
+        }
+        return try body(h)
+    }
+
     /// `sqlite3_errmsg` snapshot — for diagnostic logging on best-effort writes.
     public var lastErrorMessage: String {
         guard let h = handle else { return "<closed>" }
