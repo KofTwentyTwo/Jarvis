@@ -45,7 +45,13 @@ let package = Package(
         ),
         .testTarget(
             name: "MemoryTests",
-            dependencies: ["Memory"],
+            dependencies: [
+                "Memory",
+                // Plan 07-06: MemoryRegressionCorpusTests drives MemoryExtractor
+                // end-to-end against a real local Ollama under JARVIS_REAL_MODELS=1.
+                // The OllamaProvider product is the live LLMProvider implementation.
+                .product(name: "OllamaProvider", package: "AgentCore"),
+            ],
             path: "Tests/MemoryTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
