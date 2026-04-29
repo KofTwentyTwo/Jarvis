@@ -56,6 +56,7 @@
 		A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */; };
 		A9F18AF7B16BEA1776F76321 /* HUDBannerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17DC091C938BB7FBEACF0032 /* HUDBannerPanel.swift */; };
 		AA6FBB22D0352A50335801C1 /* MCPClipboardMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF983357F35F736ADCEF1D5 /* MCPClipboardMain.swift */; };
+		AAE80840DB3C846A667B693C /* NullVoiceAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06380B414C2EB2D45AE88D7F /* NullVoiceAdapters.swift */; };
 		AC359FF68F49110FF9B6E6E5 /* WizardStageAPIKeyViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */; };
 		B2072C6FF5589D00A8B19613 /* AgentOrchestrator in Frameworks */ = {isa = PBXBuildFile; productRef = 955423140BB4EC27191C4FA7 /* AgentOrchestrator */; };
 		B64A0CAA46B3C146B54F9F85 /* HUDBannerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA85DE5E4A9500FD19C22D85 /* HUDBannerCoordinator.swift */; };
@@ -127,6 +128,7 @@
 		00C01D284ECCFC986C7F2E16 /* Keychain */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Keychain; path = packages/Keychain; sourceTree = SOURCE_ROOT; };
 		024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStateTests.swift; sourceTree = "<group>"; };
 		0358E0CAC1377752398FA3C4 /* ReplayingToolResultObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplayingToolResultObserver.swift; sourceTree = "<group>"; };
+		06380B414C2EB2D45AE88D7F /* NullVoiceAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NullVoiceAdapters.swift; sourceTree = "<group>"; };
 		096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBanner.swift; sourceTree = "<group>"; };
 		0B5B16BDAC02919861AA4B0B /* MCPRuntimeWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPRuntimeWiringTests.swift; sourceTree = "<group>"; };
 		0CF7206DB98EC02734975536 /* HudState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudState.swift; sourceTree = "<group>"; };
@@ -278,6 +280,7 @@
 				D80B1ECFB5748E20A6ADF0EB /* Resources */,
 				7B0D5E57F282044CD98E347B /* Tests */,
 				5CBAF02B001A7FF406642CCA /* Theme */,
+				BB5926219D1C87B282AAC541 /* Voice */,
 				922FCD26000A64044B1FF187 /* Wizard */,
 			);
 			path = App;
@@ -427,6 +430,14 @@
 			path = JarvisEntitlementProbeTests;
 			sourceTree = "<group>";
 		};
+		BB5926219D1C87B282AAC541 /* Voice */ = {
+			isa = PBXGroup;
+			children = (
+				06380B414C2EB2D45AE88D7F /* NullVoiceAdapters.swift */,
+			);
+			path = Voice;
+			sourceTree = "<group>";
+		};
 		BC0DCAC9B7584481D8C65021 = {
 			isa = PBXGroup;
 			children = (
@@ -538,6 +549,10 @@
 				16B4B1822351AC23B6276002 /* Check no evaluateJavaScript calls (HUD-04) */,
 				19C4D644D9F5E146304D1FBE /* Check single-writer HUD state (HUD-08) */,
 				5203E8AC1C13F3256F11567E /* Check no modal presentation (MCP-04) */,
+				B4DBF90E660994C8B02BACF2 /* Check single memory.mutated emission site (MEM-06) */,
+				5EEF430098E4393F4C64D226 /* Check single memory.used emission site (D-05) */,
+				E8D59C61EEC6217BC20FBD62 /* Check presence-vision isolation (VISION-03) */,
+				C97897E76307F2552E0C7A0A /* Check embedding-dim literal (MEM-02) */,
 				4B80D79B2A0254274258618C /* Build webview bundle */,
 				E0992BE4761F337F2AC5BF62 /* Sources */,
 				C593366D9BBD0DC5F45EA023 /* Resources */,
@@ -878,6 +893,25 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/scripts/check-no-modal-presentation.sh\"\n";
 		};
+		5EEF430098E4393F4C64D226 /* Check single memory.used emission site (D-05) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Check single memory.used emission site (D-05)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/check-single-memory-used-emit.sh\"\n";
+		};
 		6A19A71D8F7B0FED56530812 /* Check bus-harness.html parity (canonical vs bundle) */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -996,6 +1030,44 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/scripts/check-bus-protocol-version.sh\"\n";
 		};
+		B4DBF90E660994C8B02BACF2 /* Check single memory.mutated emission site (MEM-06) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Check single memory.mutated emission site (MEM-06)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/check-single-memory-mutated-emit.sh\"\n";
+		};
+		C97897E76307F2552E0C7A0A /* Check embedding-dim literal (MEM-02) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Check embedding-dim literal (MEM-02)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/check-embedding-dim-literal.sh\"\n";
+		};
 		DD1590A06D57152C1B673573 /* Create Contents/Helpers directory */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -1014,6 +1086,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "mkdir -p \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers\"\n";
+		};
+		E8D59C61EEC6217BC20FBD62 /* Check presence-vision isolation (VISION-03) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Check presence-vision isolation (VISION-03)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/check-presence-vision-isolation.sh\"\n";
 		};
 		F902CE3B015FE94FD67700D8 /* Verify entitlements (post-codesign) */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1116,6 +1207,7 @@
 				8EF7109838AD91E95506BD1B /* MCPRuntimeWiring.swift in Sources */,
 				A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */,
 				9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */,
+				AAE80840DB3C846A667B693C /* NullVoiceAdapters.swift in Sources */,
 				7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */,
 				A30C09AE5D98B07A92945E1F /* ReplayingToolResultObserver.swift in Sources */,
 				2BCA466CFD785F3BC989C35F /* WizardStageAPIKeyView.swift in Sources */,

@@ -589,7 +589,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let log = replayLog {
             await store.setReplayLog(AppDelegateMemoryReplaySink(replayLog: log))
         } else {
-            systemLogger?.warning("installMemory: replayLog absent — memory.mutated rows won't persist")
+            systemLogger?.warning("installMemory: replayLog absent — memory mutation rows won't persist")
         }
 
         // 4. MemoryExtractor on OllamaProvider(qwen2.5-coder:32b).
@@ -1116,40 +1116,6 @@ final class AppDelegateBannerAdapter: VoiceBannerInterface, @unchecked Sendable 
         Task { @MainActor in
             coordinator?.dismissCurrent()
         }
-    }
-}
-
-/// Placeholder orchestrator adapter. Phase 7 wires the real `AgentOrchestrator`.
-actor NullOrchestratorAdapter: VoiceOrchestratorInterface {
-    nonisolated let voiceEvents: AsyncStream<VoiceOrchestratorEvent>
-    private nonisolated let eventsCont: AsyncStream<VoiceOrchestratorEvent>.Continuation
-
-    init() {
-        let (stream, cont) = AsyncStream<VoiceOrchestratorEvent>.makeStream()
-        voiceEvents = stream
-        eventsCont = cont
-    }
-
-    func submit(text: String) async {
-        // Phase 7: forward to AgentOrchestrator.submit(TurnInput.voice(text))
-    }
-
-    func cancelAndSubmit(text: String) async {
-        eventsCont.yield(.cancelled)
-        // Phase 7: forward to AgentOrchestrator.cancelAndSubmit(TurnInput.voice(text))
-    }
-}
-
-/// Placeholder TTS adapter. Phase 7 wires the real `TTSEngineActor`.
-actor NullTTSAdapter: VoiceTTSInterface {
-    var hasSynthInFlight: Bool { false }
-
-    func synthesize(_ text: String) async {
-        // Phase 7: forward to TTSEngineActor.synthesize(_:tier:voice:)
-    }
-
-    func cancelTTS() async {
-        // Phase 7: forward to TTSEngineActor.cancel()
     }
 }
 
