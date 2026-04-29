@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-04-28T00:00:00.000Z"
+last_updated: "2026-04-29T14:58:17.753Z"
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 29
+  total_plans: 35
   completed_plans: 29
-  percent: 100
+  percent: 83
 ---
 
 # State: Jarvis
@@ -25,17 +25,15 @@ progress:
 
 **v1 definition:** "Usable Jarvis" — week-one skeleton + full voice loop + vision first pass + memory first pass.
 
-**Current focus:** Phase 06 — voice
+**Current focus:** Phase 07 — memory-vision (PLANNED, ready to execute)
 
 ---
 
 ## Current Position
 
-Phase: 06 (voice) — EXECUTING
-Plan: 1 of 5
-**Phase:** 03
-**Plan:** Not started
-**Status:** Executing Phase 06
+**Phase:** 07 (memory-vision) — PLANNED
+**Plans:** 6 (07-01..07-06; all written + verified by gsd-plan-checker, no issues)
+**Status:** Ready to execute
 
 **Progress:**
 
@@ -128,26 +126,38 @@ Phase 8 (Hardening) inherits:
 
 ## Session Continuity
 
-**Resumed 2026-04-28** from `.planning/phases/07-memory-vision/.continue-here.md` (last_commit `6d79d9b`, snapshot `530130d`). User chose Path A — proceed to `/gsd-plan-phase 7`. Tree clean on `develop@530130d` (pushed). Stale `HANDOFF.json` (15:33Z, pre-supersession) flagged but not deleted; `.continue-here.md` is authoritative resume target. Body below is Phase-1-era — refresh deferred.
+**Resumed 2026-04-29** from `HANDOFF.json` mid-`/gsd-plan-phase 7` (planner stream timeout after 1/6 plans). Workflow chose `--chunked --skip-ui`: outline (~2 min) → 5 per-plan Tasks (~3-20 min each, parallelized in background) → plan-checker (PASSED, no issues, no revision iterations needed). Coverage gates: REQ 13/13, Decisions 16/16. Cosmetic non-blocker: `gsd-sdk roadmap.annotate-dependencies 07` errored with a `t.trim is not a function` upstream bug — wave headers + cross-cutting truths NOT applied to ROADMAP; plans themselves are unaffected.
+
+`HANDOFF.json` and Phase 7 `.continue-here.md` are now superseded by this STATE.md update; safe to delete on next resume cycle.
 
 ---
 
 **Next action when work resumes (including cross-machine pickup):**
 
 1. `git pull` to get the current `develop` branch.
-2. Run `/gsd-execute-phase 1` to execute Wave 1 (scaffold) first, then Waves 2a+2b in parallel, then Wave 3, then Wave 4.
+2. Run `/gsd-execute-phase 7` to execute Wave 1 (07-01 already on disk pre-resume), then Wave 2 (07-02 + 07-04 in parallel — disjoint scope), Wave 3 (07-03), Wave 4 (07-05), Wave 5 (07-06 integration closer).
 
-**Phase 1 plans (all authored and verified):**
+**Phase 7 plans (all authored and verified by gsd-plan-checker — VERIFICATION PASSED, no issues):**
 
-| Plan | Wave | depends_on | REQ-IDs | Autonomous |
-|------|------|------------|---------|------------|
-| `01-01-scaffold` | 1 | [] | SHELL-04, SHELL-05, SEC-02, SEC-03, MCP-05 | no (App ID capability is manual) |
-| `01-02-keychain-config-logging` | 2 | [01] | SEC-01, AGENT-05, SEC-05, SEC-08, OBS-05, OBS-06 | yes |
-| `01-03-app-shell-ui` | 2 | [01] | SHELL-01, SHELL-03, SHELL-04 | yes |
-| `01-04-shell-wizard-wiring` | 3 | [01, 02, 03] | SHELL-01, SHELL-02, SHELL-03, SHELL-05, SHELL-06, SEC-04 | yes |
-| `01-05-codesign-entitlement-probe` | 4 | [01, 02, 03, 04] | MCP-05, MCP-06, SEC-02, SEC-03, SEC-08 | no (stripped-archive probe human-verify) |
+| Plan | Wave | depends_on | REQ-IDs | Autonomous | Commit |
+|------|------|------------|---------|------------|--------|
+| `07-01` Memory schema + sqlite-vec store | 1 | [] | MEM-01, MEM-02 | yes | `4009d89` |
+| `07-02` Embedder + Extractor + bg orchestrator | 2 | [01] | MEM-03, MEM-04, MEM-05, MEM-06 | yes | `f94bf9a` |
+| `07-03` Memory read + MCP + DevOverlay | 3 | [02] | MEM-07, MEM-08, TEXT-03 | yes | `97e855f` |
+| `07-04` Vision capture + Presence | 2 | [01] | VISION-01, VISION-02, VISION-03 | yes | `e697eaa` |
+| `07-05` Frame-attach + multimodal + T1/T2/T3 | 4 | [04] | VISION-04 | yes | `8de01bc` |
+| `07-06` AppDelegate wiring + regression corpus + 4 grep gates | 5 | [03, 05] | (integration; verifies all 13) | yes | `6e70dd3` |
 
-Plans 02 and 03 can run in parallel (Wave 2). VALIDATION.md carries per-task Nyquist rows for all 16 tasks.
+Wave 2 (07-02 + 07-04) is the parallelism win: disjoint `files_modified` (`packages/Memory/*` vs `packages/Vision/*`).
+
+**Phase 7 pre-plan artifacts (all committed):**
+
+| File | Size | Purpose |
+|------|------|---------|
+| `07-CONTEXT.md` | 21 KB | D-01..D-18 LOCKED decisions from `/gsd-discuss-phase 7` |
+| `07-RESEARCH.md` | 18 KB / 290 lines | schema/SQL, mem0 prompt template, supersede transaction, hybrid search RRF, presence pipeline, Camera TCC, package layout, pitfalls |
+| `07-PATTERNS.md` | 63 KB / 1,423 lines | 23 new + 7 modified surfaces with code excerpts; 5 highest-risk scaffolds flagged |
+| `07-PLAN-OUTLINE.md` | 5 KB | chunked-mode manifest of the 6-plan / 5-wave decomposition |
 
 **Phase 1 pre-plan artifacts (all committed):**
 
@@ -168,21 +178,21 @@ Plans 02 and 03 can run in parallel (Wave 2). VALIDATION.md carries per-task Nyq
 - **RESEARCH Q3:** swift-log → `MultiplexLogHandler([FileLogHandler, OSLogHandler])`; file rotation hand-rolled (~80 LOC) to match D-18 spec exactly.
 - **PATTERNS §S-3:** `redact()` lives in `FileLogHandler` only — NOT in `os.Logger` handler. Callers must redact before logging untrusted variables.
 
-**Last known-good checkpoint:** 2026-04-22 — Phase 1 **planning complete** (5 PLAN.md + VALIDATION.md per-task map populated + ROADMAP Phase-1 Plans: list finalized). Ready for `/gsd-execute-phase 1`.
+**Last known-good checkpoint:** 2026-04-29 — Phase 7 **planning complete** (6 PLAN.md verified by gsd-plan-checker, REQ 13/13 + D 16/16 coverage). Ready for `/gsd-execute-phase 7`.
 
 **Context to re-load after compaction or cross-machine pickup:**
 
 1. `CLAUDE.md` (authoritative architectural decisions)
 2. `.planning/STATE.md` (this file)
 3. `.planning/PROJECT.md`
-4. `.planning/ROADMAP.md` §Phase 1
-5. `.planning/REQUIREMENTS.md` (17 REQ-IDs for P1)
-6. `.planning/phases/01-foundations/01-CONTEXT.md` (D-01..D-20)
-7. `.planning/phases/01-foundations/01-RESEARCH.md` (Standard Stack, Validation Architecture, Open Questions)
-8. `.planning/phases/01-foundations/01-UI-SPEC.md` §Open Items for Planner
-9. `.planning/phases/01-foundations/01-PATTERNS.md` §Shared Patterns S-1..S-10 and §Highest-Risk Scaffolds
+4. `.planning/ROADMAP.md` §Phase 7
+5. `.planning/REQUIREMENTS.md` (13 REQ-IDs for P7)
+6. `.planning/phases/07-memory-vision/07-CONTEXT.md` (D-01..D-18 LOCKED)
+7. `.planning/phases/07-memory-vision/07-RESEARCH.md` (no `## Validation Architecture` — Dimension 8 satisfied per-task)
+8. `.planning/phases/07-memory-vision/07-PATTERNS.md` (analog-file map; do NOT re-run pattern-mapper)
+9. `.planning/phases/07-memory-vision/07-PLAN-OUTLINE.md` + `07-01..07-06-PLAN.md` (the contract for execute-phase)
 10. `.planning/research/RESEARCH-DELTAS.md` (authoritative on conflicts with base research)
 
 ---
 
-*STATE initialized 2026-04-22 at ROADMAP completion. Last updated 2026-04-22 mid `/gsd-plan-phase 1`.*
+*STATE initialized 2026-04-22 at ROADMAP completion. Last updated 2026-04-29 at end of `/gsd-plan-phase 7 --skip-ui --chunked`.*
