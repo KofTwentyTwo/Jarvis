@@ -23,6 +23,7 @@
 // Plan: 05-01 (MCP-07)
 
 import Foundation
+import JarvisChildSpawn
 import Logging
 import MCP
 #if canImport(System)

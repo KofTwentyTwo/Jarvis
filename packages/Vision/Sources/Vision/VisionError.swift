@@ -21,4 +21,8 @@ public enum VisionError: Error, Sendable {
     case visionRequestFailed(underlying: any Error)
     /// captureFrame() invoked while session is not running (paused / shut down).
     case sessionNotRunning
+    /// Plan 07-05 / Task 4: vllm-mlx sidecar /health probe didn't reach 200
+    /// within the bounded warmup window. Caller falls back to T1 for the
+    /// remainder of the process lifetime.
+    case sidecarStartupTimeout
 }

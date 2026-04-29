@@ -1,7 +1,12 @@
 // ChildSpawnGate.swift
 //
-// Single choke point through which EVERY child-process spawn in the JarvisMCP
-// layer must pass. Enforces two invariants ahead of `Process.run()`:
+// Single choke point through which EVERY child-process spawn must pass.
+// Lives in its own SPM target (`JarvisChildSpawn`) so consumers like
+// `JarvisVision` (Plan 07-05 / VllmMlxSidecar) can pull in the gate without
+// transitively importing `JarvisMCP`'s dependencies (notably
+// `AgentOrchestrator`, which would violate VISION-03).
+//
+// Enforces two invariants ahead of `Process.run()`:
 //
 //   1. FD_CLOEXEC sweep: walks parent FDs in [3, getdtablesize()) and ensures
 //      every open FD carries FD_CLOEXEC before fork+exec.
@@ -29,6 +34,7 @@
 
 import Darwin
 import Foundation
+import Logging
 
 public actor ChildSpawnGate {
     /// Singleton — there is exactly one gate per process.
@@ -38,7 +44,7 @@ public actor ChildSpawnGate {
     /// scoped to system binaries. Anything richer must justify itself.
     public static let minimalEnvironment: [String: String] = ["PATH": "/usr/bin:/bin"]
 
-    private let logger = MCPLogChannel.logger(label: "spawngate")
+    private let logger = Logger(label: "jarvis.mcp.spawngate")
 
     /// Path prefixes the developer-instrumentation contract covers. An FD whose
     /// `F_GETPATH` is under one of these is OUR open site, so a missing

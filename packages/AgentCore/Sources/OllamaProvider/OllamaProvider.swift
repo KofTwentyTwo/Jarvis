@@ -45,6 +45,35 @@ public actor OllamaProvider: LLMProvider {
             let task = Task {
                 await self.run(
                     messages: messages,
+                    images: [],
+                    tools: tools,
+                    toolChoice: toolChoice,
+                    model: model,
+                    maxOutputTokens: maxOutputTokens,
+                    continuation: continuation
+                )
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// Plan 07-05 / D-18 — OpenAI-compat image_url multimodal stream override.
+    /// Both `gemma4:31b` (Ollama) and `Qwen3.5-35B-A3B-VL` (vllm-mlx via
+    /// `useOpenAICompat: true`) consume the same data-URL shape.
+    public nonisolated func stream(
+        messages: [LLMMessage],
+        images: [ImageBlock],
+        tools: [ToolSchema],
+        toolChoice: ToolChoice,
+        model: ModelID,
+        maxOutputTokens: Int,
+        cacheHints: CacheHints?
+    ) -> AsyncThrowingStream<LLMEvent, Error> {
+        AsyncThrowingStream<LLMEvent, Error> { continuation in
+            let task = Task {
+                await self.run(
+                    messages: messages,
+                    images: images,
                     tools: tools,
                     toolChoice: toolChoice,
                     model: model,
@@ -58,6 +87,7 @@ public actor OllamaProvider: LLMProvider {
 
     private func run(
         messages: [LLMMessage],
+        images: [ImageBlock],
         tools: [ToolSchema],
         toolChoice: ToolChoice,
         model: ModelID,
@@ -77,8 +107,9 @@ public actor OllamaProvider: LLMProvider {
             let body: Data
             if useOpenAICompat {
                 request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                body = try OllamaRequestBody.encodeOpenAICompat(
+                body = try OllamaRequestBody.encodeOpenAICompatMultimodal(
                     messages: messages,
+                    images: images,
                     tools: tools,
                     toolChoice: toolChoice,
                     model: model,
@@ -86,8 +117,9 @@ public actor OllamaProvider: LLMProvider {
                 )
             } else {
                 request.setValue("application/x-ndjson", forHTTPHeaderField: "Accept")
-                body = try OllamaRequestBody.encodeNative(
+                body = try OllamaRequestBody.encodeNativeMultimodal(
                     messages: messages,
+                    images: images,
                     tools: tools,
                     toolChoice: toolChoice,
                     model: model,

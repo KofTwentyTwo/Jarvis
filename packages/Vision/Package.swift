@@ -34,6 +34,12 @@ let package = Package(
     dependencies: [
         .package(path: "../Logging"),
         .package(path: "../AgentCore"),
+        // Plan 07-05 / Task 4: VllmMlxSidecar consumes ChildSpawnGate from
+        // the standalone JarvisChildSpawn target inside the MCP package.
+        // This is the ONLY MCP-package edge Vision pulls — JarvisChildSpawn
+        // depends only on swift-log, so VISION-03 (no AgentOrchestrator,
+        // no Voice transitively) still holds.
+        .package(path: "../MCP"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
     ],
     targets: [
@@ -42,6 +48,9 @@ let package = Package(
             dependencies: [
                 .product(name: "JarvisLogging", package: "Logging"),
                 .product(name: "AgentCore", package: "AgentCore"),
+                .product(name: "OllamaProvider", package: "AgentCore"),
+                .product(name: "AnthropicProvider", package: "AgentCore"),
+                .product(name: "JarvisChildSpawn", package: "MCP"),
                 .product(name: "Logging", package: "swift-log"),
             ],
             path: "Sources/Vision",
@@ -49,7 +58,11 @@ let package = Package(
         ),
         .testTarget(
             name: "JarvisVisionTests",
-            dependencies: ["JarvisVision"],
+            dependencies: [
+                "JarvisVision",
+                .product(name: "JarvisChildSpawn", package: "MCP"),
+                .product(name: "AgentCore", package: "AgentCore"),
+            ],
             path: "Tests/VisionTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
