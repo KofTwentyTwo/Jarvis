@@ -76,7 +76,7 @@
 		E39D7F3B185FA8D84C33B421 /* Config in Frameworks */ = {isa = PBXBuildFile; productRef = 1058DB02D52D27FA07A79025 /* Config */; };
 		E49FEEFE453A055F65DA31FF /* WizardStageHotkeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */; };
 		E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */; };
-		EB03A8906003E55271CAF133 /* Vision in Frameworks */ = {isa = PBXBuildFile; productRef = 2FBCCEE1808D1A1E870FC11A /* Vision */; };
+		EB03A8906003E55271CAF133 /* JarvisVision in Frameworks */ = {isa = PBXBuildFile; productRef = C1168750998C14962FE14DEC /* JarvisVision */; };
 		EB07CD704A3568F27DD4D901 /* Shell in Frameworks */ = {isa = PBXBuildFile; productRef = 6FAD561608B0D1C402015E0D /* Shell */; };
 		F340ACA6D0AD06E8ACF65010 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = D5E0D943EBC768ADB9C87F13 /* Logging */; };
 		F6423C84483BB194348837F5 /* VoiceWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB9BC03FD0377EB67CC0F7DB /* VoiceWiringTests.swift */; };
@@ -249,7 +249,7 @@
 				F340ACA6D0AD06E8ACF65010 /* Logging in Frameworks */,
 				3649FFF2495A8C4DDDB3B65B /* Voice in Frameworks */,
 				B72852E1EF52C0E6F8170852 /* Memory in Frameworks */,
-				EB03A8906003E55271CAF133 /* Vision in Frameworks */,
+				EB03A8906003E55271CAF133 /* JarvisVision in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -567,7 +567,7 @@
 				D5E0D943EBC768ADB9C87F13 /* Logging */,
 				254100776001B345FD91877C /* Voice */,
 				59F56604A76635EC59D2671B /* Memory */,
-				2FBCCEE1808D1A1E870FC11A /* Vision */,
+				C1168750998C14962FE14DEC /* JarvisVision */,
 			);
 			productName = Jarvis;
 			productReference = F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */;
@@ -1760,10 +1760,6 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = Voice;
 		};
-		2FBCCEE1808D1A1E870FC11A /* Vision */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Vision;
-		};
 		4CB4DC60ABEBF2DC7A7FFE4C /* AgentCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AgentCore;
@@ -1817,6 +1813,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 3C850EFCEBC3B4947F0F7AE1 /* XCRemoteSwiftPackageReference "swift-sdk" */;
 			productName = MCP;
+		};
+		C1168750998C14962FE14DEC /* JarvisVision */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JarvisVision;
 		};
 		D5E0D943EBC768ADB9C87F13 /* Logging */ = {
 			isa = XCSwiftPackageProductDependency;

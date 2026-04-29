@@ -185,9 +185,10 @@ targets:
       # Plan 07-04: package wiring for downstream Phase 7 plans
       # (AppDelegate.installVision lands in 07-06). Declaring the dependency
       # here so xcodegen picks it up at the same time as the Vision package
-      # path entry above.
+      # path entry above. Product is `JarvisVision` (not `Vision`) to avoid
+      # colliding with Apple's Vision framework — see packages/Vision/Package.swift.
       - package: Vision
-        product: Vision
+        product: JarvisVision
       # Plan 05-02 / 05-03: build the helper apps before the Jarvis copyFiles
       # phase consumes them. xcodegen orders target dependencies before copy
       # phases.

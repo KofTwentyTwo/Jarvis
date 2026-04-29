@@ -16,11 +16,20 @@
 // AgentCore does NOT pull AgentOrchestrator (separate target).
 import PackageDescription
 
+// NOTE: The Swift module name is `JarvisVision` (not `Vision`) to avoid
+// colliding with Apple's `Vision` framework — when a source file inside a
+// module named `Vision` writes `import Vision`, Swift silently treats it
+// as a self-import and skips loading Apple's framework, so Vision symbols
+// (VNDetectFaceRectanglesRequest etc.) never resolve. Using `JarvisVision`
+// matches the existing `JarvisLogging` convention. The package directory
+// stays `packages/Vision` and the library product is `JarvisVision`;
+// project.yml + scripts/check-vision-isolation.sh both key off the
+// directory path.
 let package = Package(
     name: "Vision",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "Vision", targets: ["Vision"]),
+        .library(name: "JarvisVision", targets: ["JarvisVision"]),
     ],
     dependencies: [
         .package(path: "../Logging"),
@@ -29,7 +38,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "Vision",
+            name: "JarvisVision",
             dependencies: [
                 .product(name: "JarvisLogging", package: "Logging"),
                 .product(name: "AgentCore", package: "AgentCore"),
@@ -39,8 +48,8 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
-            name: "VisionTests",
-            dependencies: ["Vision"],
+            name: "JarvisVisionTests",
+            dependencies: ["JarvisVision"],
             path: "Tests/VisionTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
