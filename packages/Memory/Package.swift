@@ -33,6 +33,7 @@ let package = Package(
             dependencies: [
                 .product(name: "JarvisLogging", package: "Logging"),
                 .product(name: "AgentCore", package: "AgentCore"),
+                .product(name: "AgentOrchestrator", package: "AgentCore"),
                 .product(name: "Replay", package: "Replay"),
                 .product(name: "Logging", package: "swift-log"),
             ],
