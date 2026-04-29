@@ -55,6 +55,47 @@ final class SingleEmissionSiteGrepTests: XCTestCase {
                       "MEM-06: the single emission site must be MemoryStore.applyOp; found at \(only)")
     }
 
+    /// D-05 + MEM-08 single emission site for memory.used /
+    /// ReplayEvent.memoryRetrieval. Mirrors the memoryMutation grep gate.
+    func testMemoryRetrievalHasSingleEmissionSite() throws {
+        let repoRoot = try Self.repoRoot()
+
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/grep")
+        task.arguments = [
+            "-rE",
+            #"\.memoryRetrieval\("#,
+            "\(repoRoot.path)/packages",
+            "--include=*.swift",
+        ]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+        try task.run()
+        task.waitUntilExit()
+
+        let data = try pipe.fileHandleForReading.readToEnd() ?? Data()
+        let output = String(decoding: data, as: UTF8.self)
+        let allHits = output.split(separator: "\n").filter { !$0.isEmpty }
+
+        let production = allHits.filter { line in
+            let s = String(line)
+            if s.contains("/Tests/") || s.contains(".xctest/") { return false }
+            if s.contains("case .memoryRetrieval") { return false }
+            if s.contains("case memoryRetrieval") { return false }
+            return true
+        }
+
+        XCTAssertEqual(production.count, 1,
+                       "D-05/MEM-08: exactly one production site may construct ReplayEvent.memoryRetrieval(...). Found \(production.count):\n\(production.joined(separator: "\n"))")
+
+        guard let only = production.first else {
+            return XCTFail("no production hits — MemoryStore.recordRetrieval must record at least one .memoryRetrieval event")
+        }
+        XCTAssertTrue(only.contains("MemoryStore.swift"),
+                      "D-05/MEM-08: the single emission site must be MemoryStore.recordRetrieval; found at \(only)")
+    }
+
     /// MEM-05 never-DELETE invariant on MemoryStore.swift.
     func testMemoryStoreNeverDeletes() throws {
         let repoRoot = try Self.repoRoot()
