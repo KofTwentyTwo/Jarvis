@@ -17,12 +17,17 @@ final class FrameAttachDiscardSiteGrepTests: XCTestCase {
         let repoRoot = try findRepoRoot()
         let url = repoRoot.appendingPathComponent("packages/Vision/Sources/Vision/FrameAttachController.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
-        // The function definition + every call site lives in this single file.
-        // Count must equal 1 — the function definition is the only occurrence.
-        // Note: tests file references discardFrame too but is in a separate file.
-        let occurrences = source.components(separatedBy: "discardFrame").count - 1
-        XCTAssertEqual(occurrences, 1,
-            "FrameAttachController.swift must contain exactly one 'discardFrame' reference (the function definition); found \(occurrences)")
+        // Single-emission-site invariant (D-15, mirrors Phase 6 TTSInterrupt
+        // \.ttsStopped count == 1). The literal `pendingFrame = nil` may
+        // appear ONCE — inside the discardFrame() function. Every byte-
+        // releasing path routes through that function.
+        let lines = source.components(separatedBy: .newlines)
+        let emissionLines = lines.filter { $0.contains("pendingFrame = nil") }
+        XCTAssertEqual(emissionLines.count, 1,
+            "FrameAttachController.swift must contain exactly one 'pendingFrame = nil' assignment (inside discardFrame); found \(emissionLines.count): \(emissionLines)")
+        // The discardFrame function must exist (so other release paths can call it).
+        XCTAssertTrue(source.contains("func discardFrame"),
+            "discardFrame function must be defined in FrameAttachController.swift")
     }
 
     func testRawBytesEgressFenceInReplay() throws {

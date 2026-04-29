@@ -33,6 +33,15 @@ public struct SessionID: Sendable, Equatable, Hashable, RawRepresentable {
 /// "nothing-masked" guarantee (OBS-02) lives at this layer: redaction is the
 /// **viewer's** responsibility (Phase 8), not the writer's.
 public enum ReplayEvent: Sendable {
+    /// Raw user input bytes (text turn) OR the placeholder JSON for an
+    /// image-bearing turn (Plan 07-05 / D-15). For image turns, the payload
+    /// is the literal byte string
+    /// `{"type":"image","discarded":true,"text":"<original-user-text>"}` —
+    /// the captured image bytes themselves NEVER reach this sink.
+    /// `FrameAttachReplaySink.placeholder(for:)` is the SOLE producer of
+    /// the placeholder shape; the raw-bytes egress fence in
+    /// `FrameAttachDiscardSiteGrepTests` enforces no png/jpeg serialization
+    /// patterns appear in this package's sources.
     case userInput(Data)
     case textDelta(String)
     case thinkingDelta(String)
