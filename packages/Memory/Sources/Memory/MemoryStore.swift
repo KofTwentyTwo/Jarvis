@@ -231,6 +231,138 @@ public actor MemoryStore {
         sink.record(.memoryMutation(bytes), forTriggerTurnId: triggerTurnId)
     }
 
+    // MARK: - Read path (Plan 07-03 — MEM-07 + TEXT-03 + D-02 + D-05)
+
+    /// SOLE production emission site for ReplayEvent.memoryRetrieval (D-05).
+    /// Mirrors recordMemoryMutation from 07-02. Best-effort; if no replay
+    /// sink has been injected, the call is a silent no-op.
+    public func recordRetrieval(_ ref: FactRef, triggerTurnId: Int64) {
+        guard let sink = replayLog else { return }
+        let stamp: Int64 = ref.timestamp == 0
+            ? Int64(Date().timeIntervalSince1970 * 1000)
+            : ref.timestamp
+        var payload: [String: Any] = [
+            "factId": ref.factId,
+            "summary": ref.summary,
+            "triggerTurnId": triggerTurnId,
+            "timestamp": stamp,
+        ]
+        if let s = ref.score {
+            payload["score"] = s
+        } else {
+            payload["score"] = NSNull()
+        }
+        guard let bytes = try? JSONSerialization.data(
+            withJSONObject: payload,
+            options: [.sortedKeys]
+        ) else {
+            logger.error("recordRetrieval: JSON serialization failed for factId=\(ref.factId)")
+            return
+        }
+        sink.record(.memoryRetrieval(bytes), forTriggerTurnId: triggerTurnId)
+    }
+
+    /// MEM-07 hybrid search execution. Runs the RESEARCH section 8 RRF SQL
+    /// and returns (Fact, rrfScore) tuples ordered by score DESC.
+    ///
+    /// Caller (HybridSearch actor) is responsible for emitting one
+    /// recordRetrieval call per result — splitting SQL execution from
+    /// emission keeps the single-emission-site grep gate clean.
+    public func runHybridSearchSQL(query: String, embedding: [Float], k: Int) throws -> [(Fact, Double)] {
+        let sql = MemoryQueries.hybridSearchSQL(k: k)
+        let qvBytes = embedding.withUnsafeBufferPointer { Data(buffer: $0) }
+        return try conn.query(sql, bindings: [
+            .text(query),
+            .blob(qvBytes),
+        ]) { stmt in
+            let id = stmt.columnInt(at: 0)
+            let subject = stmt.columnText(at: 1) ?? ""
+            let predicate = stmt.columnText(at: 2) ?? ""
+            let object = stmt.columnText(at: 3) ?? ""
+            let validFrom = stmt.columnInt(at: 4)
+            let validTo: Int64? = stmt.columnIsNull(at: 5) ? nil : stmt.columnInt(at: 5)
+            let rrf = stmt.columnDouble(at: 6)
+            let fact = Fact(
+                id: id,
+                subject: subject,
+                predicate: predicate,
+                object: object,
+                sourceTurnId: nil,
+                validFrom: validFrom,
+                validTo: validTo,
+                supersededBy: nil,
+                forgottenAt: nil,
+                createdAt: validFrom
+            )
+            return (fact, rrf)
+        }
+    }
+
+    /// Active facts (valid_to IS NULL AND forgotten_at IS NULL) for a given
+    /// subject. D-02 forgotten facts excluded.
+    public func queryActiveFacts(matching subject: String) throws -> [Fact] {
+        try conn.query(MemoryQueries.activeFactsBySubjectSQL, bindings: [.text(subject)]) { stmt in
+            Fact(
+                id: stmt.columnInt(at: 0),
+                subject: stmt.columnText(at: 1) ?? "",
+                predicate: stmt.columnText(at: 2) ?? "",
+                object: stmt.columnText(at: 3) ?? "",
+                sourceTurnId: stmt.columnIsNull(at: 4) ? nil : stmt.columnInt(at: 4),
+                validFrom: stmt.columnInt(at: 5),
+                validTo: stmt.columnIsNull(at: 6) ? nil : stmt.columnInt(at: 6),
+                supersededBy: stmt.columnIsNull(at: 7) ? nil : stmt.columnInt(at: 7),
+                forgottenAt: stmt.columnIsNull(at: 8) ? nil : stmt.columnInt(at: 8),
+                createdAt: stmt.columnInt(at: 9)
+            )
+        }
+    }
+
+    /// TEXT-03 chat-panel hydration source. Returns the most recent `limit`
+    /// turns for the given session, ordered by created_at DESC.
+    public func recentTurnsForSession(sessionId: String, limit: Int) throws -> [TurnRow] {
+        try conn.query(MemoryQueries.sessionHistorySQL, bindings: [
+            .text(sessionId),
+            .int(Int64(max(0, limit))),
+        ]) { stmt in
+            TurnRow(
+                id: stmt.columnInt(at: 0),
+                sessionId: stmt.columnText(at: 1) ?? "",
+                role: stmt.columnText(at: 2) ?? "",
+                content: stmt.columnText(at: 3) ?? "",
+                source: stmt.columnText(at: 4) ?? "",
+                createdAt: stmt.columnInt(at: 5)
+            )
+        }
+    }
+
+    /// D-02 forget tool dispatch target. Closes valid_to and sets
+    /// forgotten_at on the active row only. NEVER DELETEs. Returns true if a
+    /// row was forgotten, false if no active row matched (already forgotten,
+    /// or unknown id). Idempotent: a second call matches 0 rows because the
+    /// WHERE clause requires both valid_to IS NULL and forgotten_at IS NULL.
+    @discardableResult
+    public func forgetFact(id: Int64, triggerTurnId: Int64) throws -> Bool {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        do {
+            try conn.exec(MemoryQueries.forgetFactSQL, bindings: [
+                .int(now),
+                .int(now),
+                .int(id),
+            ])
+            let changes = try conn.query("SELECT changes();", bindings: []) { stmt in
+                stmt.columnInt(at: 0)
+            }.first ?? 0
+            if changes == 1 {
+                logger.info("forgetFact: closed valid_to and set forgotten_at on factId=\(id) (triggerTurnId=\(triggerTurnId))")
+                return true
+            }
+            logger.debug("forgetFact: no active row matched factId=\(id) — already forgotten or unknown")
+            return false
+        } catch {
+            throw MemoryError.applyOpFailed(underlying: error)
+        }
+    }
+
     // MARK: - vec0 extension load
 
     private static func loadVecExtension(on conn: SQLiteConnection) throws {

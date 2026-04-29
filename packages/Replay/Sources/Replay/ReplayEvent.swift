@@ -53,6 +53,12 @@ public enum ReplayEvent: Sendable {
     /// production code that records this event. Enforced by
     /// `SingleEmissionSiteGrepTests` in the Memory test target.
     case memoryMutation(Data)
+    /// MEM-08 / D-05 surface: emitted by `MemoryStore.recordRetrieval` (Plan
+    /// 07-03 task 1) — symmetric to `.memoryMutation`.
+    /// Payload shape: factId, summary, score, triggerTurnId, timestamp
+    /// (JSON encoded). Single-emission-site enforced by
+    /// `SingleEmissionSiteGrepTests.testMemoryRetrievalHasSingleEmissionSite`.
+    case memoryRetrieval(Data)
 }
 
 extension ReplayEvent {
@@ -104,6 +110,8 @@ extension ReplayEvent {
             return (ReplayEventKind.error.rawValue, data)
         case .memoryMutation(let data):
             return (ReplayEventKind.memoryMutation.rawValue, data)
+        case .memoryRetrieval(let data):
+            return (ReplayEventKind.memoryRetrieval.rawValue, data)
         }
     }
 }

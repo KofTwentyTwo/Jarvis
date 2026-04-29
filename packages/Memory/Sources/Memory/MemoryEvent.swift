@@ -82,13 +82,57 @@ public enum MemoryOp: Sendable, Equatable {
 }
 
 /// Compact reference to a fact for retrieval-side surfaces (DevOverlay rows
-/// in Plan 07-03 / `memory.used` bridge channel).
-public struct FactRef: Sendable, Equatable {
+/// per D-05 / MEM-08).
+///
+/// `score` is the RRF-fused rank score from HybridSearch; nil for non-search
+/// emit sites. `triggerTurnId` carries the turn that caused the retrieval, so
+/// the DevOverlay can correlate retrievals with the user-facing turn that
+/// asked the question. `timestamp` is unix-ms at emit time.
+public struct FactRef: Sendable, Equatable, Codable {
     public let factId: Int64
-    public let summary: String        // "subject — predicate — object" formatted
+    public let summary: String        // "subject predicate object" formatted
+    public let score: Double?
+    public let triggerTurnId: Int64
+    public let timestamp: Int64
 
-    public init(factId: Int64, summary: String) {
+    public init(
+        factId: Int64,
+        summary: String,
+        score: Double? = nil,
+        triggerTurnId: Int64 = 0,
+        timestamp: Int64 = 0
+    ) {
         self.factId = factId
         self.summary = summary
+        self.score = score
+        self.triggerTurnId = triggerTurnId
+        self.timestamp = timestamp
+    }
+}
+
+/// One row of the turns table (TEXT-03 chat-panel hydration + replay).
+/// Mirrors the schema from MemorySchema.swift (07-01) one-for-one.
+public struct TurnRow: Sendable, Equatable, Codable {
+    public let id: Int64
+    public let sessionId: String
+    public let role: String          // "user" | "assistant" | "tool"
+    public let content: String
+    public let source: String        // TurnSource rawValue (e.g. "userText", "wakeWord", "memoryExtraction")
+    public let createdAt: Int64      // unix-ms
+
+    public init(
+        id: Int64,
+        sessionId: String,
+        role: String,
+        content: String,
+        source: String,
+        createdAt: Int64
+    ) {
+        self.id = id
+        self.sessionId = sessionId
+        self.role = role
+        self.content = content
+        self.source = source
+        self.createdAt = createdAt
     }
 }
