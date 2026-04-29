@@ -58,6 +58,13 @@ packages:
   # via Bus events / DevOverlay rows in Plan 07-03 + 07-06.
   Memory:
     path: packages/Memory
+  # Plan 07-04: App-level vision wiring (future: AppDelegate.installVision in
+  # Plan 07-06) consumes the Vision package's CameraCapture, PresenceMonitor,
+  # PresenceSignalBus, and DisablePresence surfaces. Plan 07-04 only stands
+  # up the package and the VISION-03 grep gates; the App→Vision edge is
+  # wired in Plan 07-06.
+  Vision:
+    path: packages/Vision
   # MCP Swift SDK — consumed by `mcp-time`, `mcp-clipboard` (Plan 05-02), and
   # `mcp-applescript` (Plan 05-03) helper targets. Pinned at the same exact
   # version as `packages/MCP/Package.swift` (Plan 05-01) to avoid
@@ -175,6 +182,12 @@ targets:
       # path entry above.
       - package: Memory
         product: Memory
+      # Plan 07-04: package wiring for downstream Phase 7 plans
+      # (AppDelegate.installVision lands in 07-06). Declaring the dependency
+      # here so xcodegen picks it up at the same time as the Vision package
+      # path entry above.
+      - package: Vision
+        product: Vision
       # Plan 05-02 / 05-03: build the helper apps before the Jarvis copyFiles
       # phase consumes them. xcodegen orders target dependencies before copy
       # phases.
