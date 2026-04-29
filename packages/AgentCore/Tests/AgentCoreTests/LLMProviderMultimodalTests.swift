@@ -33,8 +33,10 @@ final class LLMProviderMultimodalTests: XCTestCase {
         }
         // The mock single-modal stream emits one .messageStop event.
         XCTAssertEqual(collected.count, 1)
-        XCTAssertEqual(await mock.singleModalCallCount, 1)
-        XCTAssertEqual(await mock.multimodalCallCount, 0,
+        let singleCount = await mock.singleModalCallCount
+        let multiCount = await mock.multimodalCallCount
+        XCTAssertEqual(singleCount, 1)
+        XCTAssertEqual(multiCount, 0,
             "Default extension must not call a multimodal override that doesn't exist")
     }
 
@@ -57,10 +59,12 @@ final class LLMProviderMultimodalTests: XCTestCase {
             collected.append(event)
         }
         XCTAssertEqual(collected.count, 1)
-        XCTAssertEqual(await mock.singleModalCallCount, 0,
-            "Override should be invoked, not the single-modal forwarder")
-        XCTAssertEqual(await mock.multimodalCallCount, 1)
+        let singleCount = await mock.singleModalCallCount
+        let multiCount = await mock.multimodalCallCount
         let recordedImages = await mock.lastImages
+        XCTAssertEqual(singleCount, 0,
+            "Override should be invoked, not the single-modal forwarder")
+        XCTAssertEqual(multiCount, 1)
         XCTAssertEqual(recordedImages.count, 1)
         XCTAssertEqual(recordedImages.first?.mediaType, "image/jpeg")
     }
@@ -79,7 +83,8 @@ final class LLMProviderMultimodalTests: XCTestCase {
             cacheHints: nil
         )
         for try await _ in stream {}
-        XCTAssertEqual(await mock.multimodalCallCount, 1,
+        let count = await mock.multimodalCallCount
+        XCTAssertEqual(count, 1,
             "Override is responsible for the full method surface")
     }
 
