@@ -29,7 +29,8 @@ final class MemoryExtractionOrchestratorTests: XCTestCase {
         let lock = NSLock()
         var sleepNs: UInt64 = 0
         var throwError: Error?
-        var ops: [[String: Any]] = []      // mem0 ops to emit as a tool call
+        /// Pre-encoded apply_memory_ops argsJSON. Empty Data → no tool call.
+        var argsJSON: Data = Data()
 
         // Records start/end so tests can assert serial drain.
         nonisolated(unsafe) static var calls: [(start: Date, end: Date)] = []
@@ -43,6 +44,18 @@ final class MemoryExtractionOrchestratorTests: XCTestCase {
             callsLock.lock(); defer { callsLock.unlock() }
             return calls
         }
+        /// Sync helper safe to call from async contexts (NSLock isn't, but a
+        /// non-async wrapper that does the lock + mutate + unlock is).
+        nonisolated static func appendCall(start: Date, end: Date) {
+            callsLock.lock(); defer { callsLock.unlock() }
+            calls.append((start, end))
+        }
+
+        nonisolated func flipToPassing(argsJSON: Data) {
+            lock.lock(); defer { lock.unlock() }
+            self.throwError = nil
+            self.argsJSON = argsJSON
+        }
 
         func stream(
             messages: [LLMMessage],
@@ -55,7 +68,7 @@ final class MemoryExtractionOrchestratorTests: XCTestCase {
             lock.lock()
             let s = sleepNs
             let err = throwError
-            let ops = self.ops
+            let args = self.argsJSON
             lock.unlock()
 
             return AsyncThrowingStream { continuation in
@@ -65,19 +78,15 @@ final class MemoryExtractionOrchestratorTests: XCTestCase {
                         try? await Task.sleep(nanoseconds: s)
                     }
                     let end = Date()
-                    Self.callsLock.lock()
-                    Self.calls.append((start, end))
-                    Self.callsLock.unlock()
+                    Self.appendCall(start: start, end: end)
 
                     if let err = err {
                         continuation.finish(throwing: err)
                         return
                     }
-                    if !ops.isEmpty {
-                        let argsJSON = (try? JSONSerialization.data(
-                            withJSONObject: ["ops": ops])) ?? Data()
+                    if !args.isEmpty {
                         continuation.yield(.toolUseRequested(
-                            ToolUseRequest(id: "t1", name: "apply_memory_ops", argsJSON: argsJSON)
+                            ToolUseRequest(id: "t1", name: "apply_memory_ops", argsJSON: args)
                         ))
                     }
                     continuation.yield(.messageStop)
@@ -173,9 +182,9 @@ final class MemoryExtractionOrchestratorTests: XCTestCase {
     /// Process applies returned ops to the store via the callback.
     func testProcessAppliesOpsToStore() async throws {
         let provider = TimedMockProvider()
-        provider.ops = [
+        provider.argsJSON = try JSONSerialization.data(withJSONObject: ["ops": [
             ["op": "ADD", "subject": "Sarah", "predicate": "works_at", "object": "Acme"]
-        ]
+        ]])
         let extractor = MemoryExtractor(provider: provider)
         let spy = SpyApplyOp()
         let orchestrator = MemoryExtractionOrchestrator(
@@ -227,12 +236,10 @@ final class MemoryExtractionOrchestratorTests: XCTestCase {
         try await Task.sleep(nanoseconds: 200_000_000)
 
         // Now flip the provider to passing, enqueue a fourth, assert it processes.
-        provider.lock.lock()
-        provider.throwError = nil
-        provider.ops = [
+        let okArgs = try JSONSerialization.data(withJSONObject: ["ops": [
             ["op": "ADD", "subject": "X", "predicate": "Y", "object": "Z"]
-        ]
-        provider.lock.unlock()
+        ]])
+        provider.flipToPassing(argsJSON: okArgs)
 
         await orchestrator.enqueue(ExtractionJob(
             turnId: TurnID(rawValue: "ok-1"),
