@@ -19,6 +19,42 @@ public enum BusOutbound: Equatable, Sendable {
     case toolCallEnd(id: UUID, ok: Bool, previewOrError: String)
     case turnStarted(id: UUID)
     case turnEnded(id: UUID, terminator: TurnTerminator)
+    /// TEXT-03 chat-panel hydration. Emitted on webview-ready by AppDelegate
+    /// (Plan 07-06) carrying the most-recent turns for the active session.
+    /// Additive (MINOR) bump per Phase 2 protocol versioning.
+    case sessionHistory(turns: [TurnRow])
+}
+
+/// Local mirror of Memory.TurnRow used by `BusOutbound.sessionHistory`.
+///
+/// Bus deliberately does not depend on the Memory package — adding that edge
+/// would pull Memory's transitive deps (Replay, AgentCore) into Bus, which
+/// is undesirable for the lightweight bridge layer. The shape mirrors
+/// Memory.TurnRow one-for-one; AppDelegate.installMemory (Plan 07-06)
+/// translates between the two when emitting.
+public struct TurnRow: Codable, Equatable, Sendable {
+    public let id: Int64
+    public let sessionId: String
+    public let role: String          // "user" | "assistant" | "tool"
+    public let content: String
+    public let source: String        // TurnSource rawValue
+    public let createdAt: Int64      // unix-ms
+
+    public init(
+        id: Int64,
+        sessionId: String,
+        role: String,
+        content: String,
+        source: String,
+        createdAt: Int64
+    ) {
+        self.id = id
+        self.sessionId = sessionId
+        self.role = role
+        self.content = content
+        self.source = source
+        self.createdAt = createdAt
+    }
 }
 
 extension BusOutbound: Codable {
@@ -35,6 +71,7 @@ extension BusOutbound: Codable {
         case toolCallEnd
         case turnStarted
         case turnEnded
+        case sessionHistory
     }
 
     /// All `CodingKeys` across every case. Swift's keyed container does not
@@ -52,6 +89,7 @@ extension BusOutbound: Codable {
         case ok
         case previewOrError
         case terminator
+        case turns
     }
 
     public init(from decoder: Decoder) throws {
@@ -87,6 +125,9 @@ extension BusOutbound: Codable {
             let id = try Self.decodeUUID(container: container, forKey: .id)
             let terminator = try container.decode(TurnTerminator.self, forKey: .terminator)
             self = .turnEnded(id: id, terminator: terminator)
+        case .sessionHistory:
+            let turns = try container.decode([TurnRow].self, forKey: .turns)
+            self = .sessionHistory(turns: turns)
         }
         // NO default branch — adding a Discriminator case without also adding
         // a matching switch arm here is a compile error. That is the entire
@@ -125,6 +166,9 @@ extension BusOutbound: Codable {
             try container.encode(Discriminator.turnEnded, forKey: .type)
             try container.encode(id.uuidString.lowercased(), forKey: .id)
             try container.encode(terminator, forKey: .terminator)
+        case .sessionHistory(let turns):
+            try container.encode(Discriminator.sessionHistory, forKey: .type)
+            try container.encode(turns, forKey: .turns)
         }
         // Exhaustive at encode site — adding a case without encoding it is a
         // compile error, mirroring the init(from:) drift preventer.
