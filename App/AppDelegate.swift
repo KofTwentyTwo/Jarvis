@@ -8,8 +8,13 @@ import Voice           // Plan 06-05: VoiceController + PTT + MuteWakeWord
 import WebKit
 import Logging   // swift-log — `Logger` here is `Logging.Logger`
 import AgentCore       // Plan 05-05: BoundedAsyncChannel for ME-04 closure
+import AgentOrchestrator // Plan 07-06: OrchestratorEvent type for installMemory's coordinator wiring
 import Replay          // Plan 05-05: ReplayEvent type for the orch→replay channel
 import JarvisMCP       // CR-02 (REVIEW 05): MCPRuntimeWiring.build for end-to-end ME-04 closure
+import Memory          // Plan 07-06: MemoryStore + MemoryExtractionOrchestrator + MemoryExtractionCoordinator
+import JarvisVision    // Plan 07-06: CameraCapture + PresenceMonitor + VisionRouter
+import OllamaProvider  // Plan 07-06: T1 vision provider + memory extractor backbone
+import AnthropicProvider // Plan 07-06: T3 cloud-escape vision provider
 
 /// Abstract the Info.plist `JarvisEntitlementsVerified` read so tests can inject
 /// a mock that returns false without touching the running binary's Info.plist.
@@ -155,6 +160,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// starts the voice subsystem. Held strongly so the async setup isn't
     /// cancelled prematurely.
     var voiceInstallTask: Task<Void, Never>?
+
+    // MARK: - Memory subsystem (Plan 07-01..07-02 wired in 07-06)
+
+    /// MemoryStore opened against ~/Library/Application Support/Jarvis/jarvis.db.
+    /// nil if vec0.dylib is missing or the open path failed — memory degrades
+    /// gracefully (no extraction, no retrieval; agent runs without memory).
+    var memoryStore: MemoryStore?
+
+    /// Background extraction orchestrator (Plan 07-02). Drains the bounded
+    /// AsyncChannel(capacity: 32, dropOldest) one job at a time so a stalled
+    /// 32B-model extraction never blocks turnEnd (MEM-06).
+    var memoryExtractionOrchestrator: MemoryExtractionOrchestrator?
+
+    /// Subscribes to AgentOrchestrator.events; on .turnEnd(.endTurn) enqueues
+    /// an ExtractionJob into memoryExtractionOrchestrator. Held strongly so
+    /// the subscriber Task it spawns isn't cancelled prematurely.
+    var memoryExtractionCoordinator: MemoryExtractionCoordinator?
+
+    /// Task spawned in `applicationWillFinishLaunching` that constructs and
+    /// starts the memory subsystem.
+    var memoryInstallTask: Task<Void, Never>?
+
+    // MARK: - Vision subsystem (Plan 07-04..07-05 wired in 07-06)
+
+    var captureSession: CameraCapture?
+    var presenceMonitor: PresenceMonitor?
+
+    /// VISION-03: the SINGLE PresenceSignalBus reference. PresenceMonitor
+    /// owns construction (only PresenceMonitor can construct the bus per
+    /// 07-04's design); we hold the SAME `monitor.bus` reference and pass
+    /// it BY VALUE (PresenceSignalBus is a Sendable struct wrapping the
+    /// AsyncStream) into both ContextBuilder (D-10 system-prompt enrichment)
+    /// and HudStateCoordinator (D-10 subtle ring indicator). The bus has NO
+    /// subscriber in JarvisTTS or in any code path leading to
+    /// AgentOrchestrator.runTurn / cancelAndSubmit — enforced by
+    /// scripts/check-presence-vision-isolation.sh and PhaseSevenGrepGateTests.
+    var presenceSignalBus: PresenceSignalBus?
+
+    /// Menu-bar toggle (D-12). Mirrors muteWakeWord — added to the same
+    /// contextMenu. Disabling presence does NOT disable frame-attach.
+    var disablePresence: DisablePresence?
+
+    /// T1/T2/T3 vision routing (Plan 07-05). Wired into the orchestrator's
+    /// runTurn dispatcher branch (deferred — AgentOrchestrator is itself not
+    /// yet wired in AppDelegate; see SUMMARY's Deferred wiring section).
+    var visionRouter: VisionRouter?
+
+    /// Camera-degradation watcher Task — surfaces TCC denial / mid-session
+    /// revocation as HUD banners (S-4 graceful denial).
+    var cameraDegradationTask: Task<Void, Never>?
+
+    /// Task spawned in `applicationWillFinishLaunching` that constructs and
+    /// starts the vision subsystem.
+    var visionInstallTask: Task<Void, Never>?
 
     /// Plan 03-05 test seam. Default production value is `"index"` (the R3F
     /// bundle entry). `installBus()` assigns this once when it resolves the
@@ -320,13 +379,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 11. Plan 06-05: install voice subsystem asynchronously.
+        // 11. Plan 07-06: install memory subsystem. MemoryStore.init can
+        //     throw if vec0.dylib is missing — installMemory catches and
+        //     degrades gracefully. We start memory BEFORE voice so the
+        //     extraction coordinator is subscribed to AgentOrchestrator.events
+        //     before the first voice-driven turn lands.
+        memoryInstallTask = Task { @MainActor [weak self] in
+            await self?.installMemory()
+        }
+
+        // 12. Plan 06-05: install voice subsystem asynchronously.
         //     Model files (ORT sessions, Orpheus MLX weights) may be absent
         //     on first launch — failure is non-fatal (voice degrades gracefully).
         //     The dormantVoiceContinuation is replaced with the real producer
         //     once VoiceController is live and started.
         voiceInstallTask = Task { @MainActor [weak self] in
             await self?.installVoice()
+        }
+
+        // 13. Plan 07-06: install vision subsystem. Camera TCC may be
+        //     undetermined or denied at first launch; presence + frame-attach
+        //     degrade gracefully via the cameraDegradationTask banner watcher.
+        visionInstallTask = Task { @MainActor [weak self] in
+            await self?.installVision()
         }
     }
 
@@ -345,6 +420,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         voiceInstallTask?.cancel()
         if let vc = voiceController {
             Task { await vc.shutdown() }
+        }
+        // Plan 07-06: tear down memory + vision.
+        memoryInstallTask?.cancel()
+        visionInstallTask?.cancel()
+        cameraDegradationTask?.cancel()
+        if let monitor = presenceMonitor {
+            Task { await monitor.cancel() }
+        }
+        if let extractor = memoryExtractionOrchestrator {
+            Task { await extractor.shutdown() }
+        }
+        if let coord = memoryExtractionCoordinator {
+            Task { await coord.stop() }
+        }
+        if let capture = captureSession {
+            Task { await capture.shutdown() }
         }
     }
 
@@ -443,6 +534,217 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Start the voice loop.
         await vc.start()
         systemLogger?.info("installVoice: VoiceController started")
+    }
+
+    // MARK: - Memory install (Plan 07-06 — mirrors installVoice)
+
+    /// Constructs and starts the memory subsystem.
+    ///
+    /// Bootstrap order (mirrors installVoice's six-step pattern):
+    ///   1. Build deps: jarvis.db URL under Application Support.
+    ///   2. Construct MemoryStore — opens DB + loads vec0.dylib + migrates.
+    ///      Failure is non-fatal: agent runs without memory until the user
+    ///      resolves it (vec0.dylib bundling is forwarded to Phase 8).
+    ///   3. Wire `replayLog` sink so MemoryStore.applyOp can record
+    ///      ReplayEvent.memoryMutation through to the on-disk replay log.
+    ///   4. Construct MemoryExtractor on top of OllamaProvider configured for
+    ///      qwen2.5-coder:32b.
+    ///   5. Construct MemoryExtractionOrchestrator (bounded AsyncChannel
+    ///      capacity 32, dropOldest, serial drain). start() spawns the
+    ///      consumer Task. The applyOp closure adapts the orchestrator's
+    ///      Int64 source-turn-id to MemoryStore.applyOp.
+    ///   6. Construct MemoryExtractionCoordinator and try to subscribe to
+    ///      AgentOrchestrator.events. AgentOrchestrator wiring lands in a
+    ///      future plan; until then the coordinator is constructed but its
+    ///      `start(...)` call is skipped — see SUMMARY's Deferred wiring.
+    ///   7. Log success.
+    @MainActor
+    private func installMemory() async {
+        // 1. DB URL.
+        let dbURL = configFileURL()
+            .deletingLastPathComponent()
+            .appendingPathComponent("jarvis.db")
+
+        // 2. MemoryStore.
+        let store: MemoryStore
+        do {
+            store = try MemoryStore(databaseURL: dbURL)
+        } catch {
+            // Graceful-degradation contract: the agent runs without memory
+            // when vec0.dylib is unavailable on this host (forwarded to
+            // Phase 8 hardening). Log + early return; voice + agent loops
+            // remain operational.
+            systemLogger?.warning(
+                "installMemory: store init failed (vec0.dylib missing or DB locked?): \(String(describing: error))"
+            )
+            return
+        }
+        memoryStore = store
+
+        // 3. Wire the replay sink so MemoryStore.applyOp emits
+        //    ReplayEvent.memoryMutation through to the existing on-disk
+        //    replay log. The Memory module declines to import Replay.ReplayLog
+        //    directly (07-02 design); AppDelegate is the only place that
+        //    bridges the two.
+        if let log = replayLog {
+            await store.setReplayLog(AppDelegateMemoryReplaySink(replayLog: log))
+        } else {
+            systemLogger?.warning("installMemory: replayLog absent — memory.mutated rows won't persist")
+        }
+
+        // 4. MemoryExtractor on OllamaProvider(qwen2.5-coder:32b).
+        let extractorProvider = OllamaProvider(
+            baseURL: URL(string: "http://127.0.0.1:11434")!
+        )
+        let extractor = MemoryExtractor(provider: extractorProvider)
+
+        // 5. Background orchestrator. Held strongly; start() spawns drain.
+        //    The applyOp closure adapts the orchestrator's (op, Int64)
+        //    contract to MemoryStore.applyOp, which is the SOLE emission
+        //    site for ReplayEvent.memoryMutation.
+        let memoryOrch = MemoryExtractionOrchestrator(
+            extractor: extractor,
+            applyOp: { op, turnId in
+                _ = try await store.applyOp(op, sourceTurnId: turnId)
+            }
+        )
+        await memoryOrch.start()
+        memoryExtractionOrchestrator = memoryOrch
+
+        // 6. Coordinator wiring — subscribe to AgentOrchestrator.events.
+        //    AgentOrchestrator is owned by a future Phase 4/5 wiring plan.
+        //    On disk at 07-06 time the App-target AgentOrchestrator instance
+        //    isn't yet exposed; the coordinator is constructed but its
+        //    start() call is deferred. The forwarded item is documented in
+        //    07-06-SUMMARY.md under "Deferred wiring".
+        let coord = MemoryExtractionCoordinator(memoryOrchestrator: memoryOrch)
+        memoryExtractionCoordinator = coord
+        if let events = self.agentOrchestratorEvents() {
+            await coord.start(
+                orchestratorEvents: events,
+                turnContent: { _ in nil }
+            )
+            systemLogger?.info("installMemory: extraction coordinator started")
+        } else {
+            systemLogger?.warning(
+                "installMemory: AgentOrchestrator.events unavailable — extraction coordinator constructed but not started (deferred wiring; see 07-06 SUMMARY)"
+            )
+        }
+
+        systemLogger?.info("installMemory: MemoryExtractionOrchestrator started")
+    }
+
+    /// Returns the live AgentOrchestrator's event stream if Phase 4 wiring is
+    /// present; nil otherwise. The AgentOrchestrator hasn't yet landed in
+    /// AppDelegate on develop — the coordinator wires up here once it does.
+    /// Documented as deferred wiring in 07-06-SUMMARY.
+    private func agentOrchestratorEvents() -> BoundedAsyncChannel<OrchestratorEvent>? {
+        // Placeholder — replaced when AgentOrchestrator is wired into
+        // AppDelegate. The Memory subsystem degrades gracefully without it
+        // (the orchestrator drains its bounded queue but no jobs ever arrive).
+        return nil
+    }
+
+    // MARK: - Vision install (Plan 07-06 — mirrors installVoice)
+
+    /// Constructs and starts the vision subsystem.
+    ///
+    /// VISION-03 architectural boundary: PresenceSignalBus is constructed
+    /// EXACTLY ONCE (by PresenceMonitor — only PresenceMonitor can
+    /// construct the bus per 07-04's `internal init`) and shared by
+    /// reference (the Sendable struct value type wraps the AsyncStream)
+    /// between two read-only consumers (ContextBuilder for D-10
+    /// system-prompt enrichment and HudStateCoordinator for D-10 subtle
+    /// ring indicator). No subscriber of the bus has any reference to
+    /// JarvisTTS or to the AgentOrchestrator.runTurn / cancelAndSubmit
+    /// code path — scripts/check-presence-vision-isolation.sh enforces.
+    ///
+    /// D-09: presence-on-by-default after first TCC grant. CameraCapture's
+    /// `becameAuthorized()` is the public entry that flips the session live
+    /// once Camera TCC has been granted; before that, `open()` throws and
+    /// the degradation watcher surfaces the banner.
+    @MainActor
+    private func installVision() async {
+        // 1. Camera capture session + degradation stream → HUD banner.
+        let capture = CameraCapture()
+        captureSession = capture
+        let degStream = await capture.degradationStream
+
+        cameraDegradationTask = Task { @MainActor [weak self] in
+            for await reason in degStream {
+                switch reason {
+                case .cameraDenied:
+                    self?.bannerCoordinator?.enqueue(.cameraDenied)
+                case .midSessionRevoked:
+                    self?.bannerCoordinator?.enqueue(.cameraRevoked)
+                }
+            }
+        }
+
+        // Try to open. Failure is non-fatal — banner already enqueued by
+        // the degradation watcher above on .cameraDenied.
+        do {
+            try await capture.open()
+        } catch {
+            systemLogger?.warning(
+                "installVision: CameraCapture.open() failed (\(String(describing: error))) — presence + frame-attach degrade gracefully"
+            )
+            // Continue — presence/frame-attach scaffolding still wires up so
+            // becameAuthorized() can be re-invoked after a TCC grant.
+        }
+
+        // 2. PresenceMonitor — constructs PresenceSignalBus internally
+        //    (only PresenceMonitor can; the bus init is internal). The
+        //    monitor's `bus` property is the SINGLE shared reference.
+        let frameStream = capture.frameStream(forPresence: true)
+        let monitor = PresenceMonitor(frameStream: frameStream)
+        presenceMonitor = monitor
+        let bus = monitor.bus
+        presenceSignalBus = bus
+        await monitor.start()
+
+        // 3. ContextBuilder consumer (D-10 system-prompt enrichment).
+        //    Read-only consumer of bus.stream; never produces.
+        AppDelegateContextBuilderAdapter.attachPresence(bus.stream)
+
+        // 4. HudStateCoordinator consumer (D-10 subtle ring indicator).
+        //    Single-writer invariant preserved — HudStateCoordinator's
+        //    resolveAndEmit remains the only HudState writer.
+        hudStateCoordinator?.attachPresence(bus.stream)
+
+        // 5. DisablePresence menu-bar toggle (D-12).
+        if let menu = menuBarController?.contextMenu {
+            disablePresence = DisablePresence(
+                presenceMonitor: monitor,
+                menuBarMenu: menu
+            )
+        }
+
+        // 6. VisionRouter (D-16/D-17/D-18 T1/T2/T3 ladder).
+        //    T2 falls back to T1 when vllm-mlx isn't available — the router's
+        //    `evaluatePostResponse` already enforces "stay on T1 if T2 not
+        //    available" (07-05's no-auto-cloud invariant); supplying the
+        //    same provider for both keeps the API contract satisfied.
+        //
+        //    Wiring into the live AgentOrchestrator.runTurn is deferred — the
+        //    orchestrator itself isn't yet wired in AppDelegate. See SUMMARY
+        //    Deferred wiring.
+        let t1 = OllamaProvider(baseURL: URL(string: "http://127.0.0.1:11434")!)
+        let t3: any LLMProvider
+        let keychainStoreLocal = self.keychainStore
+        t3 = AnthropicProvider(apiKeyProvider: { [keychainStoreLocal] in
+            (try? keychainStoreLocal.get(.anthropic)) ?? ""
+        })
+        let router = VisionRouter(
+            t1Provider: t1,
+            t2Provider: t1,                  // sidecar plan pending — T2 reuses T1 provider
+            t3Provider: t3
+        )
+        visionRouter = router
+
+        systemLogger?.info(
+            "installVision: presence + VisionRouter wired (T2 sidecar deferred; AgentOrchestrator runTurn dispatch deferred)"
+        )
     }
 
     // MARK: - Test-host detection
@@ -860,5 +1162,33 @@ actor NullTTSAdapter: VoiceTTSInterface {
 struct NullBusEmitterAdapter: BusOutboundEmitter {
     func postAudio(_ rms: Float) async {
         // Phase 7: forward to OutboundBatcher.postAudio(rms) for RingMesh pulse
+    }
+}
+
+// MARK: - Memory subsystem adapters (Plan 07-06)
+
+/// Bridges `Memory.MemoryReplaySink` → `Replay.ReplayLog`.
+///
+/// The Memory module deliberately does not import `Replay.ReplayLog` directly
+/// (07-02 design); AppDelegate is the only place that bridges the two. The
+/// adapter forwards a recorded `ReplayEvent` from MemoryStore.applyOp into the
+/// on-disk replay log. The log records are TurnID-keyed; the orchestrator
+/// records `ReplayEvent.memoryMutation` against an Int64 turnId hash, but the
+/// replay log indexes on TurnID. This adapter generates a synthetic TurnID
+/// stub from the Int64 hash — once AgentOrchestrator wiring lands the real
+/// turn-id correlation will be in place.
+struct AppDelegateMemoryReplaySink: MemoryReplaySink {
+    let replayLog: ReplayLog
+
+    func record(_ event: ReplayEvent, forTriggerTurnId triggerTurnId: Int64) {
+        // The replay log's `record(_:for:)` is async; fire-and-forget through
+        // a detached Task so the synchronous MemoryReplaySink contract stays
+        // intact. The Int64 trigger-turn-id is encoded as a TurnID's UUID
+        // string deterministically (FNV-1a hash → reverse stub) so replay
+        // queries can correlate later.
+        let synthetic = TurnID(rawValue: "memory-trigger-\(triggerTurnId)")
+        Task.detached { [replayLog] in
+            await replayLog.record(event, for: synthetic)
+        }
     }
 }

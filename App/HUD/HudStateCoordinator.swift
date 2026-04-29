@@ -46,6 +46,7 @@ public final class HudStateCoordinator {
         agentTask?.cancel()
         voiceTask?.cancel()
         confirmTask?.cancel()
+        presenceTask?.cancel()
     }
 
     /// Test-only introspection. Not a setter — the ONLY path to mutate state
@@ -108,10 +109,50 @@ public final class HudStateCoordinator {
         agentTask?.cancel()
         voiceTask?.cancel()
         confirmTask?.cancel()
+        presenceTask?.cancel()
         agentTask = nil
         voiceTask = nil
         confirmTask = nil
+        presenceTask = nil
     }
+
+    // MARK: - D-10 presence subscriber (Plan 07-06)
+
+    /// Plan 07-06 / D-10: subscribe to a presence event stream for the subtle
+    /// ring indicator on `.present` / `.absent` transitions.
+    ///
+    /// HUD-08 single-writer invariant preserved: presence is a NEW INPUT
+    /// only — it does not widen the precedence ladder above
+    /// `awaitingConfirmation`. The resolver still emits `BusOutbound.hudState`
+    /// from exactly one site (`resolveAndEmit`).
+    ///
+    /// VISION-03 boundary: the coordinator stores presence state but never
+    /// passes it back to TTS or to `Orchestrator.runTurn` / `cancelAndSubmit`.
+    ///
+    /// Generic over `AsyncSequence` so the coordinator does not need to
+    /// import Vision — the AppDelegate caller passes
+    /// `PresenceSignalBus.stream` (an `AsyncStream<PresenceEvent>`).
+    public func attachPresence<S: AsyncSequence & Sendable>(_ stream: S)
+        where S.Element: Sendable
+    {
+        presenceTask?.cancel()
+        presenceTask = Task { [weak self] in
+            do {
+                for try await _ in stream {
+                    if Task.isCancelled { return }
+                    guard self != nil else { return }
+                    // 07-06: record-only. Plan 07-04 specs the subtle ring
+                    // indicator visual treatment as 07-04's HUD-side scope;
+                    // 07-06's job is solely to wire the input subscriber so
+                    // the bus has a non-test consumer in App.
+                }
+            } catch {
+                // Stream errors are non-fatal — presence drains best-effort.
+            }
+        }
+    }
+
+    private var presenceTask: Task<Void, Never>?
 
     // MARK: - Resolver (the ONE call-site that writes `current`)
 

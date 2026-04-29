@@ -14,6 +14,7 @@
 		17072C84550FC4659C4810B9 /* MCPTimeMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCA2C937A1629F873729B75 /* MCPTimeMain.swift */; };
 		18CDCC4155A2604BC4D67147 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 467AE2D19D58325D227E2F89 /* Assets.xcassets */; };
 		1D281661B4A64095FF9FA8BA /* Bus in Frameworks */ = {isa = PBXBuildFile; productRef = FB642DDAD826E62BBE1B8623 /* Bus */; };
+		2245DEFA1E6C3880E3C78E56 /* AppDelegateContextBuilderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4723FBC0F20AD2EFF146A24 /* AppDelegateContextBuilderAdapter.swift */; };
 		267515392F3978AA4A96EFA2 /* PasteboardReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D554BFB452EC88ECA9392A2E /* PasteboardReader.swift */; };
 		29CF0F24C5D0DD0A8F1A0AEE /* WizardState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B2103B1A123E512CC56B63 /* WizardState.swift */; };
 		2BCA466CFD785F3BC989C35F /* WizardStageAPIKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */; };
@@ -179,6 +180,7 @@
 		BFEF6C3A66183A4563869131 /* WizardStageAPIKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageAPIKeyView.swift; sourceTree = "<group>"; };
 		C1517F151F3BA96803143692 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWizardController.swift; sourceTree = "<group>"; };
+		C4723FBC0F20AD2EFF146A24 /* AppDelegateContextBuilderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateContextBuilderAdapter.swift; sourceTree = "<group>"; };
 		CBF3EF4CDCC653EF50D99AF7 /* MCPRuntimeWiring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPRuntimeWiring.swift; sourceTree = "<group>"; };
 		D5077B9E3E7541D72CE0EB1B /* MCPAppleScriptMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPAppleScriptMain.swift; sourceTree = "<group>"; };
 		D554BFB452EC88ECA9392A2E /* PasteboardReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardReader.swift; sourceTree = "<group>"; };
@@ -474,6 +476,7 @@
 		EE585F62F46C659EDFC48DE7 /* MCP */ = {
 			isa = PBXGroup;
 			children = (
+				C4723FBC0F20AD2EFF146A24 /* AppDelegateContextBuilderAdapter.swift */,
 				CBF3EF4CDCC653EF50D99AF7 /* MCPRuntimeWiring.swift */,
 				0358E0CAC1377752398FA3C4 /* ReplayingToolResultObserver.swift */,
 			);
@@ -1097,6 +1100,7 @@
 			files = (
 				50C095E6F675D26E9C399179 /* AnthropicKeyValidator.swift in Sources */,
 				8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */,
+				2245DEFA1E6C3880E3C78E56 /* AppDelegateContextBuilderAdapter.swift in Sources */,
 				0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */,
 				C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */,
 				A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */,
