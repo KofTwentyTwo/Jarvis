@@ -21,6 +21,7 @@ struct JarvisEval: AsyncParsableCommand {
             CorpusInjection.self,
             CorpusSSE.self,
             CorpusNDJSON.self,
+            WakeCorpus.self,
         ]
     )
 }
@@ -305,4 +306,33 @@ struct CorpusNDJSON: AsyncParsableCommand {
     }
 }
 
-// WakeCorpus subcommand lands in Plan 08-02 Task 3 (next commit).
+// MARK: - wake-corpus (Plan 08-02 Task 3)
+
+/// `jarvis-eval wake-corpus` — pillar (e). Compute wake-word FAR/FRR over
+/// the per-host labeled WAV corpus against the production
+/// `OpenWakeWordSession` (real ONNX). D-18 thresholds enforced.
+struct WakeCorpus: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "wake-corpus",
+        abstract: "Wake-word FAR/FRR over labeled WAV corpus (D-18 thresholds)."
+    )
+
+    func run() async throws {
+        let corpus = try WakeHysteresisCorpus.loadFromBundle()
+        let runner = WakeHysteresisRunner()
+        let report = try await runner.run(corpus: corpus)
+
+        print("WAKE CORPUS:")
+        print("  clips: \(report.totalClips)  duration: \(String(format: "%.1f", report.totalDurationSeconds))s")
+        print("  TP=\(report.truePositives) FN=\(report.falseNegatives) FP=\(report.falsePositives) TN=\(report.trueNegatives)")
+        print("  FAR: \(String(format: "%.3f", report.farPerHour))/hr  FRR: \(String(format: "%.2f", report.frrPercent))%")
+        print("  D-18: passed=\(report.passed)  warned=\(report.warned)")
+        if let diagnostic = report.diagnostic {
+            print("  diagnostic: \(diagnostic)")
+        }
+        if report.warned && report.passed {
+            print("  WARNING: D-18 warn thresholds tripped (FAR > 0.5/hr or FRR > 5.0%) — does not block ship.")
+        }
+        if !report.passed { throw ExitCode.failure }
+    }
+}
