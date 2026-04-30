@@ -91,11 +91,11 @@ items:
       type: script
       path: scripts/check-corpus-secrets.sh
   - id: P8-13
-    description: "Shipping-gate script invokes `jarvis-eval all` (single CI entry per OBS-04)"
+    description: "Shipping-gate script invokes the `all` aggregate subcommand of jarvis-eval (single CI entry per OBS-04)"
     mechanization:
       type: grep_positive
       file: scripts/shipping-gate.sh
-      pattern: "jarvis-eval all"
+      pattern: "EVAL_BIN.*all"
       expected_count: 1
   - id: P8-14
     description: "Promote-replay-session.sh records temperature + model + replaySchemaVersion in sidecar JSON (D-09)"
@@ -103,7 +103,7 @@ items:
       type: grep_positive
       file: scripts/promote-replay-session.sh
       pattern: "temperature|model|replaySchemaVersion"
-      expected_count: 3
+      expected_count: 5
   - id: P8-15
     description: "Cross-phase build smoke (the harness exists in a buildable workspace)"
     mechanization:

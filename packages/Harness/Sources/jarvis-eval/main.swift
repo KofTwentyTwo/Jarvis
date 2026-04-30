@@ -494,62 +494,58 @@ struct All: AsyncParsableCommand {
 
 // MARK: - per-pillar dispatch helpers
 //
-// Each helper instantiates the subcommand with its default parameter shape,
-// overrides the few fields the aggregate gate needs (verbose flag pass-thru,
-// crash-count default), and calls `.run()`. This avoids the
-// `parseAsRoot([])` route, which on swift-argument-parser 1.5 dispatches
-// through CommandConfiguration validation that demands a non-empty argv on
-// some shapes.
+// Each helper invokes the same subcommand via `parseAsRoot([])` so that
+// swift-argument-parser populates every @Flag/@Option/@Argument property's
+// backing storage with the declared defaults. Direct `.init()` + property
+// assignment doesn't traverse the property-wrapper init path and trips the
+// "Can't read a value from a parsable argument definition" guard.
 
 private func runChecklistPillar(verbose: Bool) async throws {
-    var cmd = Checklist()
-    cmd.verbose = verbose
+    let argv: [String] = verbose ? ["--verbose"] : []
+    let cmd = try Checklist.parse(argv)
     try await cmd.run()
 }
 
 private func runCorpusInjectionPillar(verbose: Bool) async throws {
-    var cmd = CorpusInjection()
-    cmd.verbose = verbose
+    let argv: [String] = verbose ? ["--verbose"] : []
+    let cmd = try CorpusInjection.parse(argv)
     try await cmd.run()
 }
 
 private func runCorpusSSEPillar(verbose: Bool) async throws {
-    var cmd = CorpusSSE()
-    cmd.verbose = verbose
+    let argv: [String] = verbose ? ["--verbose"] : []
+    let cmd = try CorpusSSE.parse(argv)
     try await cmd.run()
 }
 
 private func runCorpusNDJSONPillar(verbose: Bool) async throws {
-    var cmd = CorpusNDJSON()
-    cmd.verbose = verbose
+    let argv: [String] = verbose ? ["--verbose"] : []
+    let cmd = try CorpusNDJSON.parse(argv)
     try await cmd.run()
 }
 
 private func runCapRecoveryPillar() async throws {
-    var cmd = CapRecovery()
-    cmd.provider = "anthropic"
+    let cmd = try CapRecovery.parse([])
     try await cmd.run()
 }
 
 private func runWakeCorpusPillar() async throws {
-    let cmd = WakeCorpus()
+    let cmd = try WakeCorpus.parse([])
     try await cmd.run()
 }
 
 private func runMcpCrashPillar() async throws {
-    var cmd = McpCrash()
-    cmd.crashes = 50
-    cmd.extended = false
+    // 50 crashes per D-19 (cycle-time threshold default).
+    let cmd = try McpCrash.parse(["--crashes", "50"])
     try await cmd.run()
 }
 
 private func runAudioRebuildPillar() async throws {
-    let cmd = AudioRebuild()
+    let cmd = try AudioRebuild.parse([])
     try await cmd.run()
 }
 
 private func runCorpusNDJSONLivePillar() async throws {
-    var cmd = CorpusNDJSONLive()
-    cmd.live = true
+    let cmd = try CorpusNDJSONLive.parse(["--live"])
     try await cmd.run()
 }
