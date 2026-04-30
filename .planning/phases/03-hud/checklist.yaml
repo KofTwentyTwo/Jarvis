@@ -1,0 +1,53 @@
+# Phase 03-hud checklist manifest (D-15 retroactive sweep)
+#
+# HUD architectural invariants:
+# - Single-writer HudStateCoordinator (no rogue setters)
+# - No evaluateJavaScript leakage into the HUD path
+# - No modal NSAlert/NSPanel dialogs presented from R3F-rendered views
+# - HUD render smoke (R3F mounts cleanly)
+phase: 03-hud
+items:
+  - id: P3-01
+    description: "HudState writes pass through HudStateCoordinator only (architectural invariant — no setHudState calls outside the coordinator)"
+    mechanization:
+      type: script
+      path: scripts/check-single-writer-hudstate.sh
+  - id: P3-02
+    description: "evaluateJavaScript stays absent from HUD path (re-asserted at this phase boundary)"
+    mechanization:
+      type: script
+      path: scripts/check-no-evaluate-javascript.sh
+  - id: P3-03
+    description: "HUD render smoke — R3F mounts and the particle ring renders one frame"
+    mechanization:
+      type: script
+      path: scripts/smoke-test-hud.sh
+  - id: P3-04
+    description: "No native AppKit modal alerts/panels presented from HUD views (modal presentation belongs to confirmation broker only — see 05-mcp)"
+    mechanization:
+      type: script
+      path: scripts/check-no-modal-presentation.sh
+  - id: P3-05
+    description: "HudStateCoordinator emits exactly one transition per state change (no double-fire under barge-in)"
+    mechanization:
+      type: swift_test
+      suite: HUDTests
+      test: testCoordinatorEmitsSingleTransitionPerStateChange
+  - id: P3-06
+    description: "HUD precedence ladder: TTS speaking displaces listening pulse without intermediate idle flash"
+    mechanization:
+      type: swift_test
+      suite: HUDTests
+      test: testPrecedenceLadderNoIntermediateIdle
+  - id: P3-07
+    description: "Reduce-Motion CAAnimationFactory respects accessibility setting (no spinning ring under reduce-motion)"
+    mechanization:
+      type: swift_test
+      suite: HUDTests
+      test: testReduceMotionDisablesRotation
+  - id: P3-08
+    description: "HUD panel is .nonactivatingPanel at .statusBar level — never steals focus"
+    mechanization:
+      type: swift_test
+      suite: HUDTests
+      test: testHUDPanelDoesNotStealFocus

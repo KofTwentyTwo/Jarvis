@@ -1,0 +1,53 @@
+# Phase 02-bus checklist manifest (D-15 retroactive sweep)
+#
+# Architectural invariants for the WKScriptMessageHandler-bound bus:
+# - BUS_PROTOCOL_VERSION parity Swift ↔ TS (SEC-09)
+# - No evaluateJavaScript — all bus traffic goes through the handler
+# - Fixture parity for Bus tests vs webview tests
+# - Cross-language wire-shape contract
+phase: 02-bus
+items:
+  - id: P2-01
+    description: "BUS_PROTOCOL_VERSION matches between Swift and TS, fixture dirs byte-identical (SEC-09 build-breaker)"
+    mechanization:
+      type: script
+      path: scripts/check-bus-protocol-version.sh
+  - id: P2-02
+    description: "Swift fixtures parity check vs harness expected list (cross-language fixture coverage)"
+    mechanization:
+      type: script
+      path: scripts/check-bus-harness-parity.sh
+  - id: P2-03
+    description: "evaluateJavaScript is FORBIDDEN — every Swift→JS message goes through the WKScriptMessageHandler bus"
+    mechanization:
+      type: script
+      path: scripts/check-no-evaluate-javascript.sh
+  - id: P2-04
+    description: "Bus envelope schema versioning lives in a single source of truth"
+    mechanization:
+      type: swift_test
+      suite: BusTests
+      test: testProtocolVersionConstantSurface
+  - id: P2-05
+    description: "Handshake mismatch surface produces ProtocolVersionMismatch error, not silent drop"
+    mechanization:
+      type: swift_test
+      suite: BusTests
+      test: testHandshakeMismatchEmitsTypedError
+  - id: P2-06
+    description: "Bus inbound rejects unknown envelope types with structured error (S-1 exhaustive switch invariant)"
+    mechanization:
+      type: swift_test
+      suite: BusTests
+      test: testInboundRejectsUnknownEnvelopeKind
+  - id: P2-07
+    description: "Bus outbound is the SOLE writer of Swift→JS bytes (single-source-of-truth invariant)"
+    mechanization:
+      type: swift_test
+      suite: BusTests
+      test: testOutboundSingleWriter
+  - id: P2-08
+    description: "Built-app smoke (cross-phase solvency; bus tests can't fully cover wire-up without an app run)"
+    mechanization:
+      type: script
+      path: scripts/check-app-builds.sh

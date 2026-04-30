@@ -1,0 +1,69 @@
+# Phase 05-mcp checklist manifest (D-15 retroactive sweep)
+#
+# MCP integration invariants:
+# - Native AppKit confirmation broker (NEVER webview modal — MCP-04)
+# - Per-server restart mutex (MCP-07)
+# - ChildSpawnGate FD_CLOEXEC + minimal env (MCP-08)
+# - Sanitize pipeline ordering (SEC-07 — wrap then sanitize)
+# - Per-helper TCC identity (nested .app bundles, separate codesign)
+phase: 05-mcp
+items:
+  - id: P5-01
+    description: "No NSAlert/NSPanel modal presentation outside the confirmation broker (MCP-04 — confirmation belongs to native AppKit, not webview)"
+    mechanization:
+      type: script
+      path: scripts/check-no-modal-presentation.sh
+  - id: P5-02
+    description: "ConfirmationBroker presents NSAlert (native), not a webview modal (MCP-04)"
+    mechanization:
+      type: swift_test
+      suite: MCPTests
+      test: testConfirmationBrokerUsesNativeAppKit
+  - id: P5-03
+    description: "Per-server restart mutex prevents concurrent re-launch of the same MCP helper (MCP-07)"
+    mechanization:
+      type: swift_test
+      suite: MCPTests
+      test: testRestartMutexPreventsConcurrentRelaunch
+  - id: P5-04
+    description: "ChildSpawnGate enforces FD_CLOEXEC on every long-lived parent FD before Process.run (MCP-08)"
+    mechanization:
+      type: swift_test
+      suite: MCPTests
+      test: testChildSpawnGateAppliesFDCLOEXEC
+  - id: P5-05
+    description: "ChildSpawnGate uses minimal environment (PATH=/usr/bin:/bin only) — no parent env inheritance"
+    mechanization:
+      type: swift_test
+      suite: MCPTests
+      test: testChildSpawnGateMinimalEnvironment
+  - id: P5-06
+    description: "Sanitize pipeline runs after UNTRUSTED_CONTENT wrap, never before (SEC-07 ordering invariant)"
+    mechanization:
+      type: swift_test
+      suite: MCPTests
+      test: testSanitizeRunsAfterWrap
+  - id: P5-07
+    description: "Sanitize defends against U+2028 / C0 controls / bidi / zero-width characters (D-23 corpus)"
+    mechanization:
+      type: swift_test
+      suite: MCPTests
+      test: testSanitizeStripsUnicodeFootguns
+  - id: P5-08
+    description: "MCP helper init failure does not leak FDs (MCPServerHandleInitFailureFDLeak)"
+    mechanization:
+      type: swift_test
+      suite: MCPTests
+      test: testInitFailureDoesNotLeakFDs
+  - id: P5-09
+    description: "ToolDispatcher contract: dispatch returns typed result; never throws past the orchestrator boundary"
+    mechanization:
+      type: swift_test
+      suite: MCPTests
+      test: testToolDispatcherContractTypedResult
+  - id: P5-10
+    description: "Crash recovery within bounded latency budget (MCP-09 / D-19 cycle-time threshold)"
+    mechanization:
+      type: swift_test
+      suite: MCPTests
+      test: testCrashRecoveryWithinLatencyBudget

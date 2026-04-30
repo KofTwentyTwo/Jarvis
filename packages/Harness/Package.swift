@@ -39,6 +39,9 @@ let package = Package(
         // swift-sdk's MCP product, distinct from our local JarvisMCP
         // library). This dep is consumed only by MCPCrashRunner.
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk", exact: "0.12.0"),
+        // Plan 08-04 Task 1: Yams parses per-phase checklist.yaml manifests.
+        // Consumed by ChecklistManifest's `load(yamlURL:)` static factory.
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.6"),
     ],
     targets: [
         .target(
@@ -57,6 +60,7 @@ let package = Package(
                 .product(name: "Memory", package: "Memory"),
                 .product(name: "DevOverlay", package: "DevOverlay"),
                 .product(name: "Logging", package: "swift-log"),
+                .product(name: "Yams", package: "Yams"),
             ],
             path: "Sources/Harness",
             resources: [
