@@ -141,17 +141,13 @@ public actor WakeHysteresisRunner {
             )
         }
 
-        // Probe path: validate every clip can be opened and decoded as
-        // 16 kHz mono, validate the production session can be constructed
-        // (manifest SHA-256 verification runs), then surface the
-        // `pipelineNotWired` diagnostic. This catches corpus / model
-        // breakage at the point where the shipping gate runs, not
-        // silently at the (currently absent) inference step.
-        var totalDurationSeconds: Double = 0
+        // End-to-end inference path: construct the production OpenWakeWordSession
+        // and feed each clip through it in 1280-sample (80 ms @ 16 kHz) frames
+        // via the public `feed(samples:)` API (Voice-package addition; Swift 6
+        // forbids UnsafeBufferPointer escape into async actor hops).
+        let session: OpenWakeWordSession
         do {
-            // One construction is sufficient — confirms manifest gating
-            // and ORT model load succeed for this host.
-            _ = try OpenWakeWordSession(modelDir: modelDir)
+            session = try OpenWakeWordSession(modelDir: modelDir)
         } catch {
             return WakeReport(
                 totalClips: corpus.clips.count,
@@ -167,32 +163,59 @@ public actor WakeHysteresisRunner {
                     + "\(modelDir.path): \(error.localizedDescription)"
             )
         }
+
+        let frameSize = 1280  // openWakeWord chunk: 80 ms @ 16 kHz
+        var totalDurationSeconds: Double = 0
+        var truePositives = 0
+        var falseNegatives = 0
+        var falsePositives = 0
+        var trueNegatives = 0
+
         for clip in corpus.clips {
             let url = try WakeHysteresisCorpus.wavURL(for: clip)
             let samples = try WAVDecoder.decode16kMonoFloat(url: url)
-            // Sanity: the wake DAG expects 1280-sample (80 ms) frames at
-            // 16 kHz mono. A clip shorter than one frame can never fire
-            // and would skew FRR — surface as part of the diagnostic.
-            _ = samples
             totalDurationSeconds += clip.durationSeconds
+
+            // Slice into 1280-sample frames; partial trailing frame is dropped
+            // because openWakeWord's mel stage expects a fixed window size.
+            var fired = false
+            var frameStart = 0
+            while frameStart + frameSize <= samples.count {
+                let frame = Array(samples[frameStart..<(frameStart + frameSize)])
+                let decision = try await session.feed(samples: frame)
+                if case .fired = decision {
+                    fired = true
+                }
+                frameStart += frameSize
+            }
+
+            switch (clip.label, fired) {
+            case (.positive, true):  truePositives += 1
+            case (.positive, false): falseNegatives += 1
+            case (.negative, true):  falsePositives += 1
+            case (.negative, false): trueNegatives += 1
+            }
         }
+
+        let durationHours = totalDurationSeconds / 3600.0
+        let farPerHour = durationHours > 0
+            ? Double(falsePositives) / durationHours
+            : 0
+        let positiveCount = truePositives + falseNegatives
+        let frrPercent = positiveCount > 0
+            ? (Double(falseNegatives) / Double(positiveCount)) * 100.0
+            : 0
 
         return WakeReport(
             totalClips: corpus.clips.count,
             totalDurationSeconds: totalDurationSeconds,
-            truePositives: 0,
-            falseNegatives: 0,
-            falsePositives: 0,
-            trueNegatives: 0,
-            farPerHour: 0,
-            frrPercent: 0,
-            diagnostic:
-                "Production OpenWakeWordSession.feed(_:) is async + "
-                + "UnsafeBufferPointer; cannot be invoked from outside the "
-                + "Voice module's actor without a public feed(samples:) "
-                + "API. Plan 08-02 ships the corpus + report scaffolding; "
-                + "the end-to-end inference path is deferred pending a "
-                + "Voice-package surface change."
+            truePositives: truePositives,
+            falseNegatives: falseNegatives,
+            falsePositives: falsePositives,
+            trueNegatives: trueNegatives,
+            farPerHour: farPerHour,
+            frrPercent: frrPercent,
+            diagnostic: nil
         )
     }
 

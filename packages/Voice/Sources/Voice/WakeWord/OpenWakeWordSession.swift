@@ -96,6 +96,19 @@ public actor OpenWakeWordSession {
         return try runHysteresis(pcmSamples: samples)
     }
 
+    /// Array-typed overload for callers that cannot escape `UnsafeBufferPointer`
+    /// across `await` boundaries (Swift 6 forbids the pointer leaving the sync
+    /// `withUnsafeBufferPointer` closure into an async-suspended actor hop).
+    /// The harness `WakeHysteresisRunner` consumes this path directly.
+    /// Production audio-tap code keeps using the buffer-pointer overload to
+    /// avoid the per-frame Array copy.
+    ///
+    /// - Parameter samples: Float32 mono samples at 16 kHz (1280 per frame).
+    /// - Returns: `.fired` after `framesRequired` consecutive above-threshold frames.
+    public func feed(samples: [Float]) throws -> DetectionDecision {
+        return try runHysteresis(pcmSamples: samples)
+    }
+
     // MARK: - Internal test helper
 
     /// Feeds an empty frame through the scripted classifier path.

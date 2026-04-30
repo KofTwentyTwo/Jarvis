@@ -1,1 +1,72 @@
-[]
+[
+  {
+    "id": "tp-daniel-150",
+    "fileName": "tp-daniel-150.wav",
+    "label": "positive",
+    "durationSeconds": 0.99,
+    "noiseProfile": "synthetic-tts"
+  },
+  {
+    "id": "tp-karen-160",
+    "fileName": "tp-karen-160.wav",
+    "label": "positive",
+    "durationSeconds": 0.887,
+    "noiseProfile": "synthetic-tts"
+  },
+  {
+    "id": "tp-samantha-180",
+    "fileName": "tp-samantha-180.wav",
+    "label": "positive",
+    "durationSeconds": 0.809,
+    "noiseProfile": "synthetic-tts"
+  },
+  {
+    "id": "tp-tom-200",
+    "fileName": "tp-tom-200.wav",
+    "label": "positive",
+    "durationSeconds": 0.719,
+    "noiseProfile": "synthetic-tts"
+  },
+  {
+    "id": "tp-victoria-170",
+    "fileName": "tp-victoria-170.wav",
+    "label": "positive",
+    "durationSeconds": 0.809,
+    "noiseProfile": "synthetic-tts"
+  },
+  {
+    "id": "tn-greeting",
+    "fileName": "tn-greeting.wav",
+    "label": "negative",
+    "durationSeconds": 1.234,
+    "noiseProfile": "synthetic-tts"
+  },
+  {
+    "id": "tn-music",
+    "fileName": "tn-music.wav",
+    "label": "negative",
+    "durationSeconds": 0.95,
+    "noiseProfile": "synthetic-tts"
+  },
+  {
+    "id": "tn-numbers",
+    "fileName": "tn-numbers.wav",
+    "label": "negative",
+    "durationSeconds": 1.488,
+    "noiseProfile": "synthetic-tts"
+  },
+  {
+    "id": "tn-time",
+    "fileName": "tn-time.wav",
+    "label": "negative",
+    "durationSeconds": 0.978,
+    "noiseProfile": "synthetic-tts"
+  },
+  {
+    "id": "tn-weather",
+    "fileName": "tn-weather.wav",
+    "label": "negative",
+    "durationSeconds": 1.528,
+    "noiseProfile": "synthetic-tts"
+  }
+]

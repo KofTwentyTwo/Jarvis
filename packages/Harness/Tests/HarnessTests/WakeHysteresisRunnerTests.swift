@@ -28,11 +28,20 @@ struct WakeHysteresisRunnerTests {
                 "diagnostic should route the operator to the recording protocol")
     }
 
-    @Test("Default labels.json scaffold is empty")
-    func defaultCorpusIsEmpty() throws {
+    @Test("Seed corpus has both positive and negative clips")
+    func seedCorpusHasBothLabels() throws {
+        // Post-P8 deferral closeout populated the corpus with TTS-synthesized
+        // clips (5 TP "Hey Jarvis" + 5 TN unrelated phrases) so the harness
+        // exercises end-to-end inference instead of the empty diagnostic
+        // path. Operators replace these with host-recorded clips per the
+        // README protocol; the contract is BOTH labels present, not exact count.
         let corpus = try WakeHysteresisCorpus.loadFromBundle()
-        #expect(corpus.clips.isEmpty,
-                "labels.json ships empty by default; operator records per-host clips")
+        #expect(!corpus.clips.isEmpty,
+                "seed corpus ships TTS-synthesized clips; operator augments per-host")
+        #expect(corpus.clips.contains { $0.label == .positive },
+                "corpus must include at least one positive (Hey Jarvis) clip")
+        #expect(corpus.clips.contains { $0.label == .negative },
+                "corpus must include at least one negative clip")
     }
 
     // MARK: - D-18 PASS predicate
