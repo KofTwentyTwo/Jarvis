@@ -1,0 +1,13 @@
+{
+  "alwaysExcluded": [
+    "row_id",
+    "session_id",
+    "turn_id",
+    "tool_use_id",
+    "message_id",
+    "ts",
+    "monotonic_ns",
+    "turn_nonce"
+  ],
+  "nondeterministicUnderSampling": []
+}
