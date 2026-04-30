@@ -449,3 +449,94 @@ public actor MemoryStore {
 extension MemoryStore: MemoryReadStore {}
 extension MemoryStore: SessionHistoryReading {}
 extension OllamaEmbeddingClient: EmbeddingProviding {}
+
+// MARK: - Plan 07-06 / Regression corpus test seams
+//
+// These small read-only seams are exercised exclusively by the env-gated
+// MemoryRegressionCorpusTests suite (JARVIS_REAL_MODELS=1). They wrap raw
+// SQL queries that the regression scenarios need to assert on. Each is
+// idempotent and side-effect-free.
+
+extension MemoryStore {
+
+    /// Convenience facade over `runHybridSearchSQL` that supplies its own
+    /// embedding via the injected embedder. Used by the regression corpus
+    /// to drive a single query end-to-end without the test having to wire
+    /// the embedder explicitly.
+    public func searchFacts(
+        query: String,
+        k: Int = 10,
+        embedder: any EmbeddingProviding
+    ) async throws -> [Fact] {
+        let embedding = try await embedder.embed(query)
+        let pairs = try runHybridSearchSQL(query: query, embedding: embedding, k: k)
+        return pairs.map { $0.0 }
+    }
+
+    /// Fetch a fact by id (regardless of valid_to / forgotten_at state).
+    /// Used by the regression corpus to verify the never-DELETE invariant.
+    public func factById(_ id: Int64) throws -> Fact? {
+        let sql = """
+            SELECT id, subject, predicate, object, source_turn_id, valid_from,
+                   valid_to, superseded_by, forgotten_at, created_at
+            FROM facts
+            WHERE id = ?
+            LIMIT 1;
+            """
+        let rows = try conn.query(sql, bindings: [.int(id)]) { stmt in
+            Fact(
+                id: stmt.columnInt(at: 0),
+                subject: stmt.columnText(at: 1) ?? "",
+                predicate: stmt.columnText(at: 2) ?? "",
+                object: stmt.columnText(at: 3) ?? "",
+                sourceTurnId: stmt.columnIsNull(at: 4) ? nil : stmt.columnInt(at: 4),
+                validFrom: stmt.columnInt(at: 5),
+                validTo: stmt.columnIsNull(at: 6) ? nil : stmt.columnInt(at: 6),
+                supersededBy: stmt.columnIsNull(at: 7) ? nil : stmt.columnInt(at: 7),
+                forgottenAt: stmt.columnIsNull(at: 8) ? nil : stmt.columnInt(at: 8),
+                createdAt: stmt.columnInt(at: 9)
+            )
+        }
+        return rows.first
+    }
+
+    /// Count facts (regardless of state) matching a predicate. Used by the
+    /// regression corpus to assert MEM-05 never-DELETE: `SELECT COUNT(*)`
+    /// should rise on supersede, never stay flat.
+    public func rawCountFacts(predicate: String) throws -> Int {
+        let sql = "SELECT COUNT(*) FROM facts WHERE predicate = ?;"
+        let rows = try conn.query(sql, bindings: [.text(predicate)]) { stmt in
+            Int(stmt.columnInt(at: 0))
+        }
+        return rows.first ?? 0
+    }
+
+    /// Active facts (valid_to IS NULL AND forgotten_at IS NULL) matching
+    /// (subject, predicate). Returns 0 or more rows; the partial index
+    /// `idx_facts_active` is the natural query plan.
+    public func activeFacts(subject: String, predicate: String) throws -> [Fact] {
+        let sql = """
+            SELECT id, subject, predicate, object, source_turn_id, valid_from,
+                   valid_to, superseded_by, forgotten_at, created_at
+            FROM facts
+            WHERE subject = ?
+              AND predicate = ?
+              AND valid_to IS NULL
+              AND forgotten_at IS NULL;
+            """
+        return try conn.query(sql, bindings: [.text(subject), .text(predicate)]) { stmt in
+            Fact(
+                id: stmt.columnInt(at: 0),
+                subject: stmt.columnText(at: 1) ?? "",
+                predicate: stmt.columnText(at: 2) ?? "",
+                object: stmt.columnText(at: 3) ?? "",
+                sourceTurnId: stmt.columnIsNull(at: 4) ? nil : stmt.columnInt(at: 4),
+                validFrom: stmt.columnInt(at: 5),
+                validTo: stmt.columnIsNull(at: 6) ? nil : stmt.columnInt(at: 6),
+                supersededBy: stmt.columnIsNull(at: 7) ? nil : stmt.columnInt(at: 7),
+                forgottenAt: stmt.columnIsNull(at: 8) ? nil : stmt.columnInt(at: 8),
+                createdAt: stmt.columnInt(at: 9)
+            )
+        }
+    }
+}

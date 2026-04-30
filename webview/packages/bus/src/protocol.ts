@@ -3,9 +3,12 @@
  *
  * Source of truth: this file's BUS_PROTOCOL_VERSION and the Swift side's
  * constant must be byte-identical. Plan 04 adds a build-time parity check.
+ *
+ * Plan 07-03 bumped Swift 2.0.0 -> 2.1.0 (additive sessionHistory case);
+ * Plan 07-06 mirrors the bump here so the build-time parity check passes.
  */
 
-export const BUS_PROTOCOL_VERSION = "2.0.0";
+export const BUS_PROTOCOL_VERSION = "2.1.0";
 
 export type HudState =
   | "idle"
@@ -22,6 +25,22 @@ export type TurnTerminator =
   | "errored"
   | "superseded";
 
+/**
+ * Local mirror of `Memory.TurnRow` (the backend Swift type) and
+ * `Bus.TurnRow` (the Swift bus mirror). Bus deliberately does NOT depend on
+ * the Memory package — this duplicated shape preserves the lightweight
+ * bridge layer. AppDelegate.installMemory translates between
+ * `Memory.TurnRow` and `Bus.TurnRow` when emitting `sessionHistory`.
+ */
+export interface TurnRow {
+  id: number;
+  sessionId: string;
+  role: string; // "user" | "assistant" | "tool"
+  content: string;
+  source: string; // TurnSource rawValue
+  createdAt: number; // unix-ms
+}
+
 export type BusOutbound =
   | { type: "hello"; version: string }
   | { type: "hudState"; state: HudState }
@@ -30,7 +49,8 @@ export type BusOutbound =
   | { type: "toolCallStart"; id: string; name: string; argsPreview: string }
   | { type: "toolCallEnd"; id: string; ok: boolean; previewOrError: string }
   | { type: "turnStarted"; id: string }
-  | { type: "turnEnded"; id: string; terminator: TurnTerminator };
+  | { type: "turnEnded"; id: string; terminator: TurnTerminator }
+  | { type: "sessionHistory"; turns: TurnRow[] };
 
 export type BusInbound =
   | { type: "helloAck"; version: string }
@@ -156,6 +176,34 @@ export function decodeOutbound(json: string): DecodeResult<BusOutbound> {
         ok: true,
         value: { type: "turnEnded", id: parsed.id, terminator: parsed.terminator },
       };
+    case "sessionHistory": {
+      if (!Array.isArray(parsed.turns)) {
+        return { ok: false, error: "sessionHistory: turns must be array" };
+      }
+      const decodedTurns: TurnRow[] = [];
+      for (const t of parsed.turns) {
+        if (!isObject(t)) return { ok: false, error: "sessionHistory: turn entry not an object" };
+        if (
+          typeof t.id !== "number" ||
+          typeof t.sessionId !== "string" ||
+          typeof t.role !== "string" ||
+          typeof t.content !== "string" ||
+          typeof t.source !== "string" ||
+          typeof t.createdAt !== "number"
+        ) {
+          return { ok: false, error: "sessionHistory: invalid turn fields" };
+        }
+        decodedTurns.push({
+          id: t.id,
+          sessionId: t.sessionId,
+          role: t.role,
+          content: t.content,
+          source: t.source,
+          createdAt: t.createdAt,
+        });
+      }
+      return { ok: true, value: { type: "sessionHistory", turns: decodedTurns } };
+    }
     default: {
       // Compile-time exhaustiveness. After all cases above narrow `type`, the
       // default branch should see `type: never`. Adding a new BusOutbound

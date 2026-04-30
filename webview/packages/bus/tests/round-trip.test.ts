@@ -19,8 +19,8 @@ function readFixture(name: string): { raw: string; parsed: unknown } {
 }
 
 describe("BUS_PROTOCOL_VERSION", () => {
-  it("equals 2.0.0 (must match Swift constant)", () => {
-    expect(BUS_PROTOCOL_VERSION).toBe("2.0.0");
+  it("equals 2.1.0 (must match Swift constant — Plan 07-03 sessionHistory bump)", () => {
+    expect(BUS_PROTOCOL_VERSION).toBe("2.1.0");
   });
 });
 

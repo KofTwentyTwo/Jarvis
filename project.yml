@@ -239,6 +239,31 @@ targets:
           "${SRCROOT}/scripts/check-no-modal-presentation.sh"
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
+      # Plan 07-06 (MEM-06): single emission site for ReplayEvent.memoryMutation.
+      - name: Check single memory.mutated emission site (MEM-06)
+        script: |
+          "${SRCROOT}/scripts/check-single-memory-mutated-emit.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+      # Plan 07-06 (D-05): single emission site for ReplayEvent.memoryRetrieval.
+      - name: Check single memory.used emission site (D-05)
+        script: |
+          "${SRCROOT}/scripts/check-single-memory-used-emit.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+      # Plan 07-06 (VISION-03): no PresenceSignalBus subscriber forwards into
+      # JarvisTTS or AgentOrchestrator submit / cancelAndSubmit / runTurn.
+      - name: Check presence-vision isolation (VISION-03)
+        script: |
+          "${SRCROOT}/scripts/check-presence-vision-isolation.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
+      # Plan 07-06 (MEM-02): no literal 768 outside MemoryConstants.embeddingDim.
+      - name: Check embedding-dim literal (MEM-02)
+        script: |
+          "${SRCROOT}/scripts/check-embedding-dim-literal.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
       - name: Build webview bundle
         script: |
           "${SRCROOT}/scripts/build-webview.sh"

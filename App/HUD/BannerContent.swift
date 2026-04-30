@@ -69,4 +69,27 @@ public extension BannerContent {
         body: "The configured Ollama URL isn't local. Only 127.0.0.1 and localhost are allowed. Check config.json.",
         action: .init(label: "Reveal config", url: nil)
     )
+
+    /// Plan 07-06 / VISION-01: Camera TCC denied — presence + frame-attach
+    /// degrade gracefully. The banner deep-links to System Settings.
+    static let cameraDenied = BannerContent(
+        id: "camera-denied",
+        priority: 3,
+        title: "Camera access denied",
+        body: "Jarvis can't see whether you're at the desk or attach a camera frame to a turn. Grant Camera access in System Settings.",
+        action: .init(
+            label: "Open System Settings",
+            url: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")
+        )
+    )
+
+    /// Plan 07-06 / VISION-01: mid-session camera revocation. The capture
+    /// session was terminated by another app or the user toggled access off.
+    static let cameraRevoked = BannerContent(
+        id: "camera-revoked",
+        priority: 3,
+        title: "Camera disconnected",
+        body: "The camera session ended unexpectedly. Presence detection paused; frame-attach unavailable until the camera comes back.",
+        action: nil
+    )
 }
