@@ -19,6 +19,8 @@ struct JarvisEval: AsyncParsableCommand {
             CapRecovery.self,
             CorpusNDJSONLive.self,
             CorpusInjection.self,
+            CorpusSSE.self,
+            CorpusNDJSON.self,
         ]
     )
 }
@@ -226,5 +228,81 @@ struct CorpusInjection: AsyncParsableCommand {
     }
 }
 
-// CorpusSSE / CorpusNDJSON / WakeCorpus subcommands land in Plan 08-02
-// Tasks 2-3 (next commits in this worktree).
+// MARK: - corpus-sse / corpus-ndjson (Plan 08-02 Task 2)
+
+/// `jarvis-eval corpus-sse` — pillar (b). Replay every Anthropic SSE
+/// fixture through the production `AnthropicProvider` SSE state machine
+/// (via `MockLLMProvider` URL-protocol stub). Fixture-only; no network.
+struct CorpusSSE: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "corpus-sse",
+        abstract: "Replay Anthropic SSE fixture corpus through the real SSEDecoder."
+    )
+
+    @Flag(help: "Print per-fixture tag sequences on mismatch.")
+    var verbose: Bool = false
+
+    func run() async throws {
+        let corpus = try SSEFixtureCorpus.loadManifest()
+        let runner = SSEFixtureRunner()
+        let report = try await runner.run(corpus: corpus)
+
+        let passed = report.results.filter { $0.passed }.count
+        print("SSE CORPUS: \(passed)/\(report.results.count) fixtures passed.")
+        for result in report.results {
+            if result.passed {
+                if verbose {
+                    print("  [OK]       \(result.fixtureId) (\(result.actualEventCount) events)")
+                }
+            } else {
+                print("  [MISMATCH] \(result.fixtureId)")
+                print("    expected (\(result.expectedEventCount)): \(result.expectedEventTags)")
+                print("    actual   (\(result.actualEventCount)): \(result.actualEventTags)")
+                if let i = result.firstMismatchIndex {
+                    print("    firstMismatchIndex: \(i)")
+                }
+            }
+        }
+        if !report.passed { throw ExitCode.failure }
+    }
+}
+
+/// `jarvis-eval corpus-ndjson` — pillar (c-fixture). Replay every Ollama
+/// NDJSON / OpenAI-compat fixture through the production `OllamaProvider`
+/// decoders. Fixture-only; the live counterpart lives in 08-03's
+/// `corpus-ndjson-live`.
+struct CorpusNDJSON: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "corpus-ndjson",
+        abstract: "Replay Ollama NDJSON + OpenAI-compat fixture corpus through real decoders."
+    )
+
+    @Flag(help: "Print per-fixture tag sequences on mismatch.")
+    var verbose: Bool = false
+
+    func run() async throws {
+        let corpus = try NDJSONFixtureCorpus.loadManifest()
+        let runner = NDJSONFixtureRunner()
+        let report = try await runner.run(corpus: corpus)
+
+        let passed = report.results.filter { $0.passed }.count
+        print("NDJSON CORPUS: \(passed)/\(report.results.count) fixtures passed.")
+        for result in report.results {
+            if result.passed {
+                if verbose {
+                    print("  [OK]       \(result.fixtureId) (\(result.actualEventCount) events)")
+                }
+            } else {
+                print("  [MISMATCH] \(result.fixtureId)")
+                print("    expected (\(result.expectedEventCount)): \(result.expectedEventTags)")
+                print("    actual   (\(result.actualEventCount)): \(result.actualEventTags)")
+                if let i = result.firstMismatchIndex {
+                    print("    firstMismatchIndex: \(i)")
+                }
+            }
+        }
+        if !report.passed { throw ExitCode.failure }
+    }
+}
+
+// WakeCorpus subcommand lands in Plan 08-02 Task 3 (next commit).

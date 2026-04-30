@@ -1,0 +1,6 @@
+data: {"id":"chatcmpl-y","choices":[{"delta":{"role":"assistant","tool_calls":[{"id":"call_X","type":"function","function":{"name":"get_time","arguments":"{\"timezone\":\"UTC\"}"}}]},"index":0}]}
+
+data: {"id":"chatcmpl-y","choices":[{"delta":{},"index":0,"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+
