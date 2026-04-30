@@ -230,7 +230,7 @@ Wave 2 (06-02 + 06-03) can run in parallel — disjoint scope (`WakeWord/*` vs `
 | `08-04-checklist-runner-and-shipping-gate` | 3 | [08-01, 08-02, 08-03] | OBS-04 (pillar h + integration) | yes |
 
 Plans:
-- [ ] 08-01-replay-oracle-PLAN.md — packages/Harness SPM + ReplayRunner + DriftClassifier + ExclusionList + ReplayMCPAdapter + MockLLMProvider + jarvis-eval CLI shell + TurnSource Strategy B (.replay/.evaluation cases) (Wave 1)
+- [x] 08-01-replay-oracle-PLAN.md — packages/Harness SPM + ReplayRunner + DriftClassifier + ExclusionList + ReplayMCPAdapter + MockLLMProvider + jarvis-eval CLI shell + TurnSource Strategy B (.replay/.evaluation cases) (Wave 1)
 - [ ] 08-02-corpora-curation-and-runners-PLAN.md — Injection corpus (20+ items per D-22/D-23/D-24) + SSE/NDJSON fixture corpora + capture-anthropic-sse.sh + wake-hysteresis corpus + 4 runners + 4 jarvis-eval subcommands (Wave 2, parallel with 08-03)
 - [ ] 08-03-live-and-integration-runners-PLAN.md — FDLeakDetector + MCPCrashRunner (D-19) + AudioGraphRebuildRunner (D-14) + ToolCapRecoveryRunner (D-21 dual assertion) + LiveOllamaRunner (D-06) + 3 subcommands; inherits P6 deferred debt (Xcode 26 launch fragility resolution + AVAudioEngine probe) per D-12/D-13 (Wave 2, parallel with 08-02)
 - [ ] 08-04-checklist-runner-and-shipping-gate-PLAN.md — ChecklistRunner with 7 mechanization types (D-16/D-17) + retroactive sweep authoring P1-P8 checklist.yaml manifests folding 18 scripts/check-*.sh as type:script (D-15) + scripts/shipping-gate.sh + scripts/promote-replay-session.sh (D-09) + pre-commit hook for D-07 + R4-L7 replay-suppression integration test (Wave 3)

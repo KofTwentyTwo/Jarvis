@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-04-30T13:06:05.709Z"
+last_updated: "2026-04-30T13:06:46.914Z"
 progress:
   total_phases: 8
   completed_phases: 7
@@ -25,17 +25,17 @@ progress:
 
 **v1 definition:** "Usable Jarvis" — week-one skeleton + full voice loop + vision first pass + memory first pass.
 
-**Current focus:** Phase 07 — memory-vision
+**Current focus:** Phase 08 — hardening
 
 ---
 
 ## Current Position
 
-Phase: 07 (memory-vision) — EXECUTING
-Plan: 1 of 6
+Phase: 08 (hardening) — EXECUTING
+Plan: 1 of 4
 **Phase:** 07 (memory-vision) — PLANNED
 **Plans:** 6 (07-01..07-06; all written + verified by gsd-plan-checker, no issues)
-**Status:** Ready to execute
+**Status:** Executing Phase 08
 
 **Progress:**
 
