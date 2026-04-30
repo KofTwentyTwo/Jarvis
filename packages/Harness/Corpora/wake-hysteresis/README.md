@@ -6,8 +6,30 @@ against the production `OpenWakeWordSession`.
 
 The corpus is **per-host**: it is recorded by the operator on the same
 hardware Jarvis ships on so the FAR/FRR numbers reflect the operator's voice
-and typical room background. The committed `labels.json` ships empty (`[]`);
-the operator records clips before the first shipping-gate run.
+and typical room background.
+
+## Shipped seed corpus (synthetic)
+
+A 10-clip synthetic seed (5 positive, 5 negative) is committed under
+`tp-*.wav` / `tn-*.wav`, generated via macOS `say` + `afconvert`. **It
+exists to exercise the full pipeline (mel → embedding → classifier with
+real ONNX inference), not to produce realistic FAR/FRR numbers.**
+
+openWakeWord was trained on human voice clips. macOS `say` synthesis sits
+outside that training distribution — the classifier produces consistently
+low probabilities for both TP and TN synthetic clips, so the seed corpus
+typically reports `TP=0 / TN=5 / FRR=100%`. This is **expected**: the
+seed corpus's job is to confirm the harness wires correctly, not to
+validate detection accuracy. Real human-voice recordings will produce
+the contract-conforming numbers.
+
+For sensitivity probing of synthetic clips:
+```bash
+JARVIS_WAKE_THRESHOLD=0.01 jarvis-eval wake-corpus
+```
+
+The operator overwrites these seed clips (or augments them) with their
+own host-recorded clips for a true D-18 measurement.
 
 ## D-18 thresholds
 

@@ -146,8 +146,17 @@ public actor WakeHysteresisRunner {
         // via the public `feed(samples:)` API (Voice-package addition; Swift 6
         // forbids UnsafeBufferPointer escape into async actor hops).
         let session: OpenWakeWordSession
+        // Threshold defaults to 0.5 (openWakeWord upstream default).
+        // Operators may lower for corpus characterization via env var:
+        //   JARVIS_WAKE_THRESHOLD=0.1 jarvis-eval wake-corpus
+        // Synthetic TTS clips often score below 0.5 because they're outside
+        // the training distribution — the corpus README documents this.
+        let evalThreshold: Float = Float(
+            ProcessInfo.processInfo.environment["JARVIS_WAKE_THRESHOLD"]
+                .flatMap(Double.init) ?? 0.5
+        )
         do {
-            session = try OpenWakeWordSession(modelDir: modelDir)
+            session = try OpenWakeWordSession(modelDir: modelDir, threshold: evalThreshold)
         } catch {
             return WakeReport(
                 totalClips: corpus.clips.count,
@@ -164,7 +173,6 @@ public actor WakeHysteresisRunner {
             )
         }
 
-        let frameSize = 1280  // openWakeWord chunk: 80 ms @ 16 kHz
         var totalDurationSeconds: Double = 0
         var truePositives = 0
         var falseNegatives = 0
@@ -176,18 +184,13 @@ public actor WakeHysteresisRunner {
             let samples = try WAVDecoder.decode16kMonoFloat(url: url)
             totalDurationSeconds += clip.durationSeconds
 
-            // Slice into 1280-sample frames; partial trailing frame is dropped
-            // because openWakeWord's mel stage expects a fixed window size.
-            var fired = false
-            var frameStart = 0
-            while frameStart + frameSize <= samples.count {
-                let frame = Array(samples[frameStart..<(frameStart + frameSize)])
-                let decision = try await session.feed(samples: frame)
-                if case .fired = decision {
-                    fired = true
-                }
-                frameStart += frameSize
-            }
+            // Stateless bulk inference: feeds the entire clip through
+            // mel → embedding → classifier with proper windowing per the
+            // openWakeWord 3-stage pipeline. Returns .fired if any classifier
+            // window over the clip exceeded threshold for `framesRequired`
+            // consecutive inferences.
+            let decision = try await session.evaluateClip(samples: samples)
+            let fired = (decision == .fired)
 
             switch (clip.label, fired) {
             case (.positive, true):  truePositives += 1
