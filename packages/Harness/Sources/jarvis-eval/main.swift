@@ -22,6 +22,8 @@ struct JarvisEval: AsyncParsableCommand {
             CorpusSSE.self,
             CorpusNDJSON.self,
             WakeCorpus.self,
+            Checklist.self,
+            All.self,
         ]
     )
 }
@@ -335,4 +337,219 @@ struct WakeCorpus: AsyncParsableCommand {
         }
         if !report.passed { throw ExitCode.failure }
     }
+}
+
+// MARK: - checklist (Plan 08-04 Task 1) — pillar (h)
+
+/// `jarvis-eval checklist` — load every `.planning/phases/<NN>-*/checklist.yaml`
+/// (or a single phase via `--phase`), dispatch each item to its mechanization,
+/// print a per-phase results block, and exit non-zero if any non-MANUAL item
+/// fails. MANUAL items always print as warning rows (D-16) but never block.
+struct Checklist: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "checklist",
+        abstract: "Run per-phase checklist.yaml manifests (D-16 / D-17)."
+    )
+
+    @Option(help: "Phase slug to run; default = all phases under .planning/phases/.")
+    var phase: String?
+
+    @Flag(help: "Print every result row, not just failures and MANUAL.")
+    var verbose: Bool = false
+
+    func run() async throws {
+        let runner = ChecklistRunner()
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let repoRoot = Self.resolveRepoRoot(from: cwd)
+        let phasesDir = repoRoot.appendingPathComponent(".planning/phases")
+        guard FileManager.default.fileExists(atPath: phasesDir.path) else {
+            print("checklist: .planning/phases/ not found at \(phasesDir.path); skipping.")
+            return
+        }
+        let phaseDirs = try FileManager.default.contentsOfDirectory(
+            at: phasesDir, includingPropertiesForKeys: [.isDirectoryKey]
+        )
+        .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
+        .sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+        let manifests: [URL] = phaseDirs
+            .compactMap { dir in
+                let yaml = dir.appendingPathComponent("checklist.yaml")
+                guard FileManager.default.fileExists(atPath: yaml.path) else { return nil }
+                if let phase, !dir.lastPathComponent.contains(phase) { return nil }
+                return yaml
+            }
+        if manifests.isEmpty {
+            print("checklist: no manifests matched (phase=\(phase ?? "all"))")
+            return
+        }
+        var anyFailed = false
+        for manifest in manifests {
+            do {
+                let result = try await runner.runManifest(at: manifest, repoRoot: repoRoot)
+                Self.printResult(result, verbose: verbose)
+                if !result.passed { anyFailed = true }
+            } catch {
+                print("checklist DECODE FAIL [\(manifest.path)]: \(error)")
+                anyFailed = true
+            }
+        }
+        if anyFailed { throw ExitCode.failure }
+    }
+
+    private static func printResult(_ r: ChecklistRunner.ChecklistResult, verbose: Bool) {
+        print(">>> \(r.phase): passed=\(r.passedCount) failed=\(r.failedCount) manual=\(r.manualCount)")
+        for item in r.results {
+            if item.warnedAsManual {
+                print("    [MANUAL] \(item.itemId): \(item.detail)")
+            } else if !item.passed {
+                print("    [FAIL]   \(item.itemId): \(item.detail)")
+            } else if verbose {
+                print("    [OK]     \(item.itemId): \(item.detail)")
+            }
+        }
+    }
+
+    /// Walk up from the executable's CWD to find a directory that contains
+    /// `.planning/`. Falls back to the CWD itself.
+    private static func resolveRepoRoot(from cwd: URL) -> URL {
+        var dir = cwd
+        for _ in 0..<8 {
+            if FileManager.default.fileExists(atPath: dir.appendingPathComponent(".planning").path) {
+                return dir
+            }
+            let parent = dir.deletingLastPathComponent()
+            if parent.path == dir.path { break }
+            dir = parent
+        }
+        return cwd
+    }
+}
+
+// MARK: - all (Plan 08-04 Task 1) — aggregate gate
+
+/// `jarvis-eval all` — runs every fixture-only pillar plus the checklist.
+/// Default skips live pillars; `--live` requires `JARVIS_LIVE_EVAL=1` per
+/// D-04 dual-gate.
+struct All: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "all",
+        abstract: "Run every pillar + checklist (fixture-only by default; D-04)."
+    )
+
+    @Flag(help: "Include live-mode pillars; requires JARVIS_LIVE_EVAL=1 in environment.")
+    var live: Bool = false
+
+    @Flag(help: "Print per-pillar verbose output.")
+    var verbose: Bool = false
+
+    func run() async throws {
+        if live {
+            guard ProcessInfo.processInfo.environment["JARVIS_LIVE_EVAL"] == "1" else {
+                throw ValidationError("--live requires JARVIS_LIVE_EVAL=1 in environment (D-04 dual-gate; defends vs accidental Anthropic burn).")
+            }
+        }
+        let pillars: [(name: String, run: () async throws -> Void)] = [
+            ("checklist", { try await runChecklistPillar(verbose: self.verbose) }),
+            ("corpus-injection", { try await runCorpusInjectionPillar(verbose: self.verbose) }),
+            ("corpus-sse", { try await runCorpusSSEPillar(verbose: self.verbose) }),
+            ("corpus-ndjson", { try await runCorpusNDJSONPillar(verbose: self.verbose) }),
+            ("cap-recovery", { try await runCapRecoveryPillar() }),
+            ("wake-corpus", { try await runWakeCorpusPillar() }),
+            ("mcp-crash", { try await runMcpCrashPillar() }),
+            ("audio-rebuild", { try await runAudioRebuildPillar() }),
+        ]
+        var failed: [String] = []
+        for pillar in pillars {
+            print("=== \(pillar.name) ===")
+            do {
+                try await pillar.run()
+                print("\(pillar.name): PASS")
+            } catch {
+                print("\(pillar.name): FAIL — \(error)")
+                failed.append(pillar.name)
+            }
+        }
+        if live {
+            print("=== corpus-ndjson-live ===")
+            do {
+                try await runCorpusNDJSONLivePillar()
+                print("corpus-ndjson-live: PASS")
+            } catch {
+                print("corpus-ndjson-live: FAIL — \(error)")
+                failed.append("corpus-ndjson-live")
+            }
+        } else {
+            print("corpus-ndjson-live: SKIPPED — run with --live + JARVIS_LIVE_EVAL=1 to include")
+        }
+        print("=== summary ===")
+        if failed.isEmpty {
+            print("ALL PILLARS PASSED")
+        } else {
+            print("FAILED: \(failed.joined(separator: ", "))")
+            throw ExitCode.failure
+        }
+    }
+}
+
+// MARK: - per-pillar dispatch helpers
+//
+// Each helper instantiates the subcommand with its default parameter shape,
+// overrides the few fields the aggregate gate needs (verbose flag pass-thru,
+// crash-count default), and calls `.run()`. This avoids the
+// `parseAsRoot([])` route, which on swift-argument-parser 1.5 dispatches
+// through CommandConfiguration validation that demands a non-empty argv on
+// some shapes.
+
+private func runChecklistPillar(verbose: Bool) async throws {
+    var cmd = Checklist()
+    cmd.verbose = verbose
+    try await cmd.run()
+}
+
+private func runCorpusInjectionPillar(verbose: Bool) async throws {
+    var cmd = CorpusInjection()
+    cmd.verbose = verbose
+    try await cmd.run()
+}
+
+private func runCorpusSSEPillar(verbose: Bool) async throws {
+    var cmd = CorpusSSE()
+    cmd.verbose = verbose
+    try await cmd.run()
+}
+
+private func runCorpusNDJSONPillar(verbose: Bool) async throws {
+    var cmd = CorpusNDJSON()
+    cmd.verbose = verbose
+    try await cmd.run()
+}
+
+private func runCapRecoveryPillar() async throws {
+    var cmd = CapRecovery()
+    cmd.provider = "anthropic"
+    try await cmd.run()
+}
+
+private func runWakeCorpusPillar() async throws {
+    let cmd = WakeCorpus()
+    try await cmd.run()
+}
+
+private func runMcpCrashPillar() async throws {
+    var cmd = McpCrash()
+    cmd.crashes = 50
+    cmd.extended = false
+    try await cmd.run()
+}
+
+private func runAudioRebuildPillar() async throws {
+    let cmd = AudioRebuild()
+    try await cmd.run()
+}
+
+private func runCorpusNDJSONLivePillar() async throws {
+    var cmd = CorpusNDJSONLive()
+    cmd.live = true
+    try await cmd.run()
 }
