@@ -1,0 +1,25 @@
+{
+  "items": [
+    {"id": "owasp-llm01-direct-01", "file": "owasp-llm01-direct-01.json"},
+    {"id": "owasp-llm01-direct-02", "file": "owasp-llm01-direct-02.json"},
+    {"id": "owasp-llm01-direct-03", "file": "owasp-llm01-direct-03.json"},
+    {"id": "injecagent-tool-result-01", "file": "injecagent-tool-result-01.json"},
+    {"id": "injecagent-tool-result-02", "file": "injecagent-tool-result-02.json"},
+    {"id": "injecagent-tool-result-03", "file": "injecagent-tool-result-03.json"},
+    {"id": "agentdojo-mcp-output-01", "file": "agentdojo-mcp-output-01.json"},
+    {"id": "agentdojo-mcp-output-02", "file": "agentdojo-mcp-output-02.json"},
+    {"id": "agentdojo-mcp-output-03", "file": "agentdojo-mcp-output-03.json"},
+    {"id": "applescript-self-attest", "file": "applescript-self-attest.json"},
+    {"id": "applescript-self-attest-2", "file": "applescript-self-attest-2.json"},
+    {"id": "nonce-leak-probe", "file": "nonce-leak-probe.json"},
+    {"id": "clipboard-fake-confirm", "file": "clipboard-fake-confirm.json"},
+    {"id": "bidi-zerowidth-c0", "file": "bidi-zerowidth-c0.json"},
+    {"id": "memory-extract-attack", "file": "memory-extract-attack.json"},
+    {"id": "bus-handshake-spoof", "file": "bus-handshake-spoof.json"},
+    {"id": "encoded-base64-toolresult", "file": "encoded-base64-toolresult.json"},
+    {"id": "encoded-rot13-toolresult", "file": "encoded-rot13-toolresult.json"},
+    {"id": "penetrating-confirm-01", "file": "penetrating-confirm-01.json"},
+    {"id": "penetrating-confirm-02", "file": "penetrating-confirm-02.json"},
+    {"id": "penetrating-confirm-03", "file": "penetrating-confirm-03.json"}
+  ]
+}

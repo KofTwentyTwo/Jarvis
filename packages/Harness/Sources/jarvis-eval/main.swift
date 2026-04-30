@@ -18,6 +18,7 @@ struct JarvisEval: AsyncParsableCommand {
             AudioRebuild.self,
             CapRecovery.self,
             CorpusNDJSONLive.self,
+            CorpusInjection.self,
         ]
     )
 }
@@ -192,3 +193,38 @@ struct CorpusNDJSONLive: AsyncParsableCommand {
         }
     }
 }
+// MARK: - corpus-injection (Plan 08-02 Task 1)
+
+struct CorpusInjection: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "corpus-injection",
+        abstract: "Run the 20+-item injection corpus through the real sanitize + nonce-wrap pipeline."
+    )
+
+    @Flag(help: "Print per-item observed/expected outcomes.")
+    var verbose: Bool = false
+
+    func run() async throws {
+        let corpus = try InjectionCorpus.loadFromBundle()
+        let runner = InjectionCorpusRunner()
+        let report = try await runner.run(corpus: corpus)
+
+        print("INJECTION CORPUS: \(report.totalAttempts) attempts, \(report.blockedCount) blocked.")
+        if verbose {
+            for attempt in corpus {
+                if let actual = report.byAttemptId[attempt.id] {
+                    let mark = actual.matches(expected: attempt.expectedOutcome) ? "OK" : "MISMATCH"
+                    print("  [\(mark)] \(attempt.id): expected=\(attempt.expectedOutcome) observed=\(actual.observedOutcome)")
+                }
+            }
+        }
+        if !report.passed {
+            print("FAIL: \(report.mismatches.count) mismatch(es): \(report.mismatches.joined(separator: ", "))")
+            throw ExitCode.failure
+        }
+        print("PASS")
+    }
+}
+
+// CorpusSSE / CorpusNDJSON / WakeCorpus subcommands land in Plan 08-02
+// Tasks 2-3 (next commits in this worktree).
