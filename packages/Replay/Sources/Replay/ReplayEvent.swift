@@ -4,10 +4,55 @@ import Foundation
 ///
 /// Surfaces in the `turns.source` column for cross-cohort eval slicing (text vs
 /// voice latency, memory-extraction-only error rates, etc.).
-public enum TurnSource: String, Sendable, Equatable, Hashable, CaseIterable {
+///
+/// **Phase 8 Strategy B (Plan 08-01):** the replay/evaluation cases carry
+/// associated values so the orchestrator's `.replay` MCP swap can reach the
+/// recorded `sessionId` without a sidecar context (R4-L7 suppression by
+/// construction). Adding associated values requires hand-rolling `rawValue` —
+/// `String, RawRepresentable, CaseIterable` synthesis no longer applies.
+public enum TurnSource: Sendable, Equatable, Hashable {
     case text
     case voice
     case memoryExtraction
+    /// Phase 8 — replay-roundtrip oracle (Plan 08-01). Suppresses HUD dispatch
+    /// and TTS; routes tool calls through `ReplayMCPAdapter` keyed by
+    /// `sessionId`.
+    case replay(sessionId: UUID)
+    /// Phase 8 — evaluation matrix (Plans 08-02 / 08-03). Suppresses HUD
+    /// dispatch and TTS; uses live MCP helpers (integration-test shape).
+    /// `scenarioId` carries the corpus-item identifier for per-item
+    /// diagnostics.
+    case evaluation(scenarioId: String)
+
+    /// SQLite source column raw value. Hand-rolled because associated-value
+    /// cases break `String` raw-representable synthesis.
+    public var rawValue: String {
+        switch self {
+        case .text: return "text"
+        case .voice: return "voice"
+        case .memoryExtraction: return "memoryExtraction"
+        case .replay: return "replay"
+        case .evaluation: return "evaluation"
+        }
+    }
+
+    /// R4-L7 suppression — replay/evaluation/memoryExtraction do not dispatch
+    /// HUD events. Only `.text` / `.voice` (real user-facing turns) do.
+    public var dispatchesToHUD: Bool {
+        switch self {
+        case .text, .voice: return true
+        case .memoryExtraction, .replay, .evaluation: return false
+        }
+    }
+
+    /// R4-L7 suppression — replay/evaluation/memoryExtraction do not speak.
+    /// Only `.text` / `.voice` (real user-facing turns) do.
+    public var speaks: Bool {
+        switch self {
+        case .text, .voice: return true
+        case .memoryExtraction, .replay, .evaluation: return false
+        }
+    }
 }
 
 /// Stable identifier for a session (one app launch).

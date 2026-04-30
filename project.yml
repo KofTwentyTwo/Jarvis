@@ -65,6 +65,12 @@ packages:
   # wired in Plan 07-06.
   Vision:
     path: packages/Vision
+  # Plan 08-01: Phase 8 evaluation harness — `Harness` library + `jarvis-eval`
+  # executable target. Consumed by tests / CI shipping-gate (`scripts/shipping-gate.sh`).
+  # The xcodegen entry exposes the local SPM package; the executable is
+  # invoked via `swift run --package-path packages/Harness jarvis-eval ...`.
+  Harness:
+    path: packages/Harness
   # MCP Swift SDK — consumed by `mcp-time`, `mcp-clipboard` (Plan 05-02), and
   # `mcp-applescript` (Plan 05-03) helper targets. Pinned at the same exact
   # version as `packages/MCP/Package.swift` (Plan 05-01) to avoid
