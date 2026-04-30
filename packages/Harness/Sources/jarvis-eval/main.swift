@@ -15,6 +15,9 @@ struct JarvisEval: AsyncParsableCommand {
         subcommands: [
             Replay.self,
             McpCrash.self,
+            AudioRebuild.self,
+            CapRecovery.self,
+            CorpusNDJSONLive.self,
         ]
     )
 }
@@ -92,4 +95,100 @@ struct McpCrash: AsyncParsableCommand {
     }
 }
 
-// Plan 08-03 Task 3 will append: AudioRebuild, CapRecovery, CorpusNDJSONLive.
+/// `jarvis-eval audio-rebuild` — pillar (g). Four canonical triggers ×
+/// six-step teardown matrix. Per D-14, the deviceChange trigger may
+/// gracefully degrade to MANUAL if synthetic injection is unavailable;
+/// the AVAudioEngine probe in 08-LAUNCH-FRAGILITY-NOTES.md confirmed
+/// it IS available, so all four triggers run automated.
+struct AudioRebuild: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "audio-rebuild",
+        abstract: "4 canonical triggers x 6-step teardown matrix (D-14 graceful degradation)."
+    )
+
+    func run() async throws {
+        let runner = AudioGraphRebuildRunner()
+        let reports = try await runner.run()
+        var sawAutomatedFail = false
+        for r in reports {
+            if r.degradedToManual {
+                print("MANUAL: \(r.trigger.rawValue) — \(r.manualOperatorInstructions ?? "")")
+            } else if r.passed {
+                print("\(r.trigger.rawValue): PASS")
+            } else {
+                sawAutomatedFail = true
+                print("\(r.trigger.rawValue): FAIL")
+                print("  expected: \(r.teardownStepsExpected)")
+                print("  observed: \(r.teardownStepsObserved)")
+            }
+        }
+        if sawAutomatedFail { throw ExitCode.failure }
+    }
+}
+
+/// `jarvis-eval cap-recovery` — D-21 dual assertion (pillar (d)).
+struct CapRecovery: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "cap-recovery",
+        abstract: "R4-L1 regression: tool-cap recovery (D-21 dual assertion)."
+    )
+
+    @Option(help: "Provider: anthropic | ollama")
+    var provider: String = "anthropic"
+
+    func run() async throws {
+        let p: ToolCapRecoveryRunner.Provider =
+            (provider == "ollama") ? .ollama : .anthropic
+        let report = try await ToolCapRecoveryRunner().run(provider: p)
+        print("Provider: \(report.provider.rawValue)")
+        print("Tool-use events on recovery: \(report.toolUseEventCount) (must be 0)")
+        print("tool_choice serialized as none: \(report.toolChoiceSerializedAsNone)")
+        print("tools array present on recovery: \(report.toolsArrayPresent)")
+        if !report.passed { throw ExitCode.failure }
+    }
+}
+
+/// `jarvis-eval corpus-ndjson-live` — pillar (c-live). D-04 dual-gated;
+/// D-06 preflight; never auto-pulls. Plan 08-02 owns the offline
+/// `corpus-ndjson` subcommand; this command is the live extension.
+struct CorpusNDJSONLive: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "corpus-ndjson-live",
+        abstract: "Live Ollama corpus run (qwen2.5-coder:32b) — D-04 dual-gated, D-06 preflight."
+    )
+
+    @Flag(help: "Required: --live AND env JARVIS_LIVE_EVAL=1 to run.")
+    var live: Bool = false
+
+    @Option(help: "Comma-separated scenario IDs from the live corpus (default: all).")
+    var scenarios: String?
+
+    func run() async throws {
+        guard live else {
+            print("live-ollama skipped — run with --live JARVIS_LIVE_EVAL=1 to include")
+            return
+        }
+        let runner = LiveOllamaRunner()
+        let scenarioList = (scenarios?
+            .split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespaces) })
+            ?? []
+        do {
+            let report = try await runner.run(scenarios: scenarioList)
+            print("Live Ollama: model=\(report.modelId) scenarios=\(report.scenarioCount) passed=\(report.passedCount)")
+            if !report.passed { throw ExitCode.failure }
+        } catch let error as LiveOllamaRunner.LiveError {
+            switch error {
+            case .liveGateNotEnabled:
+                print("live-ollama skipped — env JARVIS_LIVE_EVAL=1 not set")
+                return
+            case .daemonUnreachable(let advice):
+                print("live-ollama FAIL: \(advice)")
+                throw ExitCode.failure
+            case .modelMissing(let id, let advice):
+                print("live-ollama FAIL: model \(id) missing — \(advice)")
+                throw ExitCode.failure
+            }
+        }
+    }
+}
