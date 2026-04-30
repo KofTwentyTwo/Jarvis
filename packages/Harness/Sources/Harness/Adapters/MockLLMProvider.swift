@@ -26,6 +26,11 @@ public actor MockLLMProvider: LLMProvider {
     public enum FixtureKind: Sendable {
         case anthropicSSE
         case ollamaNDJSON
+        /// Plan 08-02 Task 2 — Ollama `/v1/chat/completions` OpenAI-compat
+        /// SSE transport. Routes through the same `OllamaProvider` actor
+        /// with `useOpenAICompat: true` so the `OpenAICompatDecoder` (not
+        /// `NDJSONDecoder`) consumes the bytes.
+        case ollamaOpenAICompat
     }
 
     private let fixtureURL: URL
@@ -46,19 +51,34 @@ public actor MockLLMProvider: LLMProvider {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [FixtureURLProtocol.self]
         let session = URLSession(configuration: config)
-        FixtureURLProtocol.register(fixtureURL: fixtureURL, kind: kind)
+
+        // Per-instance unique host so multiple MockLLMProviders running
+        // concurrently (parallel swift-testing tests) cannot trample each
+        // other's fixture registration. The protocol's registry is keyed by
+        // the HTTP request's host. (Plan 08-02 Task 2 fix — the original
+        // single-global state lost fixture identity under parallel test
+        // execution.)
+        let token = UUID().uuidString.lowercased()
+        let host = "fixture-\(token).test"
+        FixtureURLProtocol.register(host: host, fixtureURL: fixtureURL, kind: kind)
 
         switch kind {
         case .anthropicSSE:
             self.underlying = AnthropicProvider(
-                baseURL: URL(string: "https://api.anthropic.com")!,
+                baseURL: URL(string: "https://\(host)")!,
                 session: session,
                 apiKeyProvider: { "sk-ant-fixture-replay" }
             )
         case .ollamaNDJSON:
             self.underlying = OllamaProvider(
-                baseURL: URL(string: "http://127.0.0.1:11434")!,
+                baseURL: URL(string: "http://\(host)")!,
                 session: session
+            )
+        case .ollamaOpenAICompat:
+            self.underlying = OllamaProvider(
+                baseURL: URL(string: "http://\(host)")!,
+                session: session,
+                useOpenAICompat: true
             )
         }
     }
@@ -85,34 +105,39 @@ public actor MockLLMProvider: LLMProvider {
 // MARK: - URLProtocol fixture replay
 
 /// `URLProtocol` subclass that returns fixture bytes for every request,
-/// keyed by the most recently registered `(fixtureURL, kind)` pair. Single
-/// global pair is sufficient for `MockLLMProvider`'s use case (one provider
-/// per session, one fixture per provider).
+/// keyed by the request's host. Each `MockLLMProvider` instance picks a
+/// per-process-unique host (`fixture-<uuid>.test`) so parallel
+/// swift-testing tests don't trample each other's fixture registration.
 final class FixtureURLProtocol: URLProtocol, @unchecked Sendable {
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var fixtureURL: URL?
-    nonisolated(unsafe) private static var kind: MockLLMProvider.FixtureKind?
+    private struct Entry {
+        let fixtureURL: URL
+        let kind: MockLLMProvider.FixtureKind
+    }
 
-    static func register(fixtureURL: URL, kind: MockLLMProvider.FixtureKind) {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var registry: [String: Entry] = [:]
+
+    static func register(host: String, fixtureURL: URL, kind: MockLLMProvider.FixtureKind) {
         lock.lock()
         defer { lock.unlock() }
-        Self.fixtureURL = fixtureURL
-        Self.kind = kind
+        registry[host] = Entry(fixtureURL: fixtureURL, kind: kind)
     }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        let host = request.url?.host
         Self.lock.lock()
-        let url = Self.fixtureURL
-        let kind = Self.kind
+        let entry = host.flatMap { Self.registry[$0] }
         Self.lock.unlock()
 
-        guard let fixtureURL = url, let kind = kind else {
+        guard let entry = entry else {
             client?.urlProtocol(self, didFailWithError: URLError(.fileDoesNotExist))
             return
         }
+        let fixtureURL = entry.fixtureURL
+        let kind = entry.kind
 
         do {
             let data = try Data(contentsOf: fixtureURL)
@@ -120,6 +145,7 @@ final class FixtureURLProtocol: URLProtocol, @unchecked Sendable {
             switch kind {
             case .anthropicSSE: contentType = "text/event-stream"
             case .ollamaNDJSON: contentType = "application/x-ndjson"
+            case .ollamaOpenAICompat: contentType = "text/event-stream"
             }
             let response = HTTPURLResponse(
                 url: request.url ?? fixtureURL,

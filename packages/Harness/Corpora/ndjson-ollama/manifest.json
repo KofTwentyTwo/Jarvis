@@ -1,0 +1,96 @@
+[
+  {
+    "id": "happy-text",
+    "description": "Plain text completion — three NDJSON chunks of text content followed by terminator with done:true and done_reason:stop.",
+    "fileName": "happy-text.ndjson",
+    "transport": "native",
+    "expectedEventCount": 7,
+    "expectedEventTags": [
+      "messageStart",
+      "textDelta",
+      "textDelta",
+      "textDelta",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "text-then-tool-call",
+    "description": "Text content, THEN tool_calls on the chunk PRECEDING done:true — the CLAUDE.md Ollama transport gotcha. Decoder must emit toolUseRequested when tool_calls are seen, never gate on done.",
+    "fileName": "text-then-tool-call.ndjson",
+    "transport": "native",
+    "expectedEventCount": 7,
+    "expectedEventTags": [
+      "messageStart",
+      "textDelta",
+      "toolUseBuffering",
+      "toolUseRequested",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "parallel-tool-calls",
+    "description": "Two tool_calls in a single chunk preceding done:true — exercises both the gotcha (tool_calls before done) and parallel emission ordering.",
+    "fileName": "parallel-tool-calls.ndjson",
+    "transport": "native",
+    "expectedEventCount": 8,
+    "expectedEventTags": [
+      "messageStart",
+      "toolUseBuffering",
+      "toolUseRequested",
+      "toolUseBuffering",
+      "toolUseRequested",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "mid-stream-eof",
+    "description": "Two text chunks then EOF without a terminator — flushOnEOF must synthesize stopReason(streamTruncated) + usage + messageStop.",
+    "fileName": "mid-stream-eof.ndjson",
+    "transport": "native",
+    "expectedEventCount": 6,
+    "expectedEventTags": [
+      "messageStart",
+      "textDelta",
+      "textDelta",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "openai-compat-happy",
+    "description": "Ollama OpenAI-compat /v1/chat/completions — happy text path with finish_reason:stop and the literal data: [DONE] sentinel.",
+    "fileName": "openai-compat-happy.ndjson",
+    "transport": "openAICompat",
+    "expectedEventCount": 6,
+    "expectedEventTags": [
+      "messageStart",
+      "textDelta",
+      "textDelta",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "openai-compat-tool-call",
+    "description": "Ollama OpenAI-compat tool_calls — atomic delta.tool_calls (unlike Anthropic's split input_json_delta) flushed at finish_reason:tool_calls before [DONE].",
+    "fileName": "openai-compat-tool-call.ndjson",
+    "transport": "openAICompat",
+    "expectedEventCount": 6,
+    "expectedEventTags": [
+      "messageStart",
+      "toolUseBuffering",
+      "toolUseRequested",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  }
+]

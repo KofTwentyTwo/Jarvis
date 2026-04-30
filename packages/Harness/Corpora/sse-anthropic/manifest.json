@@ -1,0 +1,130 @@
+[
+  {
+    "id": "happy-text",
+    "description": "Plain text turn — message_start through message_stop with three text_delta chunks. CLAUDE.md Opus 4.7 footgun: close on message_stop, not message_delta.",
+    "fileName": "happy-text.sse",
+    "expectedEventCount": 7,
+    "expectedEventTags": [
+      "messageStart",
+      "textDelta",
+      "textDelta",
+      "textDelta",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "text-then-tool-use",
+    "description": "Text block then tool_use block with split input_json_delta — CLAUDE.md Opus 4.7 footgun: handle content_block_start with input_json_delta for tool args.",
+    "fileName": "text-then-tool-use.sse",
+    "expectedEventCount": 7,
+    "expectedEventTags": [
+      "messageStart",
+      "textDelta",
+      "toolUseBuffering",
+      "toolUseRequested",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "thinking-then-text",
+    "description": "Two thinking_delta chunks ahead of any text_delta — CLAUDE.md Opus 4.7 footgun: route thinking_delta to its own case, must precede textDelta.",
+    "fileName": "thinking-then-text.sse",
+    "expectedEventCount": 7,
+    "expectedEventTags": [
+      "messageStart",
+      "thinkingDelta",
+      "thinkingDelta",
+      "textDelta",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "refusal",
+    "description": "stop_reason: refusal — CLAUDE.md Opus 4.7 footgun: treat refusal as first-class, not a warning.",
+    "fileName": "refusal.sse",
+    "expectedEventCount": 4,
+    "expectedEventTags": [
+      "messageStart",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "mid-delta-disconnect",
+    "description": "Stream EOF mid-input_json_delta — CLAUDE.md Opus 4.7 footgun: emit partial_tool_use_at_disconnect on mid-delta termination, then synthesize streamTruncated trio.",
+    "fileName": "mid-delta-disconnect.sse",
+    "expectedEventCount": 6,
+    "expectedEventTags": [
+      "messageStart",
+      "toolUseBuffering",
+      "partialToolUseAtDisconnect",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "ping-spam",
+    "description": "20 ping events interleaved with 3 text_deltas — CLAUDE.md Opus 4.7 footgun: swallow ping (zero LLMEvents emitted for ping).",
+    "fileName": "ping-spam.sse",
+    "expectedEventCount": 7,
+    "expectedEventTags": [
+      "messageStart",
+      "textDelta",
+      "textDelta",
+      "textDelta",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "unknown-event",
+    "description": "Two unknown event names mid-stream — forward-compatibility: log warning, do not throw, continue emitting known events.",
+    "fileName": "unknown-event.sse",
+    "expectedEventCount": 7,
+    "expectedEventTags": [
+      "messageStart",
+      "textDelta",
+      "textDelta",
+      "textDelta",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "cache-hit",
+    "description": "message_start carries cache_read_input_tokens=4251 — CLAUDE.md Opus 4.7 footgun: prompt-cache telemetry surfaced via usagePrefix.",
+    "fileName": "cache-hit.sse",
+    "expectedEventCount": 5,
+    "expectedEventTags": [
+      "messageStart",
+      "textDelta",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  },
+  {
+    "id": "empty-input-json-delta",
+    "description": "Tool args split across input_json_delta chunks including two empty partial_json values — empty chunks must be skipped (never appended), assembled JSON must decode.",
+    "fileName": "empty-input-json-delta.sse",
+    "expectedEventCount": 6,
+    "expectedEventTags": [
+      "messageStart",
+      "toolUseBuffering",
+      "toolUseRequested",
+      "stopReason",
+      "usage",
+      "messageStop"
+    ]
+  }
+]
