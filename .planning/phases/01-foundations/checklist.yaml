@@ -1,0 +1,87 @@
+# Phase 01-foundations checklist manifest (D-15 retroactive sweep)
+#
+# Mechanizes the architectural invariants from Plans 01-01..01-05:
+# - Hardened Runtime + allow-jit (SEC-01/SEC-02)
+# - Speech recognition assets entitlement (VOICE-04 prereq)
+# - LSUIElement + Info.plist scaffolding
+# - Codesign discipline (no --deep, no Code Sign On Copy on nested helpers)
+# - Forbidden patterns: allow-unsigned-executable-memory absent
+# - Verify-entitlements.sh pre/post codesign gate
+phase: 01-foundations
+items:
+  - id: P1-01
+    description: "LSUIElement=YES keeps app out of Dock"
+    mechanization:
+      type: grep_positive
+      file: App/Info.plist
+      pattern: "LSUIElement"
+      expected_count: 1
+  - id: P1-02
+    description: "com.apple.security.cs.allow-jit entitlement present (Hardened Runtime + WKWebView JIT)"
+    mechanization:
+      type: grep_positive
+      file: App/Jarvis.Release.entitlements
+      pattern: "com.apple.security.cs.allow-jit"
+      expected_count: 1
+  - id: P1-03
+    description: "com.apple.developer.speech-recognition-assets entitlement present (macOS 26 Tahoe SpeechAnalyzer prereq)"
+    mechanization:
+      type: grep_positive
+      file: App/Jarvis.Release.entitlements
+      pattern: "speech-recognition-assets"
+      expected_count: 1
+  - id: P1-04
+    description: "com.apple.security.cs.allow-unsigned-executable-memory FORBIDDEN (MLX does not need it; widening it negates Hardened Runtime per CLAUDE.md)"
+    mechanization:
+      type: grep_negative
+      file: App/Jarvis.Release.entitlements
+      pattern: "allow-unsigned-executable-memory"
+      expected_count: 0
+  - id: P1-05
+    description: "NSSpeechRecognitionAssetsUsageDescription Info.plist key present (paired with the entitlement)"
+    mechanization:
+      type: grep_positive
+      file: App/Info.plist
+      pattern: "NSSpeechRecognitionAssetsUsageDescription"
+      expected_count: 1
+  - id: P1-06
+    description: "NSMicrophoneUsageDescription present"
+    mechanization:
+      type: grep_positive
+      file: App/Info.plist
+      pattern: "NSMicrophoneUsageDescription"
+      expected_count: 1
+  - id: P1-07
+    description: "JarvisEntitlementsVerified Info.plist marker present (verify-entitlements.sh writes YES pre-codesign)"
+    mechanization:
+      type: grep_positive
+      file: App/Info.plist
+      pattern: "JarvisEntitlementsVerified"
+      expected_count: 1
+  - id: P1-08
+    description: "verify-entitlements.sh post-codesign XML entitlement grep gate (requires built+signed Release archive; surfaces as MANUAL pre-build)"
+    mechanization:
+      type: MANUAL
+      description: "Build a signed Release archive, then run: BUILT_PRODUCTS_DIR=<archive> WRAPPER_NAME=Jarvis.app SRCROOT=$(pwd) bash scripts/verify-entitlements.sh --post-codesign"
+  - id: P1-09
+    description: "verify-codesign-settings.sh pbxproj linter (CodeSignOnCopy = NO on nested helpers; --deep absent; --options=runtime --timestamp present)"
+    mechanization:
+      type: script
+      path: scripts/verify-codesign-settings.sh
+  - id: P1-10
+    description: "App builds without errors via shared scheme (cross-phase smoke; documents build solvency)"
+    mechanization:
+      type: script
+      path: scripts/check-app-builds.sh
+  - id: P1-11
+    description: "Logging.bootstrap surface lives at AppDelegate launch (S-8 first-line invariant — log channel ready before any other init)"
+    mechanization:
+      type: swift_test
+      suite: LoggingTests
+      test: testBootstrapInstallsBeforeOtherInits
+  - id: P1-12
+    description: "AnthropicKey Keychain item lives under com.kingsrook.jarvis service identifier (SEC-03)"
+    mechanization:
+      type: swift_test
+      suite: KeychainTests
+      test: testAnthropicItemServiceIdentifier

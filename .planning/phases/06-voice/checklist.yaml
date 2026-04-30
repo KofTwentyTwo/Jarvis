@@ -1,0 +1,121 @@
+# Phase 06-voice checklist manifest (D-15 retroactive sweep)
+#
+# Voice subsystem invariants — most automated coverage from VoiceTests, but
+# 7 MANUAL items per D-12/D-13 surface the inherited debt that requires
+# physical hardware + microphone interaction (P6 HUMAN-UAT gates +
+# Orpheus TTFA empirical measurement). Per 08-LAUNCH-FRAGILITY-NOTES.md
+# the operator must use a Release-signed archive (not the Xcode 26 ad-hoc
+# Debug bundle, which is fragile per ACCEPTED-AS-MANUAL resolution).
+phase: 06-voice
+items:
+  # --- Automated invariants ---
+  - id: P6-01
+    description: "Wake-word ≥4-consecutive-frame hysteresis (~320ms threshold; H1 singleton spike must NOT fire)"
+    mechanization:
+      type: swift_test
+      suite: WakeWordHysteresisTests
+      test: testH1SingletonSpikeDoesNotFire
+  - id: P6-02
+    description: "Wake-word fires after exactly 4 consecutive frames above threshold (H2 boundary)"
+    mechanization:
+      type: swift_test
+      suite: WakeWordHysteresisTests
+      test: testH2FourConsecutiveFiresOnce
+  - id: P6-03
+    description: "openWakeWord ONNX runs via ORT 1.24.2+ embedded (NOT a Python sidecar — research D-2)"
+    mechanization:
+      type: swift_test
+      suite: VoiceTests
+      test: testOpenWakeWordEmbeddedNotSidecar
+  - id: P6-04
+    description: "Silero VAD v6.2.1 contract parity at scaffold (512-sample / 32 ms / 16 kHz chunks preserved)"
+    mechanization:
+      type: swift_test
+      suite: SileroContractTests
+      test: testParityProbeAtScaffold
+  - id: P6-05
+    description: "isVoiceProcessingEnabled = true ordering invariant (must be set BEFORE engine.start, VOICE-08)"
+    mechanization:
+      type: swift_test
+      suite: VoiceTests
+      test: testVoiceProcessingEnabledBeforeEngineStart
+  - id: P6-06
+    description: "AEC-off graph variant is distinct from AEC-on (VOICE-09 — separate AudioGraphVariant case)"
+    mechanization:
+      type: swift_test
+      suite: VoiceTests
+      test: testAECVariantsAreDistinct
+  - id: P6-07
+    description: "AudioGraphOwner runs the canonical 6-step teardown across all 4 RebuildTrigger cases (VOICE-10 / pillar g)"
+    mechanization:
+      type: swift_test
+      suite: TeardownTests
+      test: testAllFourTriggersRunSixStepTeardown
+  - id: P6-08
+    description: "TTS interrupt is atomic — no audible click/pop on barge-in (VOICE-11)"
+    mechanization:
+      type: swift_test
+      suite: VoiceTests
+      test: testTTSInterruptIsAtomic
+  - id: P6-09
+    description: "Single cancelAndSubmit entry-point on barge-in (VOICE-14 — exactly one call site in the orchestrator)"
+    mechanization:
+      type: swift_test
+      suite: BargeInTests
+      test: testSingleCancelAndSubmitEntryPoint
+  - id: P6-10
+    description: "Mute-wake-word state is persisted across launches (VOICE-12 contract)"
+    mechanization:
+      type: swift_test
+      suite: VoiceTests
+      test: testMuteWakeWordPersistsAcrossLaunches
+  - id: P6-11
+    description: "Mute-wake-word + PTT-armed combination still arms PTT (VOICE-12 explicit contract)"
+    mechanization:
+      type: swift_test
+      suite: VoiceTests
+      test: testMuteWakeWordKeepsPTTArmed
+  - id: P6-12
+    description: "Speech assets entitlement probe (VOICE-04 prereq — requires Release archive; surfaces as MANUAL pre-build)"
+    mechanization:
+      type: MANUAL
+      description: "Build a signed Release archive, then run: bash scripts/probe-speech-assets.sh path/to/Jarvis.app — verify it exits 0 (PASS) or 2 (INCONCLUSIVE); 1 (FAIL) blocks ship."
+  # --- MANUAL items (D-12 / D-13 inherited UAT debt) ---
+  # Prerequisite for ALL 7 MANUAL items: 08-LAUNCH-FRAGILITY-NOTES.md
+  # outcome RESOLVED-AS-MANUAL — operator uses Release-signed archive,
+  # not Xcode 26 ad-hoc Debug bundle.
+  - id: P6-MANUAL-VOICE-07
+    description: "VOICE-07 happy path UAT: end-to-end Hey Jarvis voice loop on Release-signed archive"
+    mechanization:
+      type: MANUAL
+      description: "Prerequisite — 08-LAUNCH-FRAGILITY-NOTES.md (Release archive recipe). Then: cold-launch the Release archive; grant Microphone TCC; say 'Hey Jarvis, what time is it'. Verify HUD ring transitions idle→listening→thinking→speaking; spoken answer is natural-sounding (Orpheus tara voice); ring returns to idle."
+  - id: P6-MANUAL-VOICE-09
+    description: "VOICE-09 AEC-fallback banner UAT: degraded-mode banner appears when VPIO unavailable"
+    mechanization:
+      type: MANUAL
+      description: "Prerequisite — 08-LAUNCH-FRAGILITY-NOTES.md. Then: trigger AEC-unavailable condition (plug in non-VPIO USB audio device OR force-throw in AudioGraphOwner for one launch). Verify HUD banner shows 'AEC unavailable; degraded-mode active'. Verify banner is native AppKit (Accessibility Inspector confirms NOT a webview modal)."
+  - id: P6-MANUAL-VOICE-10
+    description: "VOICE-10 mic re-grant UAT: graph rebuild after Microphone permission flip"
+    mechanization:
+      type: MANUAL
+      description: "Prerequisite — 08-LAUNCH-FRAGILITY-NOTES.md. Then: deny Microphone TCC at first launch; verify banner with Settings deep link; enable Microphone in System Settings; switch back to Jarvis; verify audio graph rebuilds (HUD shows .reconfiguring flicker) and listening state shows real RMS reactivity."
+  - id: P6-MANUAL-VOICE-12
+    description: "VOICE-12 mute-wake-word + PTT UAT: mute pauses wake-word but PTT still works; persists across relaunch"
+    mechanization:
+      type: MANUAL
+      description: "Prerequisite — 08-LAUNCH-FRAGILITY-NOTES.md. Then: menu-bar → Mute Wake Word; say 'Hey Jarvis' (no response); hold PTT hotkey + speak (PTT WORKS — explicit contract); restart app; verify mute-state persists; toggle un-mute; verify wake-word resumes."
+  - id: P6-MANUAL-VOICE-13
+    description: "VOICE-13 push-to-talk UAT: PTT hotkey skips wake-word entirely"
+    mechanization:
+      type: MANUAL
+      description: "Prerequisite — 08-LAUNCH-FRAGILITY-NOTES.md. Then: configure PTT hotkey via first-launch shortcut recorder; hold hotkey + speak; verify ring transitions immediately to .listening(.ptt) (no wake-word delay); release; verify STT finalizes + agent processes."
+  - id: P6-MANUAL-VOICE-14
+    description: "VOICE-14 barge-in UAT: speaking → wake-word interrupts within ~50ms"
+    mechanization:
+      type: MANUAL
+      description: "Prerequisite — 08-LAUNCH-FRAGILITY-NOTES.md. Then: ask 'count to 20'; while ring is .speaking say 'Hey Jarvis'; verify TTS stops within ~50ms with no audible click/pop; ring transitions speaking → listening directly (no idle flash)."
+  - id: P6-MANUAL-ORPHEUS-TTFA
+    description: "Empirical Orpheus TTFA measurement on host Apple Silicon (target 150-250 ms)"
+    mechanization:
+      type: MANUAL
+      description: "Prerequisite — 08-LAUNCH-FRAGILITY-NOTES.md. Then: JARVIS_REAL_MODELS=1 swift test --package-path packages/Voice --filter OrpheusTTFATests interactively. Record measured ms. If TTFA > 250 ms, edit default config to set features.tts.tier2 = 'ttskit' (TTSKit fallback)."

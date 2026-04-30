@@ -1,0 +1,85 @@
+# Phase 07-memory-vision checklist manifest (D-15 retroactive sweep)
+#
+# Memory + Vision invariants:
+# - Embedding dim is the LITERAL 768 (sqlite-vec schema constant; MEM-02)
+# - Single-source emit for memory.mutated (MEM-08)
+# - Single-source emit for memory.used (MEM-08)
+# - PresenceSignalBus has no TTS orchestrator subscribers (VISION-03 forbidden)
+# - Vision package isolation (no Memory ← Vision direct import; presence flow only)
+# - PresenceVision isolation re-asserted at the bus boundary
+# - Memory extraction is zero-egress (MEM-04)
+# - Frame-attach raw bytes never reach the replay log (D-15 placeholder shape)
+phase: 07-memory-vision
+items:
+  - id: P7-01
+    description: "EMBEDDING_DIM literal is 768 throughout Memory package (nomic-embed-text matches; sqlite-vec schema fixed at 768; MEM-02)"
+    mechanization:
+      type: script
+      path: scripts/check-embedding-dim-literal.sh
+  - id: P7-02
+    description: "MemoryStore is the single source of memory.mutated bus emits (no rogue emitters)"
+    mechanization:
+      type: script
+      path: scripts/check-single-memory-mutated-emit.sh
+  - id: P7-03
+    description: "MemoryStore is the single source of memory.used bus emits (no rogue emitters)"
+    mechanization:
+      type: script
+      path: scripts/check-single-memory-used-emit.sh
+  - id: P7-04
+    description: "PresenceSignalBus has zero TTS orchestrator subscribers (VISION-03 — presence-triggered auto-speak is architecturally forbidden)"
+    mechanization:
+      type: script
+      path: scripts/check-presence-bus-no-tts-orchestrator.sh
+  - id: P7-05
+    description: "Presence-vision isolation: presence flow does not back-reference vision (PresenceSignalBus subscribers list audited)"
+    mechanization:
+      type: script
+      path: scripts/check-presence-vision-isolation.sh
+  - id: P7-06
+    description: "Vision package isolation: Memory does not import Vision; vision flows are one-way through PresenceSignalBus"
+    mechanization:
+      type: script
+      path: scripts/check-vision-isolation.sh
+  - id: P7-07
+    description: "Memory extraction runs against local Ollama only — zero egress (MEM-04 — sandbox test)"
+    mechanization:
+      type: swift_test
+      suite: MemoryTests
+      test: testMemoryExtractionZeroEgress
+  - id: P7-08
+    description: "Memory extraction follows mem0 ADD/UPDATE/NOOP pattern (MEM-03)"
+    mechanization:
+      type: swift_test
+      suite: MemoryTests
+      test: testExtractionEmitsAddUpdateNoop
+  - id: P7-09
+    description: "Temporal validity: facts carry valid_from / valid_to (Zep/Graphiti style)"
+    mechanization:
+      type: swift_test
+      suite: MemoryTests
+      test: testFactsCarryTemporalValidity
+  - id: P7-10
+    description: "FTS5 + sqlite-vec index live in single SQLite file (~/Library/Application Support/Jarvis/jarvis.db)"
+    mechanization:
+      type: swift_test
+      suite: MemoryTests
+      test: testFTS5AndVectorIndexInSingleDB
+  - id: P7-11
+    description: "Frame-attach raw bytes NEVER reach the replay log — placeholder JSON only (D-15 raw-bytes egress fence)"
+    mechanization:
+      type: swift_test
+      suite: ReplayTests
+      test: testFrameAttachReplaySinkEmitsPlaceholder
+  - id: P7-12
+    description: "FrameAttachDiscardSiteGrep — no png/jpeg serialization patterns appear in Replay package sources"
+    mechanization:
+      type: swift_test
+      suite: ReplayTests
+      test: testNoImageSerializationInReplaySources
+  - id: P7-13
+    description: "Vision frame attach is gated behind explicit user opt-in (VISION-04)"
+    mechanization:
+      type: swift_test
+      suite: VisionTests
+      test: testFrameAttachRequiresExplicitOptIn

@@ -1,0 +1,111 @@
+# Phase 08-hardening checklist manifest (self-coverage)
+#
+# The harness's own invariants:
+# - DriftClassifier exposes all 6 categories (idOrTimestamp, samplingNondeterminism,
+#   schemaChange, orderingBug, truncationBug, valueBug)
+# - Injection corpus is at least 20 items (D-22)
+# - 6 D-23 mandatory injection items present (AppleScript / nonce-leak probe /
+#   fake confirmation sheet / unicode footguns / memory-extraction attack /
+#   bus-handshake-shaped attack)
+# - Replay schema-version handshake present (D-11)
+# - check-corpus-secrets.sh greps the 4 secret patterns (D-07)
+# - Capture-script redacts before tee (D-07 backstop)
+# - 8 jarvis-eval pillar subcommands wired
+# - shipping-gate.sh invokes jarvis-eval all
+# - promote-replay-session.sh records the temperature/model meta sidecar (D-09)
+phase: 08-hardening
+items:
+  - id: P8-01
+    description: "DriftClassifier declares all 6 DriftCategory cases (idOrTimestamp, samplingNondeterminism, schemaChange, orderingBug, truncationBug, valueBug)"
+    mechanization:
+      type: grep_positive
+      file: packages/Harness/Sources/Harness/Oracle/DriftReport.swift
+      pattern: "case (idOrTimestamp|samplingNondeterminism|schemaChange|orderingBug|truncationBug|valueBug)"
+      expected_count: 6
+  - id: P8-02
+    description: "Injection corpus contains at least 20 items (D-22 floor)"
+    mechanization:
+      type: swift_test
+      suite: InjectionCorpusTests
+      test: testCorpusContainsAtLeast20Items
+  - id: P8-03
+    description: "D-23 mandatory injection items: AppleScript description claiming safe"
+    mechanization:
+      type: swift_test
+      suite: InjectionCorpusTests
+      test: testD23AppleScriptSafeClaimPresent
+  - id: P8-04
+    description: "D-23 mandatory injection items: nonce-leak probe (UNTRUSTED_CONTENT close-tag attack)"
+    mechanization:
+      type: swift_test
+      suite: InjectionCorpusTests
+      test: testD23NonceLeakProbePresent
+  - id: P8-05
+    description: "D-23 mandatory injection items: fake confirmation-sheet text in clipboard"
+    mechanization:
+      type: swift_test
+      suite: InjectionCorpusTests
+      test: testD23FakeConfirmationSheetPresent
+  - id: P8-06
+    description: "D-23 mandatory injection items: unicode footguns (U+2028 / C0 / bidi / zero-width)"
+    mechanization:
+      type: swift_test
+      suite: InjectionCorpusTests
+      test: testD23UnicodeFootgunsPresent
+  - id: P8-07
+    description: "D-23 mandatory injection items: memory-extraction prior-turn attack"
+    mechanization:
+      type: swift_test
+      suite: InjectionCorpusTests
+      test: testD23MemoryExtractionAttackPresent
+  - id: P8-08
+    description: "D-23 mandatory injection items: bus-handshake-shaped attack (BUS_PROTOCOL_VERSION mimic)"
+    mechanization:
+      type: swift_test
+      suite: InjectionCorpusTests
+      test: testD23BusHandshakeAttackPresent
+  - id: P8-09
+    description: "Replay schema-version handshake (D-11) lives in ReplayRunner with supportedSchemaVersion = 1"
+    mechanization:
+      type: grep_positive
+      file: packages/Harness/Sources/Harness/Runners/ReplayRunner.swift
+      pattern: "supportedSchemaVersion"
+      expected_count: 2
+  - id: P8-10
+    description: "ChecklistRunner declares all 7 D-16 mechanization cases (no `default:` arm in the encoder switch — S-1)"
+    mechanization:
+      type: grep_positive
+      file: packages/Harness/Sources/Harness/Corpus/ChecklistManifest.swift
+      pattern: "case (swiftTest|script|grepNegative|grepPositive|plistCheck|codesignGrep|manual)"
+      expected_count: 7
+  - id: P8-11
+    description: "D-17 enforcement string present in ChecklistManifest (one per grep-style mechanization: grep_negative / grep_positive / codesign_grep + the file-level docstring reference)"
+    mechanization:
+      type: grep_positive
+      file: packages/Harness/Sources/Harness/Corpus/ChecklistManifest.swift
+      pattern: "D-17"
+      expected_count: 4
+  - id: P8-12
+    description: "Pre-commit corpus secret guard exists and is executable"
+    mechanization:
+      type: script
+      path: scripts/check-corpus-secrets.sh
+  - id: P8-13
+    description: "Shipping-gate script invokes `jarvis-eval all` (single CI entry per OBS-04)"
+    mechanization:
+      type: grep_positive
+      file: scripts/shipping-gate.sh
+      pattern: "jarvis-eval all"
+      expected_count: 1
+  - id: P8-14
+    description: "Promote-replay-session.sh records temperature + model + replaySchemaVersion in sidecar JSON (D-09)"
+    mechanization:
+      type: grep_positive
+      file: scripts/promote-replay-session.sh
+      pattern: "temperature|model|replaySchemaVersion"
+      expected_count: 3
+  - id: P8-15
+    description: "Cross-phase build smoke (the harness exists in a buildable workspace)"
+    mechanization:
+      type: script
+      path: scripts/check-app-builds.sh

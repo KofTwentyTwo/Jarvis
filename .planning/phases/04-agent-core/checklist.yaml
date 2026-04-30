@@ -1,0 +1,98 @@
+# Phase 04-agent-core checklist manifest (D-15 retroactive sweep)
+#
+# Agent loop invariants — the densest set of architectural truths:
+# - 1h cache-TTL header round-trip (Opus 4.7 footgun)
+# - SSE decoder fixture coverage (every Anthropic event type)
+# - NDJSON tool_calls-on-sight (Ollama transport gotcha)
+# - turnNonce wraps every UNTRUSTED_CONTENT block (SEC-06)
+# - 8 KB tool_result cap (AGENT-08)
+# - Drop-oldest channel topology (AGENT-10)
+# - Retry-on-stream-truncation bound (AGENT-09)
+# - Cap-recovery uses tool_choice .none (AGENT-07 / R4-L1)
+# - OrphanDetector finds dangling tool_use_ids
+phase: 04-agent-core
+items:
+  - id: P4-01
+    description: "Anthropic 1h cache TTL requires anthropic-beta: extended-cache-ttl-2025-04-11 header (Opus 4.7 silently ignores 1h without it)"
+    mechanization:
+      type: swift_test
+      suite: AnthropicProviderTests
+      test: testOneHourCacheRequiresBetaHeader
+  - id: P4-02
+    description: "SSE decoder handles message_stop terminator (close on message_stop, not message_delta)"
+    mechanization:
+      type: swift_test
+      suite: AnthropicProviderTests
+      test: testSSEDecoderClosesOnMessageStop
+  - id: P4-03
+    description: "SSE decoder routes thinking_delta to its own LLMEvent case"
+    mechanization:
+      type: swift_test
+      suite: AnthropicProviderTests
+      test: testSSEDecoderRoutesThinkingDelta
+  - id: P4-04
+    description: "SSE decoder treats stop_reason: refusal as first-class event"
+    mechanization:
+      type: swift_test
+      suite: AnthropicProviderTests
+      test: testSSEDecoderHandlesRefusalStop
+  - id: P4-05
+    description: "SSE decoder emits partial_tool_use_at_disconnect on mid-delta termination (AGENT-09 retry seed)"
+    mechanization:
+      type: swift_test
+      suite: AnthropicProviderTests
+      test: testSSEDecoderEmitsPartialToolUseAtDisconnect
+  - id: P4-06
+    description: "Ollama /api/chat NDJSON decoder reads tool_calls on sight (NOT gated on done:true) per CLAUDE.md transport gotcha"
+    mechanization:
+      type: swift_test
+      suite: OllamaProviderTests
+      test: testNDJSONDecoderReadsToolCallsOnSight
+  - id: P4-07
+    description: "Ollama OpenAI-compat SSE decoder reads atomic tool_calls (separate from /api/chat NDJSON path)"
+    mechanization:
+      type: swift_test
+      suite: OllamaProviderTests
+      test: testOpenAICompatDecoderReadsAtomicToolCalls
+  - id: P4-08
+    description: "Tool-cap recovery sets tool_choice: none (Anthropic) / drops tools array (Ollama) — R4-L1 regression guard"
+    mechanization:
+      type: swift_test
+      suite: AgentOrchestratorTests
+      test: testCapRecoverySetsToolChoiceNone
+  - id: P4-09
+    description: "Tool result content capped at 8 KB (AGENT-08 — defends Opus 4.7 token-budget budget)"
+    mechanization:
+      type: swift_test
+      suite: AgentCoreTests
+      test: testToolResultPackerCapsAt8KB
+  - id: P4-10
+    description: "turnNonce wraps every UNTRUSTED_CONTENT block (SEC-06 — defends nonce-leak attempts)"
+    mechanization:
+      type: swift_test
+      suite: AgentCoreTests
+      test: testUntrustedWrapperEmitsTurnNonce
+  - id: P4-11
+    description: "BoundedAsyncChannel implements drop-oldest on saturation (AGENT-10 — webview can't backpressure tokens)"
+    mechanization:
+      type: swift_test
+      suite: AgentCoreTests
+      test: testBoundedChannelDropsOldestOnSaturation
+  - id: P4-12
+    description: "Stream-truncation retry bounded to N attempts (AGENT-09)"
+    mechanization:
+      type: swift_test
+      suite: AgentOrchestratorTests
+      test: testStreamTruncationRetryBoundedAttempts
+  - id: P4-13
+    description: "ReplayLog OrphanDetector flags tool_use ids without matching tool_result (OBS-02)"
+    mechanization:
+      type: swift_test
+      suite: ReplayTests
+      test: testOrphanDetectorFlagsDanglingToolUseId
+  - id: P4-14
+    description: "DevOverlay snapshot captures last-5 tool calls + per-turn latency breakdown (OBS-01)"
+    mechanization:
+      type: swift_test
+      suite: DevOverlayTests
+      test: testDevSnapshotIncludesToolCallHistoryAndLatency
