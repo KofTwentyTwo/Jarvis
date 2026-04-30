@@ -57,7 +57,7 @@ export const useJarvisStore = create<JarvisState>()(
     currentTurnId: null,
     activeTextPartId: null,
     a11y: { reduceMotion: false, reduceTransparency: false },
-    theme: { arcReactorGlow: '#1E88E5' },
+    theme: { arcReactorGlow: '#4FC3F7' },
     connection: 'booting',
 
     setHudState: (s) => set({ hudState: s }),

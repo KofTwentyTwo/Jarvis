@@ -26,6 +26,16 @@ export const RingMaterial = shaderMaterial(
     uColorGlow: new THREE.Color('#1E88E5'),
     uReduceMotion: 0,
     uOutwardWaveAmp: 0,
+    // Per-layer brightness multiplier (additive blend stacks; 1.0 = baseline).
+    uIntensity: 1.0,
+    // Per-layer "core" lift toward white. Inner rings ≈ 0.7, outer ≈ 0.0.
+    uCoreBoost: 0.0,
+    // Per-layer rotation phase offset (radians).
+    uPhase: 0.0,
+    // Per-layer radius scale (1.0 = baseline ring; 0.55 = inner core; 1.45 = outer).
+    uRadiusScale: 1.0,
+    // Per-particle size multiplier (4.0 = baseline; halo layer uses 12.0).
+    uPointSize: 4.0,
   },
   vertexShader,
   fragmentShader,
@@ -52,6 +62,11 @@ declare module '@react-three/fiber' {
       uColorGlow?: THREE.Color
       uReduceMotion?: number
       uOutwardWaveAmp?: number
+      uIntensity?: number
+      uCoreBoost?: number
+      uPhase?: number
+      uRadiusScale?: number
+      uPointSize?: number
     }
   }
 }
