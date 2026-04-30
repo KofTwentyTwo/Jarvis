@@ -33,8 +33,11 @@ void main() {
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
   gl_Position = projectionMatrix * mvPosition;
 
-  // Distance-attenuated point size (300 units = nominal sprite size at z=3).
-  gl_PointSize = uPointSize * (300.0 / -mvPosition.z);
+  // Use uPointSize directly as the on-screen pixel size. The perspective
+  // multiplier (`300 / -z`) blew past the ~63-px GPU clamp on macOS Metal,
+  // so all layers ended up at the same clamped size and the stack looked
+  // like one ring. Direct mode keeps per-layer differentiation.
+  gl_PointSize = uPointSize;
 
   // Slight per-particle alpha jitter so dense rings don't look uniform.
   vAlpha = 0.78 + 0.22 * fract(sin(aTheta * 12.9898 + uPhase) * 43758.5453);

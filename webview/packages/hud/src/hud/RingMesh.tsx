@@ -48,54 +48,58 @@ type LayerConfig = {
   alphaJitter: number        // small radius jitter so dense rings don't streak
 }
 
+// Per-layer pixel sizes use `gl_PointSize = uPointSize` directly (the
+// vertex shader dropped the perspective multiplier — see ring.vert.glsl
+// comment). Numbers below are real on-screen pixel sizes that read
+// distinctly on a Retina display.
 const LAYERS: LayerConfig[] = [
   {
     id: 'core',
     particles: 384,
-    radiusScale: 0.55,
-    pointSize: 5.5,
-    intensity: 1.4,
-    coreBoost: 0.85,
+    radiusScale: 0.62,
+    pointSize: 8.0,
+    intensity: 2.4,
+    coreBoost: 0.95,
     phase: 0.0,
     rotateMultiplier: 1.4,
     pulseMultiplier: 1.6,
-    alphaJitter: 0.02,
+    alphaJitter: 0.015,
   },
   {
     id: 'inner',
     particles: 512,
     radiusScale: 0.85,
-    pointSize: 4.0,
-    intensity: 1.0,
-    coreBoost: 0.40,
+    pointSize: 5.0,
+    intensity: 1.6,
+    coreBoost: 0.55,
     phase: 0.0,
     rotateMultiplier: 1.0,
     pulseMultiplier: 1.0,
-    alphaJitter: 0.03,
+    alphaJitter: 0.025,
   },
   {
     id: 'outer',
     particles: 256,
-    radiusScale: 1.15,
-    pointSize: 3.0,
-    intensity: 0.65,
-    coreBoost: 0.0,
+    radiusScale: 1.18,
+    pointSize: 4.0,
+    intensity: 1.1,
+    coreBoost: 0.10,
     phase: Math.PI / 6,
     rotateMultiplier: -0.6,    // contra-rotate for parallax depth
     pulseMultiplier: 0.5,
-    alphaJitter: 0.05,
+    alphaJitter: 0.04,
   },
   {
     id: 'halo',
     particles: 96,
-    radiusScale: 1.0,
-    pointSize: 16.0,
-    intensity: 0.35,
+    radiusScale: 1.04,
+    pointSize: 18.0,
+    intensity: 0.7,
     coreBoost: 0.0,
     phase: 0.0,
     rotateMultiplier: 0.2,
     pulseMultiplier: 0.4,
-    alphaJitter: 0.10,
+    alphaJitter: 0.12,
   },
 ]
 

@@ -1,5 +1,6 @@
 import { ParticleRing } from './hud/ParticleRing'
 import { LoadingFallbacks } from './hud/LoadingFallbacks'
+import { HudFrame } from './hud/HudFrame'
 import { ChatPanel } from './chat/ChatPanel'
 
 export function App() {
@@ -9,7 +10,10 @@ export function App() {
         <ParticleRing particles={512} />
       </div>
       <LoadingFallbacks />
-      <ChatPanel />
+      <HudFrame />
+      <div className="jarvis-hud__chat">
+        <ChatPanel />
+      </div>
     </div>
   )
 }
