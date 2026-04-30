@@ -649,29 +649,29 @@ items:
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **How many historical sessions should the OBS-03 replay oracle run in CI?**
+1. **How many historical sessions should the OBS-03 replay oracle run in CI?** **RESOLVED: D-08 + D-10** — 5–10 hand-selected golden sessions covering 8 archetypes; full historical replay is opt-in audit via `--all`, not the gate.
    - What we know: Each session is a SQLite file; running one replay takes roughly as long as the original turn (LLM stream + tool calls). CI budget is finite.
    - What's unclear: 10 sessions? 100? All sessions?
    - Recommendation: Define a `Corpora/replay-golden/` subset (5–10 hand-selected sessions covering: short turn, long multi-tool turn, cap-recovery turn, confirmation-approved turn, confirmation-denied turn, barge-in turn, stream-truncation retry turn). Running this subset is the gate; full historical replay is an opt-in audit.
 
-2. **Should the eval matrix gate on BOTH fixture AND live Anthropic, or fixture only?**
+2. **Should the eval matrix gate on BOTH fixture AND live Anthropic, or fixture only?** **RESOLVED: D-04 + D-05** — fixture-only is the shipping gate; `--live` is opt-in for manual release checks (`JARVIS_LIVE_EVAL=1` env-var or interactive confirmation).
    - What we know: Fixture gives deterministic CI; live catches API-shape regressions from Anthropic side (e.g., new field in response, cache-ttl default shift).
    - What's unclear: Is live-Anthropic a shipping gate or a manual release check?
    - Recommendation: Fixture is the shipping gate. Live Anthropic is `jarvis-eval corpus-sse --live` — run manually before releasing a new Jarvis build. Add a calendar reminder, not a CI automation.
 
-3. **When wake-hysteresis corpus FAR exceeds 0.5/hr or FRR exceeds 5%, does the build fail or warn?**
+3. **When wake-hysteresis corpus FAR exceeds 0.5/hr or FRR exceeds 5%, does the build fail or warn?** **RESOLVED: D-18** — fail at FAR > 1.0/hr OR FRR > 10% (clearly broken line); warn between 2026-published targets and the fail line.
    - What we know: 2026-standard targets are published [CITED: picovoice.ai wake-word-benchmarks].
    - What's unclear: Personal-project tolerance.
    - Recommendation: Fail at FAR > 1.0/hr OR FRR > 10% (the "clearly broken" line); warn between published targets and fail line. Warnings are visible in shipping-gate output, don't block ship.
 
-4. **Should MCP crash-recovery load test run 100 crashes, or something smaller for CI time budget?**
+4. **Should MCP crash-recovery load test run 100 crashes, or something smaller for CI time budget?** **RESOLVED: D-19** — profile-then-decide; 100 if at most 200 ms/crash, 50 with `--extended` for 500 if higher.
    - What we know: Requirement in ROADMAP says 100 injected helper crashes. Each crash = spawn + IPC handshake + kill, ~100ms-1s each.
    - What's unclear: 100s total for this pillar is reasonable; 10s per crash × 100 = 17 min is not.
    - Recommendation: Profile in first plan; if cycle time is > 200ms/crash, reduce to 50 crashes (still enough to detect linear FD leaks) and add a `--extended` flag that runs 500. Document the target in REQUIREMENTS.md if it's mutated.
 
-5. **How is the "looks done but isn't" checklist bootstrapped from already-completed phases?**
+5. **How is the "looks done but isn't" checklist bootstrapped from already-completed phases?** **RESOLVED: D-15** — P8 retroactively sweeps P1–P7 SUMMARY.md files into per-phase `checklist.yaml` manifests during plan 08-04; per-phase ownership going forward.
    - What we know: P1 is partially complete. P1's 01-01-SUMMARY and 01-02-SUMMARY have implicit items (see §Pitfall 4).
    - What's unclear: Does the P8 planner author checklist YAMLs retroactively for P1–P7, or does each phase's `/gsd-verify-phase` own populating its own YAML?
    - Recommendation: Each phase's `/gsd-verify-phase` output adds its own `checklist.yaml`. P8 planner authors the `ChecklistRunner` that reads all YAMLs + runs mechanizations; it does NOT author retroactively. If a phase finished before this pattern existed (P1 in flight), P8 executes a sweep pass across P1–P7 SUMMARY.md files to extract items and propose YAMLs for user review.
