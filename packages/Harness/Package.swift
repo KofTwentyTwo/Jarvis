@@ -34,6 +34,11 @@ let package = Package(
         .package(path: "../DevOverlay"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
+        // Plan 08-03 Task 2: MCPCrashRunner uses real MCPClient.callTool
+        // which takes `[String: Value]?` arguments (Value lives in the
+        // swift-sdk's MCP product, distinct from our local JarvisMCP
+        // library). This dep is consumed only by MCPCrashRunner.
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk", exact: "0.12.0"),
     ],
     targets: [
         .target(
@@ -47,6 +52,7 @@ let package = Package(
                 .product(name: "OllamaProvider", package: "AgentCore"),
                 .product(name: "Replay", package: "Replay"),
                 .product(name: "JarvisMCP", package: "MCP"),
+                .product(name: "MCP", package: "swift-sdk"),
                 .product(name: "Voice", package: "Voice"),
                 .product(name: "Memory", package: "Memory"),
                 .product(name: "DevOverlay", package: "DevOverlay"),
