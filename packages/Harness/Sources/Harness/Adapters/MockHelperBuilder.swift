@@ -71,6 +71,7 @@ public enum HarnessMockHelperBuilder {
             .deletingLastPathComponent()  // Sources/
             .deletingLastPathComponent()  // Harness/  (package dir)
             .deletingLastPathComponent()  // packages/
+            .deletingLastPathComponent()  // <repo root>
         let fixture = repoRoot
             .appendingPathComponent("packages")
             .appendingPathComponent("MCP")
