@@ -294,10 +294,13 @@ Note: REQUIREMENTS.md traceability header previously reported "10 / 2" for P7/P8
 
 **Depends on:** Phase 4 (orchestrator + LLM providers), Phase 5 (MCP tool dispatcher chain), Phase 6 (voice subsystem entry points), Phase 7 (memory coordinator + vision router + frame-attach controller). Phase 8 not on the critical path — the harness ran against unit-tested types regardless of production wiring.
 
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 9 to break down)
+- [ ] 09-01-PLAN.md — Broadcaster + installAgent + LiveOrchestratorEvents (closes INT-07-01; ME-01..05) (Wave 1)
+- [ ] 09-02-PLAN.md — VisionRouter dispatch + FrameAttach lifecycle (closes INT-07-02 + INT-07-04; VIS-01..05, VIS-07) (Wave 2)
+- [ ] 09-03-PLAN.md — Presence enrichment via PresenceStateSnapshot + system-prompt injection (closes INT-07-03; VIS-06, AGENT-09) (Wave 3)
+- [ ] 09-04-PLAN.md — Voice + Text adapter wiring + rejection surfaces; deletes NullVoiceAdapters.swift (AGENT-09) (Wave 4)
 
 **Success criteria (preview, refined during /gsd-plan-phase 9):**
 1. AppDelegate constructs and holds an `AgentOrchestrator`; tool dispatcher chain from Phase 5 is the orchestrator's `toolDispatcher`.
