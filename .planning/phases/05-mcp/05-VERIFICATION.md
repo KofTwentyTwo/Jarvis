@@ -1,27 +1,24 @@
 ---
 phase: 05-mcp
 verified: 2026-04-25T23:23:22Z
-status: gaps_found
-score: 31/32 must-haves verified
+re_verified: 2026-05-01T00:00:00Z
+status: passed
+score: 32/32 must-haves verified (after re-verification)
 re_verification:
-  previous_status: null
-  previous_score: null
-  gaps_closed: []
+  previous_status: gaps_found
+  previous_score: 31/32
+  previous_verified: 2026-04-25T23:23:22Z
+  gaps_closed:
+    - "G-01 — App target Swift 6 concurrency error at AppDelegate.swift:294 (`await runtime.client.registeredToolNames().count` inside string-interpolation autoclosure). Fixed in commit 5f9a767 (`fix(05-verify): G-01 extract await out of string interpolation autoclosure + add check-app-builds.sh gate`). Current AppDelegate.swift:374-376 hoists the await into a proper async context: `let toolCount = await runtime.client.registeredToolNames().count; self.systemLogger?.info(\"MCPRuntime built — \\(toolCount) tools\")`. Plus `scripts/check-app-builds.sh` was added as a manual / CI gate so this class of regression doesn't recur."
   gaps_remaining: []
   regressions: []
+  evidence:
+    - "App target compiles cleanly under xcodebuild Debug arm64 (verified 2026-05-01 via `bash scripts/check-app-builds.sh` — exit 0, '[check-app-builds] PASS — App target compiles cleanly')"
+    - "All subsequent phases (06-voice, 07-memory-vision, 08-hardening) executed end-to-end on top of Phase 5's wiring — could not have happened without a compiling App target"
 sha_verified: ca5b554ff55b7a5eec3337f263115619a9b85b82
 req_ids_covered: [AGENT-11, MCP-01, MCP-02, MCP-03, MCP-04, MCP-07, MCP-08, MCP-09, SEC-07, SEC-08, ME-04]
 spm_test_count: 360
-gaps:
-  - truth: "AppDelegate instantiates: MCPClient → registers 3 helpers → wraps via MCPToolDispatcher → wraps via ConfirmingToolDispatcher → injects into AgentOrchestrator. The orchestrator's ToolDispatcher is now the confirmation-gated MCP-backed dispatcher in production."
-    status: failed
-    reason: "App target xcodebuild fails (Debug AND Release) due to a Swift 6 concurrency error introduced by the CR-02 production wiring. AppDelegate.swift:294 places `await runtime.client.registeredToolNames().count` inside a string-interpolated logger autoclosure, which the compiler rejects: `'await' in an autoclosure that does not support concurrency` + `call to actor-isolated instance method 'registeredToolNames()' in a synchronous main actor-isolated context`. The structural wiring exists (steps 1-9 of applicationWillFinishLaunching land before step 10's MCPRuntimeWiring.build call) but step 10 itself does not compile, so the dispatcher chain is never constructed in a runnable build. SPM `swift build -c release` for JarvisMCP and AgentCore both pass — the regression is App-target-specific. Was masked because xcodebuild test for the App target is upstream-blocked (Xcode 26 harness bug) so the App target never gets compile-checked by tests."
-    artifacts:
-      - path: "App/AppDelegate.swift"
-        issue: "Line 294: `self.systemLogger?.info(\"MCPRuntime built — \\(await runtime.client.registeredToolNames().count) tools\")` — `await` inside string interpolation autoclosure (which is non-async)."
-    missing:
-      - "Extract `let count = await runtime.client.registeredToolNames().count` to a local before the log call (or use a non-async accessor / cached count)."
-      - "Add `xcodebuild build -project Jarvis.xcodeproj -scheme Jarvis -configuration Debug` as a CI gate so this class of regression doesn't recur (the upstream xctest blocker doesn't affect plain `xcodebuild build`)."
+gaps: []
 overrides_applied: 0
 ---
 
