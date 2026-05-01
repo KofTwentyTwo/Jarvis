@@ -22,6 +22,7 @@
 - [ ] **Phase 6: Voice** — Wake word + VAD + STT + TTS with canonical audio-graph teardown and barge-in
 - [ ] **Phase 7: Memory + Vision** — SQLite + FTS5 + sqlite-vec, mem0-style extraction, webcam + Vision presence (signal-only)
 - [ ] **Phase 8: Hardening** — Injection corpus, fixture corpora, replay-roundtrip oracle, eval matrix gates shipping
+- [ ] **Phase 9: Orchestrator Wiring** — Instantiate `AgentOrchestrator` in `AppDelegate`; close INT-07-01..04 cross-phase dispatch deferrals (memory extraction, vision dispatch, presence-aware prompt, frame-attach) plus the `NullOrchestratorAdapter` voice dead-end
 
 ---
 
@@ -284,6 +285,29 @@ Note: REQUIREMENTS.md traceability header previously reported "10 / 2" for P7/P8
 - **Scaffold-time verifications** (must succeed before phase completion, not deferred):
   - P1: `speech-recognition-assets` entitlement load-bearing probe
   - P6: Silero v6.2.1 contract parity with v5; Orpheus empirical TTFA 150–250 ms; AEC post-format coercion on macOS 26
+
+### Phase 9: Orchestrator Wiring
+
+**Goal:** Instantiate `AgentOrchestrator` in production `AppDelegate`, replacing every Null/placeholder adapter with real wiring so memory extraction, vision dispatch, presence-aware system prompts, and frame-attach all run end-to-end. Closes INT-07-01..04 from `.planning/v0.12.0-MILESTONE-AUDIT.md` and the `NullOrchestratorAdapter` / `NullTTSAdapter` / `NullBusEmitterAdapter` placeholders left over from Phase 6.
+
+**Requirements**: ME-01..05, VIS-01..07, AGENT-09 (live-dispatch verification of types implemented in earlier phases)
+
+**Depends on:** Phase 4 (orchestrator + LLM providers), Phase 5 (MCP tool dispatcher chain), Phase 6 (voice subsystem entry points), Phase 7 (memory coordinator + vision router + frame-attach controller). Phase 8 not on the critical path — the harness ran against unit-tested types regardless of production wiring.
+
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 9 to break down)
+
+**Success criteria (preview, refined during /gsd-plan-phase 9):**
+1. AppDelegate constructs and holds an `AgentOrchestrator`; tool dispatcher chain from Phase 5 is the orchestrator's `toolDispatcher`.
+2. `agentOrchestratorEvents()` returns the live channel; `MemoryExtractionCoordinator.start(...)` runs in production (closes INT-07-01).
+3. `VisionRouter` is reachable from a turn — either as a `ToolDispatcher` decorator or via an explicit post-response evaluation hook (closes INT-07-02; architecture decided in /gsd-discuss-phase 9).
+4. `ContextBuilder.installPresence` actually mutates per-turn system prompt per D-10; presence bus events show up in the live model prompt (closes INT-07-03).
+5. `FrameAttachController` instantiated; constructor signature drift (07-06 SUMMARY surprise) reconciled (closes INT-07-04).
+6. Voice's `NullOrchestratorAdapter` replaced with a real adapter forwarding to `orchestrator.submit(_:)` / `cancelAndSubmit(_:)`; HUD/banner surface `SubmitOutcome.rejected` reasons.
+7. Text-input path also routes through the orchestrator (closes the symmetric Phase 6 dead-end).
+8. App build green, full SPM test suite green, full Harness suite green.
 
 ---
 

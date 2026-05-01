@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: milestone
-status: completed
-last_updated: "2026-05-01T14:09:26.848Z"
+status: planning
+last_updated: "2026-05-01T14:13:38.896Z"
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 8
   total_plans: 39
   completed_plans: 39
-  percent: 100
+  percent: 89
 ---
 
 # State: Jarvis
@@ -39,8 +39,9 @@ Plan: 1 of 4
 
 **Progress:**
 
-```
+[██████████] 100%
 [                    ] 0 / 8 phases complete
+
 ```
 
 - [ ] Phase 1: Foundations — **planned** (5 plans across 4 waves, 17/17 REQ-IDs covered); ready to execute
@@ -73,6 +74,10 @@ Plan: 1 of 4
 ---
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 9 added: Phase 9 (Orchestrator Wiring) added 2026-05-01 — closes INT-07-01..04 cross-phase dispatch deferrals identified in v0.12.0-MILESTONE-AUDIT.md plus the NullOrchestratorAdapter voice dead-end
 
 ### Key Decisions (cumulative)
 
