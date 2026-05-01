@@ -3,7 +3,11 @@ import PackageDescription
 
 let package = Package(
     name: "AgentCore",
-    platforms: [.macOS(.v13)],
+    // Plan 09-02 — bumped from .v13 to .v14 to match JarvisVision (Plan 07-04).
+    // AgentOrchestrator now depends on JarvisVision (D-01 vision-dispatch),
+    // and SPM rejects a v13 library depending on a v14 product. AgentCore +
+    // AgentOrchestrator have no API surface that's macOS-13-specific.
+    platforms: [.macOS(.v14)],
     products: [
         .library(name: "AgentCore", targets: ["AgentCore"]),
         .library(name: "AnthropicProvider", targets: ["AnthropicProvider"]),
@@ -15,6 +19,11 @@ let package = Package(
         .package(path: "../Logging"),
         .package(path: "../Config"),
         .package(path: "../Replay"),
+        // Plan 09-02 — AgentOrchestrator now dispatches image-bearing turns
+        // through VisionRouter (D-01). Vision already depends on AgentCore,
+        // so AgentOrchestrator → Vision → AgentCore is acyclic (Vision
+        // does NOT depend on AgentOrchestrator — VISION-03 invariant).
+        .package(path: "../Vision"),
         // Plan 05-05 deviation (Rule 3, blocking): AgentOrchestrator
         // sources `import Logging` (swift-log Logger) directly. Same fix
         // pattern as Replay's Package.swift — the Xcode framework
@@ -63,6 +72,8 @@ let package = Package(
                 .product(name: "JarvisLogging", package: "Logging"),
                 .product(name: "Config", package: "Config"),
                 .product(name: "Replay", package: "Replay"),
+                // Plan 09-02 — visionRouter dispatch + post-response escalation.
+                .product(name: "JarvisVision", package: "Vision"),
                 .product(name: "Logging", package: "swift-log"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
@@ -91,6 +102,9 @@ let package = Package(
                 "AgentCore",
                 .product(name: "Config", package: "Config"),
                 .product(name: "Replay", package: "Replay"),
+                // Plan 09-02 — vision-dispatch + voice-tracking tests use
+                // VisionRouter live (no separate mock surface).
+                .product(name: "JarvisVision", package: "Vision"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),

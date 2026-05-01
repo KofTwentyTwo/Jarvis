@@ -3,6 +3,7 @@ import AgentCore
 import Config
 import Replay
 import JarvisLogging
+import JarvisVision
 import Logging
 
 /// Heart of Phase 4 — the turn-lifecycle actor.
@@ -36,6 +37,14 @@ public actor AgentOrchestrator {
     private let sessionId: SessionID
     private let systemPrompt: String
     private let availableToolsList: [ToolSchema]
+    /// Plan 09-02 / D-01 — image-bearing turns are dispatched through the
+    /// VisionRouter BEFORE the streaming loop. Defaulted-nil so existing test
+    /// sites (and the Plan 1 installAgent wiring before Plan 2 lands) compile
+    /// unchanged. When nil, the runTurn vision branch is a no-op (the standard
+    /// streaming path runs for both text-only and image-bearing turns, with the
+    /// caveat that the resolved provider may not be vision-capable — callers
+    /// who care about that pre-route through their own dispatcher).
+    private let visionRouter: VisionRouter?
     private let logger: Logger
 
     // MARK: - Outbound channel
@@ -54,6 +63,21 @@ public actor AgentOrchestrator {
 
     private var currentTurn: TurnExecution?
 
+    /// Plan 09-02 / D-16 — turns that carried an `ImageBlock`. The
+    /// broadcaster's frame-attach subscriber asks `turnHadImage(_:)` after
+    /// `.turnEnd` to decide whether to call `FrameAttachController
+    /// .onAssistantTurnComplete()`. Grows monotonically; pruning is deferred
+    /// (each entry is the size of a UUID-string TurnID, so even a long-running
+    /// app accumulates only kilobytes per session).
+    private var imageBearingTurns: Set<TurnID> = []
+
+    /// Plan 09-02 / BLOCKER-2 — turns submitted via `.voice(...)`. Plan 4's
+    /// voice subscriber drain gates `emitTurnEnded` on this set so
+    /// text-originated turns don't drive `VoiceController` back to `.idle`
+    /// from `.listening` when text + voice share the orchestrator. Same
+    /// pruning caveat as `imageBearingTurns`.
+    private var voiceOriginatedTurns: Set<TurnID> = []
+
     // MARK: - Init
 
     public init(
@@ -63,7 +87,8 @@ public actor AgentOrchestrator {
         replayLog: ReplayLog,
         sessionId: SessionID,
         systemPrompt: String,
-        availableTools: [ToolSchema] = []
+        availableTools: [ToolSchema] = [],
+        visionRouter: VisionRouter? = nil
     ) {
         self.configStore = configStore
         self.providerFactory = providerFactory
@@ -72,8 +97,33 @@ public actor AgentOrchestrator {
         self.sessionId = sessionId
         self.systemPrompt = systemPrompt
         self.availableToolsList = availableTools
+        self.visionRouter = visionRouter
         self.logger = Logger(label: JarvisLogChannel.agent.rawValue)
         self.events = BoundedAsyncChannel<OrchestratorEvent>(capacity: 256, policy: .suspend)
+    }
+
+    // MARK: - Public accessors (Plan 09-02)
+
+    /// D-16 — true iff the turn carried an `ImageBlock`. The broadcaster's
+    /// frame-attach subscriber asks this on `.turnEnd` to decide whether to
+    /// release the captured frame via `FrameAttachController.onAssistantTurnComplete()`.
+    public func turnHadImage(_ turnId: TurnID) -> Bool {
+        imageBearingTurns.contains(turnId)
+    }
+
+    /// BLOCKER-2 — true iff the turn was submitted via `TurnInput.voice(...)`.
+    /// Plan 4's voice subscriber drain calls this to filter `.tokenDelta` /
+    /// `.turnEnd` events that belong to text-originated turns (without this,
+    /// a text-originated `.turnEnd` would drive `VoiceController` back to
+    /// `.idle` from `.listening`).
+    public func turnSourceWasVoice(_ turnId: TurnID) -> Bool {
+        voiceOriginatedTurns.contains(turnId)
+    }
+
+    /// BLOCKER-2 actor-internal populator. Called from `runTurn` after
+    /// allocating the `TurnID` when `input.source == .voice`.
+    private func recordVoiceTurn(_ turnId: TurnID) {
+        voiceOriginatedTurns.insert(turnId)
     }
 
     // MARK: - Public entry points (AGENT-06)
@@ -121,7 +171,13 @@ public actor AgentOrchestrator {
         let nonce = TurnNonce.fresh()
         let perTurn = await configStore.perTurn()
 
-        let provider: any LLMProvider
+        // BLOCKER-2: track voice-originated turns inside the actor's isolation
+        // domain so Plan 4's voice subscriber can filter text-originated turns.
+        if input.source == .voice {
+            recordVoiceTurn(turnId)
+        }
+
+        var provider: any LLMProvider
         do {
             provider = try await providerFactory(perTurn.resolvedProvider)
         } catch {
@@ -130,6 +186,31 @@ public actor AgentOrchestrator {
                 "error": "\(error)",
             ])
             return .rejected(reason: .providerUnavailable)
+        }
+
+        // D-01: image-bearing turn → swap provider via VisionRouter BEFORE
+        // the streaming loop. T2 is reachable only via post-response
+        // escalation (D-02) inside runTurnLoop; route(...) selects T1 by
+        // default and T3 ONLY when explicitCloudOptIn (D-18). The first
+        // image is the routing input; Phase 9 supports single-frame attach
+        // (VISION-04). Multi-frame turns are out of scope until a future
+        // plan revisits the route signature.
+        var t2AvailableForThisTurn = false
+        if !input.images.isEmpty, let router = self.visionRouter,
+           let firstImage = input.images.first {
+            let cloudOptIn = ContextBuilder().matchesCloudOptIn(input.userText)
+            let decision = await router.route(
+                for: firstImage,
+                prompt: input.userText,
+                explicitCloudOptIn: cloudOptIn
+            )
+            provider = await router.providerForTier(decision.tier)
+            // T2 is available iff we routed local — D-04 ships with
+            // t2Provider == t1Provider, but evaluatePostResponse correctly
+            // stays-on-T1 when t2Available == false, so passing the actual
+            // tier here keeps the contract honest.
+            t2AvailableForThisTurn = (decision.tier != .t3Cloud)
+            imageBearingTurns.insert(turnId)
         }
 
         // Persist turnNonce in the replay log row (NOT in OrchestratorEvent —
@@ -177,7 +258,8 @@ public actor AgentOrchestrator {
                 initialMessages: initialMessages,
                 perTurn: perTurn,
                 wrapper: wrapper,
-                source: input.source
+                input: input,
+                t2AvailableForThisTurn: t2AvailableForThisTurn
             )
         }
 
@@ -197,14 +279,29 @@ public actor AgentOrchestrator {
         initialMessages: [LLMMessage],
         perTurn: PerTurnSnapshot,
         wrapper: UntrustedWrapper,
-        source: TurnSource
+        input: TurnInput,
+        t2AvailableForThisTurn: Bool
     ) async {
+        // `source` was a parameter prior to Plan 09-02; it's now derived from
+        // `input.source` to match the AGENT-09 retry path (which still
+        // allocates fresh turns under the original source). Keeping a local
+        // `source` binding preserves the existing call sites below.
+        let source: TurnSource = input.source
+
         var messages = initialMessages
         var toolCallBudget = perTurn.maxToolCallsPerTurn()
         var retry = RetryState(originalTurnId: turnId)
         var currentTurnId = turnId
         var currentProvider = provider
         var currentPerTurn = perTurn
+        // D-02: post-response escalation needs the running concat of textDelta
+        // for the current pass. Reset on each pass restart (initial entry +
+        // T1→T2 escalation re-enter via `continue outer`).
+        var assistantTextSoFar: String = ""
+        // D-02: escalation gets ONE shot. The second low-confidence outcome
+        // stays on T1 (the user got the response we have). This mirrors the
+        // AGENT-09 retry budget but is independent of it.
+        var escalationConsumed = false
 
         outer: while true {
             // Compute tool_choice based on remaining budget.
@@ -212,14 +309,33 @@ public actor AgentOrchestrator {
             let toolChoice: ToolChoice = toolCallBudget > 0 ? .auto : .none
             let toolsForCall: [ToolSchema] = toolCallBudget > 0 ? availableToolsList : []
 
-            let stream = currentProvider.stream(
-                messages: messages,
-                tools: toolsForCall,
-                toolChoice: toolChoice,
-                model: modelIDFor(currentPerTurn.resolvedProvider),
-                maxOutputTokens: currentPerTurn.maxOutputTokens(),
-                cacheHints: CacheHints(systemPromptTTL: .extended1h)
-            )
+            // D-01: image-bearing turns use the multimodal stream overload so
+            // the provider can encode the image bytes per its API
+            // (Anthropic vision blocks vs Ollama OpenAI-compat data URLs).
+            // Text-only turns fall through to the single-modal stream — the
+            // default `LLMProvider` extension handles `images.isEmpty`
+            // gracefully on text-only conformers.
+            let stream: AsyncThrowingStream<LLMEvent, Error>
+            if !input.images.isEmpty {
+                stream = currentProvider.stream(
+                    messages: messages,
+                    images: input.images,
+                    tools: toolsForCall,
+                    toolChoice: toolChoice,
+                    model: modelIDFor(currentPerTurn.resolvedProvider),
+                    maxOutputTokens: currentPerTurn.maxOutputTokens(),
+                    cacheHints: CacheHints(systemPromptTTL: .extended1h)
+                )
+            } else {
+                stream = currentProvider.stream(
+                    messages: messages,
+                    tools: toolsForCall,
+                    toolChoice: toolChoice,
+                    model: modelIDFor(currentPerTurn.resolvedProvider),
+                    maxOutputTokens: currentPerTurn.maxOutputTokens(),
+                    cacheHints: CacheHints(systemPromptTTL: .extended1h)
+                )
+            }
 
             do {
                 for try await event in stream {
@@ -233,6 +349,11 @@ public actor AgentOrchestrator {
                         break
 
                     case .textDelta(let s):
+                        // D-02: accumulate the assistant's text for the
+                        // current pass so the post-response escalation hook
+                        // can hand it to VisionRouter.evaluatePostResponse.
+                        // Reset on `continue outer` from the escalation arm.
+                        assistantTextSoFar += s
                         await replayLog.record(.textDelta(s), for: currentTurnId)
                         await events.send(.tokenDelta(turnId: currentTurnId, text: s))
 
@@ -336,6 +457,45 @@ public actor AgentOrchestrator {
                         await replayLog.record(.stopReason(stopReasonString(reason)), for: currentTurnId)
                         switch reason {
                         case .endTurn:
+                            // D-02 / WARNING-3 LOCKED STRATEGY: labeled-loop
+                            // `continue outer`. When the post-response check
+                            // says low-confidence + T2 available, discard the
+                            // T1 assistant message from `messages`, swap to
+                            // T2, reset the accumulator, and re-enter the
+                            // streaming loop under the SAME `currentTurnId`.
+                            // The user sees ONE final answer (no second turn
+                            // row, no fresh turnId — this is what makes D-02
+                            // distinct from AGENT-09's stream_truncated retry
+                            // path which DOES allocate a fresh turnId).
+                            //
+                            // Escalation gets ONE shot (`escalationConsumed`).
+                            // A second low-confidence outcome stays on T1 —
+                            // we already have a response and the AGENT-09
+                            // retry path is the only thing that reaches a
+                            // fresh-turnId retry from here.
+                            if !input.images.isEmpty,
+                               !escalationConsumed,
+                               let router = self.visionRouter {
+                                let outcome = await router.evaluatePostResponse(
+                                    assistantTextSoFar,
+                                    config: .default,
+                                    t2Available: t2AvailableForThisTurn
+                                )
+                                if outcome == .escalateToT2 {
+                                    escalationConsumed = true
+                                    await replayLog.record(
+                                        .escalationAttempt(turnId: currentTurnId, kind: .t1ToT2),
+                                        for: currentTurnId
+                                    )
+                                    currentProvider = await router.providerForTier(.t2LocalQuality)
+                                    // Discard T1's assistant message from
+                                    // model-facing history; T2 re-streams from
+                                    // the same initial messages + image(s).
+                                    messages = initialMessages
+                                    assistantTextSoFar = ""
+                                    continue outer
+                                }
+                            }
                             await events.send(.turnEnd(turnId: currentTurnId, stopReason: .endTurn))
                             await replayLog.endTurn(currentTurnId, stopReason: "end_turn")
                             await events.send(.stateChange(.idle))

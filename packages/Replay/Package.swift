@@ -3,7 +3,10 @@ import PackageDescription
 
 let package = Package(
     name: "Replay",
-    platforms: [.macOS(.v13)],
+    // Plan 09-02 cascade — bumped from v13 to v14 because Replay's AgentCore
+    // dependency now transitively pulls JarvisVision (macOS 14). Project
+    // deployment target has always been macOS 14; v13 here was stale.
+    platforms: [.macOS(.v14)],
     products: [
         .library(name: "Replay", targets: ["Replay"]),
     ],
