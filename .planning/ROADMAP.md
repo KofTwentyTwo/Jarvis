@@ -298,7 +298,7 @@ Note: REQUIREMENTS.md traceability header previously reported "10 / 2" for P7/P8
 
 Plans:
 **Wave 1**
-- [ ] 09-01-PLAN.md — Broadcaster + installAgent + LiveOrchestratorEvents (closes INT-07-01; ME-01..05) (Wave 1)
+- [x] 09-01-PLAN.md — Broadcaster + installAgent + LiveOrchestratorEvents (closes INT-07-01; ME-01..05) (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 09-02-PLAN.md — VisionRouter dispatch + FrameAttach lifecycle (closes INT-07-02 + INT-07-04; VIS-01..05, VIS-07) (Wave 2)
