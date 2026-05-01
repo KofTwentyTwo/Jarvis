@@ -4,6 +4,16 @@ import AgentOrchestrator
 import JarvisLogging
 import Logging
 
+/// Test seam (Phase 9 / Plan 1, BLOCKER-1 verification): the coordinator's
+/// dependency surface is the single `enqueue(_:)` method. Production
+/// `MemoryExtractionOrchestrator` conforms; tests can supply a job-capturing
+/// spy without driving the full extractor stack.
+public protocol MemoryEnqueueing: Sendable {
+    func enqueue(_ job: ExtractionJob) async
+}
+
+extension MemoryExtractionOrchestrator: MemoryEnqueueing {}
+
 /// Subscribes to `AgentOrchestrator.events` and converts successful
 /// `.turnEnd(stopReason: .endTurn)` events into `ExtractionJob` enqueues
 /// against `MemoryExtractionOrchestrator` (D-01).
@@ -16,11 +26,11 @@ public actor MemoryExtractionCoordinator {
 
     public typealias TurnContentLookup = @Sendable (TurnID) async -> (user: String, assistant: String)?
 
-    private let memoryOrchestrator: MemoryExtractionOrchestrator
+    private let memoryOrchestrator: any MemoryEnqueueing
     private let logger: Logger
     private var subscription: Task<Void, Never>?
 
-    public init(memoryOrchestrator: MemoryExtractionOrchestrator) {
+    public init(memoryOrchestrator: any MemoryEnqueueing) {
         self.memoryOrchestrator = memoryOrchestrator
         self.logger = Logger(label: "memory.coordinator")
     }

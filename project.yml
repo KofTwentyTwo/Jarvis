@@ -270,6 +270,13 @@ targets:
           "${SRCROOT}/scripts/check-embedding-dim-literal.sh"
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
+      # Plan 09-01 (D-05/D-08, WARNING-2): orchestrator.events has exactly one
+      # production consumer — OrchestratorEventBroadcaster's drain Task.
+      - name: Check orchestrator.events single-consumer (Phase 9)
+        script: |
+          "${SRCROOT}/scripts/check-orchestrator-events-single-consumer.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
       - name: Build webview bundle
         script: |
           "${SRCROOT}/scripts/build-webview.sh"

@@ -215,6 +215,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// starts the vision subsystem.
     var visionInstallTask: Task<Void, Never>?
 
+    // MARK: - Agent subsystem (Plan 09-01)
+
+    /// ConfigStore built from launch + per-turn snapshots in
+    /// `applicationWillFinishLaunching`. Held strongly so installAgent()
+    /// can hand it to the AgentOrchestrator constructor.
+    private var configStore: ConfigStore?
+
+    /// AgentOrchestrator instantiated in `installAgent()`. nil until the
+    /// install task completes. Held strongly so the actor + its events
+    /// channel + the broadcaster's drain Task all outlive launch.
+    private var agentOrchestrator: AgentOrchestrator?
+
+    /// D-05/D-08: single fan-out drain over `agentOrchestrator.events`.
+    /// Owned for app lifetime by AppDelegate.
+    private var eventBroadcaster: OrchestratorEventBroadcaster?
+
+    /// BLOCKER-1 source of truth: the per-turn (userText, assistantText)
+    /// accumulator used by `lookupTurnContent`. Plan 1's transcript
+    /// subscriber appends assistant-side .tokenDelta into this store;
+    /// Plan 4 will append user-side text at submit time.
+    private var turnTranscriptStore: TurnTranscriptStore?
+
+    /// Task spawned in `applicationWillFinishLaunching` that runs `installAgent`.
+    private var agentInstallTask: Task<Void, Never>?
+
+    /// Drains the broadcaster's memory subscription into MemoryExtractionCoordinator.
+    private var memoryEventSubscriberTask: Task<Void, Never>?
+
+    /// Drains the broadcaster's transcript subscription into TurnTranscriptStore
+    /// (assistant-side accumulator).
+    private var transcriptSubscriberTask: Task<Void, Never>?
+
+    /// Drains the broadcaster's devOverlay subscription into DevSnapshotEmitter.
+    /// Lossy — the DevOverlay is observational.
+    private var devOverlaySubscriberTask: Task<Void, Never>?
+
     /// Plan 03-05 test seam. Default production value is `"index"` (the R3F
     /// bundle entry). `installBus()` assigns this once when it resolves the
     /// Bundle.main URL. Tests assert the post-install value to confirm the
@@ -278,7 +314,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
-        _ = snapshots  // Phase 2+ wires the ConfigStore to the agent loop.
+        // Plan 09-01: build a ConfigStore from the launch + per-turn
+        // snapshots so installAgent() can construct the AgentOrchestrator
+        // with a live config source.
+        let configStore = ConfigStore(launch: snapshots.0, initial: snapshots.1)
+        self.configStore = configStore
 
         // 4. Menu bar + HUD panel + banner panel.
         installMenuBar()
@@ -403,6 +443,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         visionInstallTask = Task { @MainActor [weak self] in
             await self?.installVision()
         }
+
+        // 14. Plan 09-01: install agent subsystem. Awaits the memory install
+        //     task so the MemoryExtractionCoordinator is constructed before
+        //     installAgent subscribes it to the broadcaster's memory child
+        //     stream. visionRouter / presenceSnapshot wiring is added by
+        //     Plans 2 + 3; this plan constructs the orchestrator with the
+        //     existing 7-arg signature.
+        agentInstallTask = Task { @MainActor [weak self] in
+            await self?.memoryInstallTask?.value
+            await self?.installAgent()
+        }
     }
 
     /// CR-02 (REVIEW 05): on-disk replay log path. Lives next to
@@ -436,6 +487,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let capture = captureSession {
             Task { await capture.shutdown() }
+        }
+        // Plan 09-01: tear down agent subsystem (broadcaster + subscribers).
+        agentInstallTask?.cancel()
+        memoryEventSubscriberTask?.cancel()
+        transcriptSubscriberTask?.cancel()
+        devOverlaySubscriberTask?.cancel()
+        if let broadcaster = eventBroadcaster {
+            Task { await broadcaster.stop() }
         }
     }
 
@@ -611,38 +670,139 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         await memoryOrch.start()
         memoryExtractionOrchestrator = memoryOrch
 
-        // 6. Coordinator wiring — subscribe to AgentOrchestrator.events.
-        //    AgentOrchestrator is owned by a future Phase 4/5 wiring plan.
-        //    On disk at 07-06 time the App-target AgentOrchestrator instance
-        //    isn't yet exposed; the coordinator is constructed but its
-        //    start() call is deferred. The forwarded item is documented in
-        //    07-06-SUMMARY.md under "Deferred wiring".
+        // 6. Construct the MemoryExtractionCoordinator. Plan 09-01 moves the
+        //    `coord.start(...)` call into `installAgent()` — this is where the
+        //    OrchestratorEventBroadcaster's memory child stream is allocated
+        //    and the BLOCKER-1-fixing `lookupTurnContent` closure is bound.
         let coord = MemoryExtractionCoordinator(memoryOrchestrator: memoryOrch)
         memoryExtractionCoordinator = coord
-        if let events = self.agentOrchestratorEvents() {
-            await coord.start(
-                orchestratorEvents: events,
-                turnContent: { _ in nil }
-            )
-            systemLogger?.info("installMemory: extraction coordinator started")
-        } else {
-            systemLogger?.warning(
-                "installMemory: AgentOrchestrator.events unavailable — extraction coordinator constructed but not started (deferred wiring; see 07-06 SUMMARY)"
-            )
-        }
 
         systemLogger?.info("installMemory: MemoryExtractionOrchestrator started")
     }
 
-    /// Returns the live AgentOrchestrator's event stream if Phase 4 wiring is
-    /// present; nil otherwise. The AgentOrchestrator hasn't yet landed in
-    /// AppDelegate on develop — the coordinator wires up here once it does.
-    /// Documented as deferred wiring in 07-06-SUMMARY.
-    private func agentOrchestratorEvents() -> BoundedAsyncChannel<OrchestratorEvent>? {
-        // Placeholder — replaced when AgentOrchestrator is wired into
-        // AppDelegate. The Memory subsystem degrades gracefully without it
-        // (the orchestrator drains its bounded queue but no jobs ever arrive).
-        return nil
+    // MARK: - Agent install (Plan 09-01)
+
+    /// Bootstrap the AgentOrchestrator + OrchestratorEventBroadcaster +
+    /// TurnTranscriptStore wiring (Phase 9 SC#1, SC#2). Closes INT-07-01:
+    /// memory extraction now reaches MemoryExtractionCoordinator's drain
+    /// AND `lookupTurnContent` returns NON-NIL pairs.
+    ///
+    /// Six-step pattern (S-2):
+    ///   1. Required deps from earlier installs.
+    ///   2. Provider factory closure (closes over Keychain).
+    ///   3. Construct the AgentOrchestrator (existing 7-arg signature; visionRouter
+    ///      and presenceSnapshot wiring lands in Plans 2 + 3).
+    ///   4. Construct the OrchestratorEventBroadcaster + start drain (D-08).
+    ///      Construct the TurnTranscriptStore (BLOCKER-1 source of truth).
+    ///   5. Subscribe consumers (memory + transcript + devOverlay).
+    ///   6. Log success.
+    @MainActor
+    private func installAgent() async {
+        // 1. Required deps from earlier installs.
+        guard let mcpRuntime = self.mcpRuntime,
+              let replayLog = self.replayLog,
+              let configStore = self.configStore else {
+            systemLogger?.warning("installAgent: deps not ready (mcp/replay/config) — skipping")
+            return
+        }
+
+        // 2. Provider factory closure — closes over the keychain reference.
+        //    `keychainStore` is a non-Sendable existential; capture a local
+        //    Sendable copy for the closure.
+        let keychainStoreLocal: any KeychainStore = self.keychainStore
+        let providerFactory: @Sendable (ProviderSelection) async throws -> any LLMProvider = {
+            selection in
+            switch selection {
+            case .anthropic:
+                return AnthropicProvider(apiKeyProvider: { @Sendable in
+                    (try? keychainStoreLocal.get(.anthropic)) ?? ""
+                })
+            case .ollama:
+                return OllamaProvider(baseURL: URL(string: "http://127.0.0.1:11434")!)
+            }
+        }
+
+        // 3. Construct the orchestrator with the existing 7-arg signature.
+        //    visionRouter + presenceSnapshot wiring is added by Plans 2 + 3.
+        let orchestrator = AgentOrchestrator(
+            configStore: configStore,
+            providerFactory: providerFactory,
+            toolDispatcher: mcpRuntime.dispatcher,
+            replayLog: replayLog,
+            sessionId: SessionID.fresh(),
+            systemPrompt: "You are Jarvis, a personal macOS assistant.",
+            availableTools: []
+        )
+        self.agentOrchestrator = orchestrator
+
+        // 4. Broadcaster + transcript store (D-05 / D-08 / BLOCKER-1).
+        let broadcaster = OrchestratorEventBroadcaster(upstream: orchestrator.events)
+        await broadcaster.start()
+        self.eventBroadcaster = broadcaster
+
+        let transcriptStore = TurnTranscriptStore()
+        self.turnTranscriptStore = transcriptStore
+
+        // 5a. Memory subscriber — D-07 protected events.
+        //     `lookupTurnContent` reads from the TurnTranscriptStore (BLOCKER-1
+        //     fix). Plan 1 feeds the assistant side via the transcript subscriber
+        //     below; Plan 4 will feed the user side at submit time.
+        let memorySub = await broadcaster.subscribe(priority: .memory, capacity: 256)
+        if let coord = self.memoryExtractionCoordinator {
+            memoryEventSubscriberTask = Task { [weak self] in
+                await coord.start(
+                    orchestratorEvents: memorySub.stream,
+                    turnContent: { [weak self] turnId in
+                        // BLOCKER-1 fix: read from TurnTranscriptStore (the
+                        // source of truth populated by the transcript subscriber
+                        // and Plan 4's submit-time user-side append) rather
+                        // than the Phase-7-era nil stub.
+                        if let pair = await self?.turnTranscriptStore?.flushPair(turnId) {
+                            return (user: pair.userText, assistant: pair.assistantText)
+                        }
+                        return nil
+                    }
+                )
+            }
+        } else {
+            systemLogger?.warning("installAgent: memoryExtractionCoordinator nil — memory dormant")
+        }
+
+        // 5b. Transcript collector (BLOCKER-1: assistant side accumulator).
+        //     Drains .tokenDelta events into the TurnTranscriptStore so
+        //     `flushPair(turnId)` returns the accumulated assistant text by
+        //     the time memory's drain processes the matching .turnEnd.
+        //     Broadcaster fan-out is synchronous per event so the transcript
+        //     subscriber processes every .tokenDelta before the memory
+        //     subscriber sees the trailing .turnEnd.
+        let transcriptSub = await broadcaster.subscribe(priority: .transcript, capacity: 256)
+        transcriptSubscriberTask = Task { [weak self] in
+            for await event in transcriptSub.stream {
+                if Task.isCancelled { break }
+                guard let self else { break }
+                if case let .tokenDelta(turnId, text) = event {
+                    await self.turnTranscriptStore?.append(
+                        turnId: turnId, role: .assistant, deltaText: text
+                    )
+                }
+            }
+        }
+
+        // 5c. DevOverlay subscriber (lossy — observational; reserved for the
+        //     DevOverlay emitter wiring in a follow-on plan). Subscribed here
+        //     so the broadcaster's three-subscriber pattern is established;
+        //     the drain task simply consumes events to keep the actor's
+        //     internal mirror flushing.
+        let devSub = await broadcaster.subscribe(priority: .devOverlay, capacity: 32)
+        devOverlaySubscriberTask = Task {
+            for await _ in devSub.stream {
+                if Task.isCancelled { break }
+            }
+        }
+
+        systemLogger?.info(
+            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay subscribers active)"
+        )
     }
 
     // MARK: - Vision install (Plan 07-06 — mirrors installVoice)
