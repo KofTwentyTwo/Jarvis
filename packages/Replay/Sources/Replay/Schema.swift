@@ -93,4 +93,8 @@ public enum ReplayEventKind: String, Sendable {
     /// Added in Plan 07-03 — single-emission-site memory retrieval event
     /// recorded only by `MemoryStore.recordRetrieval`.
     case memoryRetrieval = "memory_retrieval"
+    /// Added in Plan 09-02 / D-02 — vision-tier T1→T2 escalation marker.
+    /// Distinct from `stream_truncated_retry` (AGENT-09): same turnId across
+    /// attempts, exactly one user-visible final answer.
+    case escalationAttempt = "escalation_attempt"
 }

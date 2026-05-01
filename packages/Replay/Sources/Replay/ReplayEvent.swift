@@ -1,4 +1,5 @@
 import Foundation
+import AgentCore
 
 /// Source channel that produced a turn.
 ///
@@ -71,6 +72,16 @@ public struct SessionID: Sendable, Equatable, Hashable, RawRepresentable {
     }
 }
 
+/// Plan 09-02 / D-02 vision-tier escalation marker. Distinct from
+/// `streamTruncatedRetry` (AGENT-09): escalation reuses the SAME `turnId`
+/// across attempts (the user sees one final answer); `streamTruncatedRetry`
+/// allocates a fresh `retryTurnId`. Pattern matching on each is mutually
+/// exclusive — see `EscalationAttemptMarkerTests`.
+public enum EscalationKind: Sendable, Equatable {
+    /// T1 response was low-confidence; retried on T2 with the same turnId.
+    case t1ToT2
+}
+
 /// One entry in the replay log. Ten cases — exactly the set surfaced by the
 /// orchestrator (Plan 04-04) plus HUD/error event sinks.
 ///
@@ -113,6 +124,14 @@ public enum ReplayEvent: Sendable {
     /// (JSON encoded). Single-emission-site enforced by
     /// `SingleEmissionSiteGrepTests.testMemoryRetrievalHasSingleEmissionSite`.
     case memoryRetrieval(Data)
+    /// Plan 09-02 / D-02 — vision-tier escalation marker. The orchestrator
+    /// records this when VisionRouter post-response check returns
+    /// `.escalateToT2`: the T1 assistant message is discarded from the
+    /// model-facing history, the T2 provider is swapped in, and the streaming
+    /// loop restarts under the SAME `turnId`. Distinct from
+    /// `streamTruncatedRetry` (AGENT-09): escalation gets ONE shot; a second
+    /// truncation hands off to the AGENT-09 retry path with a fresh turnId.
+    case escalationAttempt(turnId: TurnID, kind: EscalationKind)
 }
 
 extension ReplayEvent {
@@ -166,6 +185,18 @@ extension ReplayEvent {
             return (ReplayEventKind.memoryMutation.rawValue, data)
         case .memoryRetrieval(let data):
             return (ReplayEventKind.memoryRetrieval.rawValue, data)
+        case .escalationAttempt(let turnId, let kind):
+            // JSON envelope so a forensic reader can distinguish escalation
+            // attempts from AGENT-09 retries without re-reading the turns
+            // table. `turnId` is repeated in the events row's turn_id column
+            // anyway; carrying it in the payload keeps the marker
+            // self-describing if dumped in isolation.
+            let envelope: [String: String] = [
+                "turn_id": turnId.rawValue,
+                "kind": (kind == .t1ToT2) ? "t1_to_t2" : "unknown",
+            ]
+            let bytes = (try? JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])) ?? Data()
+            return (ReplayEventKind.escalationAttempt.rawValue, bytes)
         }
     }
 }

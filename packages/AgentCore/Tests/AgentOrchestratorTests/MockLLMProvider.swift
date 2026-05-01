@@ -27,6 +27,18 @@ public actor MockLLMProvider: LLMProvider {
         public let tools: [ToolSchema]
         public let toolChoice: ToolChoice
         public let model: ModelID
+        /// Plan 09-02 — non-empty when the orchestrator chose the multimodal
+        /// stream overload for an image-bearing turn.
+        public var images: [ImageBlock] = []
+
+        public init(messages: [LLMMessage], tools: [ToolSchema], toolChoice: ToolChoice,
+                    model: ModelID, images: [ImageBlock] = []) {
+            self.messages = messages
+            self.tools = tools
+            self.toolChoice = toolChoice
+            self.model = model
+            self.images = images
+        }
     }
 
     private var scripts: [Script]
@@ -75,7 +87,47 @@ public actor MockLLMProvider: LLMProvider {
             Task { [self] in
                 let scriptToRun = await self.recordCallAndSelectScript(
                     messages: messages, tools: tools,
-                    toolChoice: toolChoice, model: model
+                    toolChoice: toolChoice, model: model,
+                    images: []
+                )
+                for event in scriptToRun.events {
+                    if Task.isCancelled {
+                        continuation.finish(throwing: CancellationError())
+                        return
+                    }
+                    if scriptToRun.throttleBetweenEventsNs > 0 {
+                        try? await Task.sleep(nanoseconds: scriptToRun.throttleBetweenEventsNs)
+                    }
+                    if Task.isCancelled {
+                        continuation.finish(throwing: CancellationError())
+                        return
+                    }
+                    continuation.yield(event)
+                }
+                continuation.finish()
+            }
+        }
+    }
+
+    /// Plan 09-02 — multimodal overload. Records the received `images`
+    /// alongside the standard tuple so vision-dispatch tests can assert the
+    /// provider was called with the original image bytes, then yields the
+    /// scripted event sequence (same loop as the single-modal stream).
+    public nonisolated func stream(
+        messages: [LLMMessage],
+        images: [ImageBlock],
+        tools: [ToolSchema],
+        toolChoice: ToolChoice,
+        model: ModelID,
+        maxOutputTokens: Int,
+        cacheHints: CacheHints?
+    ) -> AsyncThrowingStream<LLMEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task { [self] in
+                let scriptToRun = await self.recordCallAndSelectScript(
+                    messages: messages, tools: tools,
+                    toolChoice: toolChoice, model: model,
+                    images: images
                 )
                 for event in scriptToRun.events {
                     if Task.isCancelled {
@@ -98,11 +150,12 @@ public actor MockLLMProvider: LLMProvider {
 
     private func recordCallAndSelectScript(
         messages: [LLMMessage], tools: [ToolSchema],
-        toolChoice: ToolChoice, model: ModelID
+        toolChoice: ToolChoice, model: ModelID, images: [ImageBlock]
     ) -> Script {
         recordedCalls.append(RecordedCall(
             messages: messages, tools: tools,
-            toolChoice: toolChoice, model: model
+            toolChoice: toolChoice, model: model,
+            images: images
         ))
         let chosen: Script
         if callIndex < scripts.count {
