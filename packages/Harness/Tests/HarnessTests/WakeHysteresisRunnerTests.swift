@@ -135,7 +135,35 @@ struct WakeHysteresisRunnerTests {
             trueNegatives: tn,
             farPerHour: far,
             frrPercent: frr,
-            diagnostic: nil
+            diagnostic: nil,
+            pipelineStatus: .ok,
+            performanceStatus: .pass,
+            isSyntheticCorpus: false
         )
+    }
+
+    // MARK: - PIPELINE / PERFORMANCE distinction
+
+    @Test("Synthetic-only corpus is recognised as seed scaffolding")
+    func syntheticCorpusDetection() {
+        let synth = WakeHysteresisCorpus(clips: [
+            WakeClip(id: "s1", fileName: "s1.wav", label: .positive,
+                     durationSeconds: 1.0, noiseProfile: "synthetic-pink"),
+            WakeClip(id: "s2", fileName: "s2.wav", label: .negative,
+                     durationSeconds: 1.0, noiseProfile: "synthetic-tts"),
+        ])
+        #expect(WakeHysteresisRunner.isAllSynthetic(synth))
+
+        let mixed = WakeHysteresisCorpus(clips: [
+            WakeClip(id: "s1", fileName: "s1.wav", label: .positive,
+                     durationSeconds: 1.0, noiseProfile: "synthetic-pink"),
+            WakeClip(id: "r1", fileName: "r1.wav", label: .positive,
+                     durationSeconds: 1.0, noiseProfile: "quiet"),
+        ])
+        #expect(!WakeHysteresisRunner.isAllSynthetic(mixed))
+
+        // Empty corpus → `true` so the empty-corpus branch reports
+        // PIPELINE NOT WIRED + PERFORMANCE PENDING (the strict diagnostic).
+        #expect(WakeHysteresisRunner.isAllSynthetic(WakeHysteresisCorpus(clips: [])))
     }
 }

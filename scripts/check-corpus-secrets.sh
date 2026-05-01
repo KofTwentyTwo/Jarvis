@@ -22,6 +22,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${REPO:=$(cd "$SCRIPT_DIR/.." && pwd)}"
 : "${CORPORA_PATH:=$REPO/packages/Harness/Corpora}"
+# Replay/eval session SQLite files may carry a tool_call body that
+# accidentally inlines an API key. Scan them too — D-07 review-followup.
+: "${REPLAY_GLOB:=$REPO/Corpora/replay-golden}"
+: "${EVAL_GLOB:=$REPO/Corpora/evaluation}"
 
 PATTERNS=(
     "sk-ant-[A-Za-z0-9]{40,}"
@@ -30,19 +34,58 @@ PATTERNS=(
     "sk-[A-Za-z0-9]{32,}"
 )
 
-if [[ ! -d "$CORPORA_PATH" ]]; then
-    # Corpora directory missing is not a violation — first commits / fresh
-    # checkouts may legitimately predate it.
-    exit 0
+HITS=0
+
+if [[ -d "$CORPORA_PATH" ]]; then
+    for pat in "${PATTERNS[@]}"; do
+        if grep -rE "$pat" "$CORPORA_PATH" 2>/dev/null; then
+            echo "ERROR: D-07 violation — pattern '$pat' detected in Corpora/" >&2
+            HITS=$((HITS + 1))
+        fi
+    done
 fi
 
-HITS=0
-for pat in "${PATTERNS[@]}"; do
-    if grep -rE "$pat" "$CORPORA_PATH" 2>/dev/null; then
-        echo "ERROR: D-07 violation — pattern '$pat' detected in Corpora/" >&2
-        HITS=$((HITS + 1))
-    fi
-done
+# Scan recorded SQLite session files. SQLite is a binary container — `grep`
+# against the file works because key patterns are ASCII and stored verbatim.
+# We scan only files matching well-known suffixes so a stray DB elsewhere in
+# the tree (e.g. dev caches) isn't gated. `sqlite3` is preferred when
+# available (it dumps tool_call rows as text) but plain grep is the
+# acceptable fallback so the hook stays portable.
+scan_sqlite() {
+    local target_dir="$1"
+    [[ -d "$target_dir" ]] || return 0
+    while IFS= read -r -d '' db; do
+        local hits_in_db=0
+        if command -v sqlite3 >/dev/null 2>&1; then
+            local dump
+            dump=$(sqlite3 -readonly "$db" \
+                "SELECT payload_text, tool_call_args, tool_result_text FROM events WHERE kind LIKE 'tool_%';" \
+                2>/dev/null || true)
+            for pat in "${PATTERNS[@]}"; do
+                if echo "$dump" | grep -qE "$pat"; then
+                    echo "ERROR: D-07 violation — pattern '$pat' detected in SQLite events of $db" >&2
+                    hits_in_db=$((hits_in_db + 1))
+                fi
+            done
+        else
+            for pat in "${PATTERNS[@]}"; do
+                if grep -aE "$pat" "$db" >/dev/null 2>&1; then
+                    echo "ERROR: D-07 violation — pattern '$pat' detected in SQLite blob $db" >&2
+                    hits_in_db=$((hits_in_db + 1))
+                fi
+            done
+        fi
+        HITS=$((HITS + hits_in_db))
+    done < <(find "$target_dir" \
+        \( -name "*.sqlite" -o -name "*.sqlite3" -o -name "*.db" \
+           -o -name "*.replay" -o -name "*.evaluation" \) \
+        -type f -print0 2>/dev/null)
+}
+
+scan_sqlite "$REPLAY_GLOB"
+scan_sqlite "$EVAL_GLOB"
+# Also scan the Harness-bundled corpora (golden replays staged inside SPM).
+scan_sqlite "$REPO/packages/Harness/Corpora"
 
 if [[ $HITS -gt 0 ]]; then
     echo "" >&2

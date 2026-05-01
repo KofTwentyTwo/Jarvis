@@ -1,4 +1,5 @@
 {
+  "manifest_version": 1,
   "items": [
     {"id": "owasp-llm01-direct-01", "file": "owasp-llm01-direct-01.json"},
     {"id": "owasp-llm01-direct-02", "file": "owasp-llm01-direct-02.json"},

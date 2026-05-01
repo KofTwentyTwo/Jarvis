@@ -55,12 +55,29 @@ public actor MCPCrashRunner {
     /// wraps the report in. False positives (failing on a benign FD) make
     /// the harness flaky.
     public static let steadyStateWhitelist: Set<String> = [
+        // Helper transport: the swift-sdk's `StdioTransport` reads from a
+        // POSIX pipe per child. After SIGKILL the parent end persists for
+        // a tick before the next register opens a new pair.
         "type=PIPE",
+        // Mock-helper FIFOs used by HarnessMockHelperBuilder for fake-stdin.
         "type=FIFO",
+        // CFFileDescriptor / kernel-event sources Foundation registers when
+        // wiring the child Process — released asynchronously after exit.
         "type=systm",
+        // Foundation/MCP SDK uses kqueue for child-process death watch.
+        // FDs cycle as helpers restart but never grow without bound.
         "type=KQUEUE",
+        // Internal IPC (XPC, NSURLSession sockets, dispatch_source) the
+        // SDK opens unconditionally. Whitelisted because they're not
+        // per-helper.
         "type=unix",
+        // Transient helper artefacts: HarnessMockHelperBuilder writes the
+        // mock helper binary + manifest under /tmp/jarvis-* and SQLite
+        // creates per-session WAL/SHM there too.
         "/tmp/jarvis-",
+        // ReplayLog SQLite — the parent keeps the journal/WAL open while
+        // any active session is in flight. `-wal` and `-shm` companion
+        // files appear/disappear as SQLite checkpoints; both are safe.
         "-wal",
         "-shm",
     ]

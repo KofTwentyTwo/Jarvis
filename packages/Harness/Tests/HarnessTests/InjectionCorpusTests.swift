@@ -71,6 +71,15 @@ struct InjectionCorpusTests {
         )
     }
 
+    @Test("Manifest carries a manifest_version surfaced for gate-run logging")
+    func manifestVersionPresentAndExposed() throws {
+        let loaded = try InjectionCorpus.loadFromBundleWithVersion()
+        #expect(loaded.manifestVersion >= 1, "manifest_version must be >= 1 (got \(loaded.manifestVersion))")
+        #expect(loaded.items.count >= 20)
+        // After load, the static accessor must reflect the version we just read.
+        #expect(InjectionCorpus.loadedManifestVersion == loaded.manifestVersion)
+    }
+
     @Test("Nonce-leak probe: the closing tag is neutralized by strip-then-wrap")
     func nonceLeakProbeIsNeutralized() async throws {
         let corpus = try InjectionCorpus.loadFromBundle()

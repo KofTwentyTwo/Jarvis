@@ -70,7 +70,8 @@ public enum DriftClassifier {
                     field: "row_count",
                     category: .truncationBug,
                     recorded: String(recordedRows.count),
-                    actual: String(actualRows.count)
+                    actual: String(actualRows.count),
+                    reason: "row count mismatch (recorded=\(recordedRows.count) actual=\(actualRows.count))"
                 )
             )
         }
@@ -116,7 +117,8 @@ public enum DriftClassifier {
                     field: key,
                     category: .schemaChange,
                     recorded: rec.fields[key] ?? "",
-                    actual: "<missing>"
+                    actual: "<missing>",
+                    reason: "field present on recorded side, absent on actual"
                 )
             )
         }
@@ -128,7 +130,8 @@ public enum DriftClassifier {
                     field: key,
                     category: .schemaChange,
                     recorded: "<missing>",
-                    actual: act.fields[key] ?? ""
+                    actual: act.fields[key] ?? "",
+                    reason: "field present on actual side, absent on recorded"
                 )
             )
         }
@@ -147,7 +150,8 @@ public enum DriftClassifier {
                         field: key,
                         category: .idOrTimestamp,
                         recorded: recValue,
-                        actual: actValue
+                        actual: actValue,
+                        reason: "alwaysExcluded membership (id/timestamp/nonce)"
                     )
                 )
             } else if exclusions.nondeterministicUnderSampling.contains(key)
@@ -158,7 +162,8 @@ public enum DriftClassifier {
                         field: key,
                         category: .samplingNondeterminism,
                         recorded: recValue,
-                        actual: actValue
+                        actual: actValue,
+                        reason: "nondeterministicUnderSampling@temperature=\(temperature)"
                     )
                 )
             } else {
@@ -170,7 +175,10 @@ public enum DriftClassifier {
                         field: key,
                         category: .valueBug,
                         recorded: recValue,
-                        actual: actValue
+                        actual: actValue,
+                        reason: temperature > 0
+                            ? "deterministic field diverged at temperature=\(temperature) (not on sampling carve-out)"
+                            : "deterministic field diverged at temperature=0"
                     )
                 )
             }

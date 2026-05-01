@@ -47,6 +47,28 @@ public actor WakeHysteresisRunner {
 
     public init() {}
 
+    /// Pipeline wiring status — distinct from FAR/FRR performance.
+    /// Reviewers raised that a synthetic-corpus pass risks operators
+    /// mistaking "wiring works" for "performance validated"; the runner now
+    /// reports both axes separately.
+    public enum PipelineStatus: String, Sendable, Codable {
+        /// Clips ran through the production OpenWakeWordSession end-to-end.
+        case ok
+        /// Empty corpus, missing model dir, init failure — performance is
+        /// not measurable until the operator resolves the diagnostic.
+        case notWired
+    }
+
+    /// Performance verdict — only meaningful when the corpus is operator
+    /// recorded. Synthetic seeds always report `.pending` so the shipping
+    /// gate never marks "performance validated" off TTS samples.
+    public enum PerformanceStatus: String, Sendable, Codable {
+        case pending     // synthetic seed corpus (or no corpus); FAR/FRR not informative
+        case pass        // operator-recorded corpus, D-18 thresholds met
+        case warn        // operator-recorded corpus, warn thresholds tripped (does not block)
+        case fail        // operator-recorded corpus, D-18 thresholds violated
+    }
+
     /// FAR/FRR report. `passed` requires BOTH a non-empty corpus AND
     /// counts that satisfy D-18 thresholds.
     public struct WakeReport: Sendable, Codable, Equatable {
@@ -59,6 +81,12 @@ public actor WakeHysteresisRunner {
         public let farPerHour: Double
         public let frrPercent: Double
         public let diagnostic: String?
+        public let pipelineStatus: PipelineStatus
+        public let performanceStatus: PerformanceStatus
+        /// `true` when the corpus is the synthetic-pink TTS seed (or empty).
+        /// Operators know this means "pipeline ok, performance not yet
+        /// validated". Set when every clip has a `synthetic-` noise profile.
+        public let isSyntheticCorpus: Bool
 
         public init(
             totalClips: Int,
@@ -69,7 +97,10 @@ public actor WakeHysteresisRunner {
             trueNegatives: Int,
             farPerHour: Double,
             frrPercent: Double,
-            diagnostic: String?
+            diagnostic: String?,
+            pipelineStatus: PipelineStatus,
+            performanceStatus: PerformanceStatus,
+            isSyntheticCorpus: Bool
         ) {
             self.totalClips = totalClips
             self.totalDurationSeconds = totalDurationSeconds
@@ -80,6 +111,9 @@ public actor WakeHysteresisRunner {
             self.farPerHour = farPerHour
             self.frrPercent = frrPercent
             self.diagnostic = diagnostic
+            self.pipelineStatus = pipelineStatus
+            self.performanceStatus = performanceStatus
+            self.isSyntheticCorpus = isSyntheticCorpus
         }
 
         /// D-18 PASS predicate. The `totalClips > 0` guard is the
@@ -87,6 +121,12 @@ public actor WakeHysteresisRunner {
         /// frrPercent <= 10.0` alone evaluates true on 0/0 thresholds,
         /// which would silently pass the shipping gate before the
         /// operator records any audio.
+        ///
+        /// Pipeline-only: a synthetic corpus that wires through cleanly
+        /// returns `pipelineStatus == .ok` and `performanceStatus ==
+        /// .pending`. The shipping gate treats `.pending` as a
+        /// non-blocking warning — it never marks "performance validated"
+        /// off TTS clips.
         public var passed: Bool {
             return totalClips > 0
                 && farPerHour <= 1.0
@@ -101,8 +141,18 @@ public actor WakeHysteresisRunner {
         }
     }
 
+    /// A clip is "synthetic" when its noise-profile tag begins with
+    /// `synthetic-` (per the Corpora/wake-hysteresis README convention —
+    /// `synthetic-pink`, `synthetic-tts`, etc.). A corpus is treated as
+    /// the seed scaffolding when EVERY clip carries a synthetic tag.
+    static func isAllSynthetic(_ corpus: WakeHysteresisCorpus) -> Bool {
+        guard !corpus.clips.isEmpty else { return true }
+        return corpus.clips.allSatisfy { $0.noiseProfile.hasPrefix("synthetic-") }
+    }
+
     /// Run the corpus through the production wake-word session.
     public func run(corpus: WakeHysteresisCorpus) async throws -> WakeReport {
+        let synthetic = Self.isAllSynthetic(corpus)
         // Empty-corpus short-circuit — the bare D-18 predicate would
         // pass 0/0 thresholds.
         guard !corpus.clips.isEmpty else {
@@ -117,7 +167,10 @@ public actor WakeHysteresisRunner {
                 frrPercent: 0,
                 diagnostic:
                     "wake-hysteresis corpus is empty — record clips per "
-                    + "Corpora/wake-hysteresis/README.md and rerun."
+                    + "Corpora/wake-hysteresis/README.md and rerun.",
+                pipelineStatus: .notWired,
+                performanceStatus: .pending,
+                isSyntheticCorpus: true
             )
         }
 
@@ -137,7 +190,10 @@ public actor WakeHysteresisRunner {
                 diagnostic:
                     "JARVIS_WAKE_MODEL_DIR env var not set — wake-corpus "
                     + "requires the openWakeWord model directory to construct "
-                    + "the production OpenWakeWordSession."
+                    + "the production OpenWakeWordSession.",
+                pipelineStatus: .notWired,
+                performanceStatus: .pending,
+                isSyntheticCorpus: synthetic
             )
         }
 
@@ -169,7 +225,10 @@ public actor WakeHysteresisRunner {
                 frrPercent: 0,
                 diagnostic:
                     "OpenWakeWordSession init failed at "
-                    + "\(modelDir.path): \(error.localizedDescription)"
+                    + "\(modelDir.path): \(error.localizedDescription)",
+                pipelineStatus: .notWired,
+                performanceStatus: .pending,
+                isSyntheticCorpus: synthetic
             )
         }
 
@@ -209,6 +268,21 @@ public actor WakeHysteresisRunner {
             ? (Double(falseNegatives) / Double(positiveCount)) * 100.0
             : 0
 
+        // Pipeline ran end-to-end. Performance verdict depends on whether
+        // the corpus is the synthetic seed (cannot be trusted for FAR/FRR
+        // because TTS clips are out-of-distribution for openWakeWord) or an
+        // operator-recorded set (D-18 thresholds apply).
+        let performance: PerformanceStatus
+        if synthetic {
+            performance = .pending
+        } else if farPerHour > 1.0 || frrPercent > 10.0 {
+            performance = .fail
+        } else if farPerHour > 0.5 || frrPercent > 5.0 {
+            performance = .warn
+        } else {
+            performance = .pass
+        }
+
         return WakeReport(
             totalClips: corpus.clips.count,
             totalDurationSeconds: totalDurationSeconds,
@@ -218,7 +292,10 @@ public actor WakeHysteresisRunner {
             trueNegatives: trueNegatives,
             farPerHour: farPerHour,
             frrPercent: frrPercent,
-            diagnostic: nil
+            diagnostic: nil,
+            pipelineStatus: .ok,
+            performanceStatus: performance,
+            isSyntheticCorpus: synthetic
         )
     }
 

@@ -51,3 +51,10 @@ items:
       type: swift_test
       suite: HUDTests
       test: testHUDPanelDoesNotStealFocus
+  - id: P3-09
+    description: "HUD panel z-order is set to a high level (.statusBar / .mainMenu / .screenSaver / .popUpMenu) — guards against occlusion regression if someone lowers the level constant"
+    mechanization:
+      type: grep_positive
+      file: App/HUD/JarvisHUDPanel.swift
+      pattern: "self\\.level = \\.(statusBar|mainMenu|screenSaver|popUpMenu)"
+      expected_count: 1

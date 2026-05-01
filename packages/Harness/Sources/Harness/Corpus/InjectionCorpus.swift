@@ -114,6 +114,11 @@ extension InjectionAttempt.Vector: Codable {
 // MARK: - Corpus loader
 
 public enum InjectionCorpus {
+    /// Default version when an older manifest predates the field.
+    /// `loadFromBundle` rejects manifests with a numeric `manifest_version`
+    /// less than 1 — the field exists from v1 forward.
+    public static let unversionedDefault: Int = 1
+
     /// Loaded once via `loadFromBundle`, exposed for swift-testing
     /// `@Test(arguments:)` parameterization at suite-load time.
     public static let all: [InjectionAttempt] = {
@@ -123,10 +128,31 @@ public enum InjectionCorpus {
         (try? loadFromBundle()) ?? []
     }()
 
+    /// Manifest version most recently read by `loadFromBundle`. Surfaced by
+    /// the checklist runner so each gate run records which corpus version
+    /// was exercised.
+    public static var loadedManifestVersion: Int { _loadedManifestVersion }
+    private nonisolated(unsafe) static var _loadedManifestVersion: Int = unversionedDefault
+
+    /// Variant that returns both the items AND the manifest version. Use
+    /// from CLI surfaces that want to print the version alongside the
+    /// item count; `loadFromBundle` (no-arg) keeps the existing return
+    /// shape so call sites that don't care stay compiling.
+    public static func loadFromBundleWithVersion() throws -> (items: [InjectionAttempt], manifestVersion: Int) {
+        let manifest = try loadManifest()
+        let items = try loadItems(from: manifest)
+        return (items, manifest.manifest_version ?? unversionedDefault)
+    }
+
     /// Read `Corpora/injection/manifest.json` (a list of `{id, file}` index
     /// entries) then resolve and decode each referenced payload file into
     /// an `InjectionAttempt`.
     public static func loadFromBundle() throws -> [InjectionAttempt] {
+        let manifest = try loadManifest()
+        return try loadItems(from: manifest)
+    }
+
+    private static func loadManifest() throws -> Manifest {
         let bundle = Bundle.module
         guard let manifestURL = bundle.url(
             forResource: "manifest",
@@ -137,7 +163,12 @@ public enum InjectionCorpus {
         }
         let data = try Data(contentsOf: manifestURL)
         let manifest = try JSONDecoder().decode(Manifest.self, from: data)
+        _loadedManifestVersion = manifest.manifest_version ?? unversionedDefault
+        return manifest
+    }
 
+    private static func loadItems(from manifest: Manifest) throws -> [InjectionAttempt] {
+        let bundle = Bundle.module
         var items: [InjectionAttempt] = []
         items.reserveCapacity(manifest.items.count)
         for entry in manifest.items {
@@ -161,6 +192,9 @@ public enum InjectionCorpus {
     }
 
     private struct Manifest: Codable {
+        // Optional so first-load of a legacy manifest without the field
+        // still decodes (the field was added in Phase 8 review-followup).
+        let manifest_version: Int?
         let items: [Entry]
         struct Entry: Codable {
             let id: String

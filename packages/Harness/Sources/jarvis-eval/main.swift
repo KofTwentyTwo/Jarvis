@@ -210,11 +210,12 @@ struct CorpusInjection: AsyncParsableCommand {
     var verbose: Bool = false
 
     func run() async throws {
-        let corpus = try InjectionCorpus.loadFromBundle()
+        let loaded = try InjectionCorpus.loadFromBundleWithVersion()
+        let corpus = loaded.items
         let runner = InjectionCorpusRunner()
         let report = try await runner.run(corpus: corpus)
 
-        print("INJECTION CORPUS: \(report.totalAttempts) attempts, \(report.blockedCount) blocked.")
+        print("INJECTION CORPUS: \(report.totalAttempts) attempts, \(report.blockedCount) blocked.  manifest_version=\(loaded.manifestVersion)")
         if verbose {
             for attempt in corpus {
                 if let actual = report.byAttemptId[attempt.id] {
@@ -328,6 +329,23 @@ struct WakeCorpus: AsyncParsableCommand {
         print("  clips: \(report.totalClips)  duration: \(String(format: "%.1f", report.totalDurationSeconds))s")
         print("  TP=\(report.truePositives) FN=\(report.falseNegatives) FP=\(report.falsePositives) TN=\(report.trueNegatives)")
         print("  FAR: \(String(format: "%.3f", report.farPerHour))/hr  FRR: \(String(format: "%.2f", report.frrPercent))%")
+        // Two-axis status: PIPELINE wiring vs PERFORMANCE thresholds.
+        // Reviewers (Gemini, Gemma4) flagged that a synthetic-corpus pass
+        // risks operators reading "wake-corpus PASS" as "voice trigger
+        // validated"; print both axes explicitly so a synthetic seed
+        // never claims a performance verdict.
+        let pipelineLine = report.pipelineStatus == .ok ? "OK" : "NOT WIRED"
+        let perfLabel: String
+        switch report.performanceStatus {
+        case .pending:
+            perfLabel = report.isSyntheticCorpus
+                ? "PENDING (synthetic seed corpus — record operator clips to validate)"
+                : "PENDING (no measurement)"
+        case .pass: perfLabel = "PASS"
+        case .warn: perfLabel = "WARN"
+        case .fail: perfLabel = "FAIL"
+        }
+        print("  PIPELINE: \(pipelineLine)  PERFORMANCE: \(perfLabel)")
         print("  D-18: passed=\(report.passed)  warned=\(report.warned)")
         if let diagnostic = report.diagnostic {
             print("  diagnostic: \(diagnostic)")

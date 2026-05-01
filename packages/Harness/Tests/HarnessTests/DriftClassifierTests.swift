@@ -52,7 +52,27 @@ struct DriftClassifierTests {
         #expect(report.expected.count == 1)
         #expect(report.expected.first?.category == .idOrTimestamp)
         #expect(report.expected.first?.field == "row_id")
+        // Exclusion reason recorded for visibility at every gate run.
+        #expect(report.expected.first?.reason.contains("alwaysExcluded") == true)
         #expect(report.unexpected.isEmpty)
+    }
+
+    @Test("samplingNondeterminism reason carries the recording temperature")
+    func samplingReasonIncludesTemperature() {
+        let exclusions = ExclusionList(
+            alwaysExcluded: ExclusionList.obs02Default.alwaysExcluded,
+            nondeterministicUnderSampling: ["textDelta"]
+        )
+        let rec = row(("kind", "text_delta"), ("textDelta", "A"))
+        let act = row(("kind", "text_delta"), ("textDelta", "B"))
+        let report = DriftClassifier.classify(
+            recordedRows: [rec],
+            actualRows: [act],
+            exclusions: exclusions,
+            recordingTemperature: 0.7
+        )
+        let item = try? #require(report.expected.first)
+        #expect(item?.reason.contains("temperature=0.7") == true)
     }
 
     @Test("textDelta divergence under temp>0 with sampling-carveout is expected")
