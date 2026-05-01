@@ -190,6 +190,7 @@
 		E5B2103B1A123E512CC56B63 /* WizardState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardState.swift; sourceTree = "<group>"; };
 		E9CF7C158A5A7699A9CA32DE /* mcp-clipboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mcp-clipboard.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jarvis.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FB5CCC9470306930471B8F6E /* Harness */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Harness; path = packages/Harness; sourceTree = SOURCE_ROOT; };
 		FFBE24D9C8E23A56E1C1EF57 /* JarvisEntitlementProbeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisEntitlementProbeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FFCA2C937A1629F873729B75 /* MCPTimeMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPTimeMain.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -472,6 +473,7 @@
 				A1E748E1EAA90C94FA7F3707 /* AgentCore */,
 				639B5F162E847B0CFC679E30 /* Bus */,
 				2E9C7A0B14B3AE5C9100CACF /* Config */,
+				FB5CCC9470306930471B8F6E /* Harness */,
 				00C01D284ECCFC986C7F2E16 /* Keychain */,
 				5DE981947E40847F9BAF5641 /* Logging */,
 				756AA19AD01796D665A09094 /* MCP */,
@@ -553,6 +555,7 @@
 				5EEF430098E4393F4C64D226 /* Check single memory.used emission site (D-05) */,
 				E8D59C61EEC6217BC20FBD62 /* Check presence-vision isolation (VISION-03) */,
 				C97897E76307F2552E0C7A0A /* Check embedding-dim literal (MEM-02) */,
+				D122C0A3ED0003CE60D6BF5D /* Check orchestrator.events single-consumer (Phase 9) */,
 				4B80D79B2A0254274258618C /* Build webview bundle */,
 				E0992BE4761F337F2AC5BF62 /* Sources */,
 				C593366D9BBD0DC5F45EA023 /* Resources */,
@@ -723,6 +726,7 @@
 				7C9A86EDAF8C4170A3BD03EB /* XCLocalSwiftPackageReference "packages/AgentCore" */,
 				C9F5C5BB642801B788644312 /* XCLocalSwiftPackageReference "packages/Bus" */,
 				EFF4B62688DB8BC3E515BD34 /* XCLocalSwiftPackageReference "packages/Config" */,
+				44849C6250CB0961C60F92EF /* XCLocalSwiftPackageReference "packages/Harness" */,
 				22F43C6F6F358E8483EC4DE0 /* XCLocalSwiftPackageReference "packages/Keychain" */,
 				984FAE3C0A7E82CA2D8C6CB0 /* XCLocalSwiftPackageReference "packages/Logging" */,
 				6F782D2F097AA8CC6D055E24 /* XCLocalSwiftPackageReference "packages/MCP" */,
@@ -1067,6 +1071,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/scripts/check-embedding-dim-literal.sh\"\n";
+		};
+		D122C0A3ED0003CE60D6BF5D /* Check orchestrator.events single-consumer (Phase 9) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Check orchestrator.events single-consumer (Phase 9)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/check-orchestrator-events-single-consumer.sh\"\n";
 		};
 		DD1590A06D57152C1B673573 /* Create Contents/Helpers directory */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1776,6 +1799,10 @@
 		22F43C6F6F358E8483EC4DE0 /* XCLocalSwiftPackageReference "packages/Keychain" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = packages/Keychain;
+		};
+		44849C6250CB0961C60F92EF /* XCLocalSwiftPackageReference "packages/Harness" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = packages/Harness;
 		};
 		6C5461AE3754FA04CB6DE44C /* XCLocalSwiftPackageReference "packages/Voice" */ = {
 			isa = XCLocalSwiftPackageReference;
