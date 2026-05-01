@@ -380,6 +380,50 @@ final class MemoryExtractionOrchestratorTests: XCTestCase {
         await memOrch.shutdown()
     }
 
+    // MARK: - Phase 9 / Plan 1 — generic AsyncSequence acceptance (S-4)
+
+    /// `start(orchestratorEvents:)` now accepts any `AsyncSequence` whose
+    /// Element is `OrchestratorEvent`, not just `BoundedAsyncChannel`.
+    /// Drives the coordinator with an `AsyncStream` (the type the
+    /// OrchestratorEventBroadcaster's child subscriptions emit) and asserts
+    /// the drain loop still fires `turnContent` on `.turnEnd(.endTurn)`.
+    func testStartAcceptsAsyncStream() async throws {
+        let provider = TimedMockProvider()
+        let extractor = MemoryExtractor(provider: provider)
+        let spy = SpyApplyOp()
+        let memOrch = MemoryExtractionOrchestrator(
+            extractor: extractor,
+            applyOp: { op, turnId in spy.record(op, sourceTurnId: turnId) }
+        )
+        let coord = MemoryExtractionCoordinator(memoryOrchestrator: memOrch)
+        let captured = JobCapture()
+
+        let (stream, cont) = AsyncStream<OrchestratorEvent>.makeStream()
+        await coord.start(orchestratorEvents: stream) { id in
+            captured.lastTurnId = id
+            captured.markFetch()
+            return ("u-text", "a-text")
+        }
+
+        let turnId = TurnID(rawValue: "asyncstream-1")
+        cont.yield(.turnEnd(turnId: turnId, stopReason: .endTurn))
+        cont.finish()
+
+        // Wait until turnContent has been called (the closure is the only
+        // observable side effect short of running the full extractor stack).
+        let deadline = Date().addingTimeInterval(2.0)
+        while captured.fetchCount == 0 && Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertGreaterThanOrEqual(captured.fetchCount, 1,
+            "S-4 generalization broke: AsyncStream input failed to drive coord.start")
+        XCTAssertEqual(captured.lastTurnId?.rawValue, "asyncstream-1")
+
+        await coord.stop()
+        await memOrch.shutdown()
+    }
+
     // MARK: - shared capture
 
     final class JobCapture: @unchecked Sendable {
