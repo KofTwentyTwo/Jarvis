@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-02T23:46:39.436Z",
+  "context": "milestone-audit",
+  "phase": null,
+  "phase_name": null,
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_this_session": [
+    {"id": "S1", "name": "Webview entry update to v2.3.0 bundle", "commit": "build(phase-09): update webview entry"},
+    {"id": "S2", "name": "Injection.js bumped to v2.3.0 + extended three-way parity gate", "commit": "fix(bus): bump Injection.js placeholder to v2.3.0"},
+    {"id": "S3", "name": "Injection.js single-slot _pendingHello -> FIFO queue", "commit": "fix(bus): replace single-slot _pendingHello with FIFO queue"},
+    {"id": "S4", "name": "MenuBarContextMenu — strong-ref ClosureTarget via objc_setAssociatedObject (NSMenuItem.target weak-deallocation bug)", "commit": "fix(menu): keep ClosureTarget alive for menu item lifetime"},
+    {"id": "S5", "name": "ShortcutRecorderHostView visible + clickable + draws focus state + setRecordedDisplay; KeyboardShortcut.displayString; WizardStageHotkeyView clear instructions + selected display", "commit": "fix(wizard,shell): make hotkey recorder visible + clear instructions"},
+    {"id": "S6", "name": "WizardState persists hotkey to UserDefaults; refresh queries IOHIDCheckAccess so wizard resumes correctly after grant in System Settings", "commit": "fix(wizard,shell): wizard re-resumes correctly after quit/reopen"},
+    {"id": "S7", "name": "Wizard window reuse + always-closable + Input Monitoring Re-check button + System Settings fallback hint", "commit": "fix(wizard): single-window reuse + always-closable + Re-check + System-Settings-fallback"},
+    {"id": "S8", "name": "Banner suppression during wizard, query-only TCC probe at launch, Dev Overlay menu wired to real DevOverlayWindow, camera entitlement added", "commit": "fix(app,wizard,scripts): suppress wizard-redundant banners + wire DevOverlay menu + add camera entitlement"},
+    {"id": "S9", "name": "scripts/dev-reset.sh — wipe all Jarvis local state for clean first-run testing", "commit": "feat(scripts): add dev-reset.sh"},
+    {"id": "S10", "name": "JarvisHUDPanel.summon uses NSApp.activate + makeKeyAndOrderFront; Settings menu opens wizard", "commit": "fix(hud,menu): summon brings HUD to front + Settings menu opens wizard"},
+    {"id": "S11", "name": "ROOT-CAUSE FIX — WKContentWorld unified to .page + Injection.js always-ack hello at stub level (fixes HUD-stuck-on-BOOTING)", "commit": "fix(bus): unify WKContentWorld + always-ack hello at stub level"},
+    {"id": "S12", "name": "AUDIT-AND-FIX-PLAN.md — multi-session plan", "commit": "docs(planning): add AUDIT-AND-FIX-PLAN.md"}
+  ],
+  "uncommitted_files": [
+    "App/AppDelegate.swift (BootDiag instrumentation calls)",
+    "App/HUD/HudStateCoordinator.swift (BootDiag.info call inside resolveAndEmit)",
+    "App/Diagnostics/BootDiag.swift (NEW — diagnostic-only)",
+    "App/Settings/SettingsView.swift (NEW — partial, needs SettingsWindow + AppDelegate wiring + JarvisApp.swift fix)",
+    "packages/Bus/Sources/Bus/BusBootDiag.swift (NEW — diagnostic-only)",
+    "Jarvis.xcodeproj/project.pbxproj (regenerated for new files)"
+  ],
+  "blockers": [],
+  "human_actions_pending": [],
+  "key_findings_during_session": [
+    {"finding": "GSD verification cleared v0.12.0 as 9/9 phases / 100%, but real-world use revealed multiple stubs that the verifier missed because tests were unit-level only — none exercised the assembled app end-to-end", "severity": "blocking_for_v0.12.0_release"},
+    {"finding": "WKContentWorld bug: Injection.js installed in JarvisBusWorld but the page bundle (<script type=module>) ran in default world. window.* property access is per-world. Tests bypassed this entirely via JSEvaluator test seam.", "severity": "high"},
+    {"finding": "CameraCapture.captureFrame() returns 1×1 black-pixel JPEG stub at packages/Vision/Sources/Vision/CameraCapture.swift:106. Frame-attach is non-functional. Comment says 'Replaced in 07-05' — never came back.", "severity": "high"},
+    {"finding": "NSMenuItem.target is weak; assigning ClosureTarget directly let it deallocate. ALL closure-driven menu items silently no-op'd (Setup, Show Dev Overlay, Copy State Dump). Compiler emitted 3 'weak ref always nil' warnings that were ignored.", "severity": "high"},
+    {"finding": "Show Dev Overlay was a stub banner ('lands in Phase 4') even though packages/DevOverlay was fully implemented; no one wired it.", "severity": "medium"},
+    {"finding": "Settings menu was hardcoded .isEnabled=false ('Coming soon'). Two competing settings entry points: menu-bar item (now wired to wizard as stopgap) and SwiftUI @main Settings scene in JarvisApp.swift (still 'coming soon' Text).", "severity": "medium"},
+    {"finding": "Ad-hoc Debug signing has unstable TCC identity; bundle may not appear in System Settings → Privacy & Security → Input Monitoring without manually adding via '+' button.", "severity": "medium"}
+  ],
+  "next_action": "Open .planning/AUDIT-AND-FIX-PLAN.md → Phase A2 (strip BootDiag instrumentation as a single revert commit). Then Phase A3 (finish Settings panel: SettingsWindow.swift + AppDelegate wiring + JarvisApp.swift fix). Then Phase A4 (build + smoke test). Then Phase B (run /gsd-audit-uat, /gsd-audit-milestone, /gsd-validate-phase 1..9).",
+  "context_notes": "Today's session whack-a-moled bugs all morning before the user said 'we're all over the place — do an audit + plan + full fix.' I built the multi-session plan in .planning/AUDIT-AND-FIX-PLAN.md and committed it. The HUD now reaches STANDBY (proven via BootDiag trace + screenshot). All 12 fixes that landed are real production-code fixes; the diagnostic instrumentation is uncommitted and needs stripping in Phase A2 (it's working as designed, just temporary). The unfinished Settings panel is in App/Settings/SettingsView.swift; it compiles in spirit but needs the wrapper window + wiring + JarvisApp.swift cleanup before it ships. After Phase A finishes, the audit phase (B) is the priority — it'll reveal more findings beyond the 7 listed above and feed the per-phase fix queue."
+}
