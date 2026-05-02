@@ -265,6 +265,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Lossy — the DevOverlay is observational.
     private var devOverlaySubscriberTask: Task<Void, Never>?
 
+    /// Plan 09-04 — voice path bridge. The real adapter is constructed in
+    /// installVoice() and held strongly here so the broadcaster's voice
+    /// subscriber drain in installAgent can call its `emitTurnEnded` /
+    /// `emitError` hooks.
+    private var voiceOrchestratorAdapter: VoiceOrchestratorAdapter?
+
+    /// Plan 09-04 — drains the broadcaster's `.voice` subscription. BLOCKER-2:
+    /// per-turn assistant text accumulator + `turnSourceWasVoice` filter so
+    /// text-originated turns NEVER drive `VoiceController` back to `.idle`.
+    private var voiceEventTranslatorTask: Task<Void, Never>?
+
+    /// Plan 09-04 — OutboundBatcher used by `VoiceBusEmitterAdapter` to
+    /// route the 30 Hz audio-level RMS into the bus's RingMesh pulse.
+    /// Constructed in installVoice; webviewBridge is the sink.
+    private var outboundBatcher: OutboundBatcher?
+
     /// Plan 03-05 test seam. Default production value is `"index"` (the R3F
     /// bundle entry). `installBus()` assigns this once when it resolves the
     /// Bundle.main URL. Tests assert the post-install value to confirm the
@@ -442,23 +458,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await self?.installMemory()
         }
 
-        // 12. Plan 06-05: install voice subsystem asynchronously.
-        //     Model files (ORT sessions, Orpheus MLX weights) may be absent
-        //     on first launch — failure is non-fatal (voice degrades gracefully).
-        //     The dormantVoiceContinuation is replaced with the real producer
-        //     once VoiceController is live and started.
-        voiceInstallTask = Task { @MainActor [weak self] in
-            await self?.installVoice()
-        }
+        // MARK: - Install Order (Phase 9 / Plan 4 / WARNING-5: LOCKED)
+        // vision → agent → voice. DO NOT REORDER.
+        //
+        // - vision must finish before agent because installAgent's orchestrator
+        //   constructor takes self.visionRouter (Plan 2 / D-01) and the
+        //   broadcaster's frame-attach release subscriber needs frameAttachController.
+        // - agent must finish before voice because installVoice's adapters
+        //   require self.agentOrchestrator and self.turnTranscriptStore (both
+        //   constructed inside installAgent — Plan 1 / Plan 4).
+        // scripts/check-install-order.sh enforces the literal line ordering.
 
-        // 13. Plan 07-06: install vision subsystem. Camera TCC may be
+        // 12. Plan 07-06: install vision subsystem. Camera TCC may be
         //     undetermined or denied at first launch; presence + frame-attach
         //     degrade gracefully via the cameraDegradationTask banner watcher.
         visionInstallTask = Task { @MainActor [weak self] in
             await self?.installVision()
         }
 
-        // 14. Plan 09-01: install agent subsystem. Awaits the memory install
+        // 13. Plan 09-01: install agent subsystem. Awaits the memory install
         //     task so the MemoryExtractionCoordinator is constructed before
         //     installAgent subscribes it to the broadcaster's memory child
         //     stream.
@@ -466,13 +484,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //     Plan 09-02: also awaits the vision install task so installAgent
         //     can pass `visionRouter:` and `frameAttachController` (both set
         //     by installVision) into the orchestrator constructor + the
-        //     broadcaster's frame-attach release subscriber. Sequential
-        //     install order is now LOCKED: memory + vision must complete
-        //     before agent (D-15 + D-01).
+        //     broadcaster's frame-attach release subscriber.
         agentInstallTask = Task { @MainActor [weak self] in
             await self?.memoryInstallTask?.value
             await self?.visionInstallTask?.value
             await self?.installAgent()
+        }
+
+        // 14. Plan 06-05: install voice subsystem asynchronously.
+        //     Model files (ORT sessions, Orpheus MLX weights) may be absent
+        //     on first launch — failure is non-fatal (voice degrades gracefully).
+        //     The dormantVoiceContinuation is replaced with the real producer
+        //     once VoiceController is live and started.
+        //
+        //     Plan 4 / WARNING-5: voiceInstallTask now AWAITS agentInstallTask
+        //     because the real VoiceOrchestratorAdapter / VoiceBusEmitterAdapter
+        //     require self.agentOrchestrator + self.turnTranscriptStore.
+        voiceInstallTask = Task { @MainActor [weak self] in
+            await self?.agentInstallTask?.value
+            await self?.installVoice()
         }
     }
 
@@ -515,6 +545,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         devOverlaySubscriberTask?.cancel()
         // Plan 09-02 / D-16: tear down frame-attach release subscriber.
         frameAttachReleaseTask?.cancel()
+        // Plan 09-04: tear down voice event translator subscriber.
+        voiceEventTranslatorTask?.cancel()
         if let broadcaster = eventBroadcaster {
             Task { await broadcaster.stop() }
         }
@@ -577,20 +609,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Construct WakeWordDAG.
         let wakeWordDAG = WakeWordDAG(session: wakeWordSession)
 
-        // Construct VoiceController.
-        // NullBannerAdapter bridges VoiceBannerInterface → HUDBannerCoordinator.
-        // NullOrchestratorAdapter is a placeholder until Phase 7 wires the real orchestrator.
-        // NullBusAdapter is a placeholder until Phase 6+Bus wiring is finalized.
+        // Construct VoiceController. Plan 09-04 (D-09 + D-11) replaces the
+        // three Null placeholder adapters with the production adapter triad:
+        //
+        //   - VoiceOrchestratorAdapter wraps `self.agentOrchestrator` and
+        //     surfaces SubmitOutcome.rejected reasons to HUDBannerCoordinator.
+        //   - VoiceTTSAdapter wraps a TTSEngineActor (currently nil — engine
+        //     construction lands in a follow-on plan; the adapter no-ops
+        //     gracefully so the rest of the wiring goes live).
+        //   - VoiceBusEmitterAdapter wraps an OutboundBatcher whose sink is
+        //     the WebviewBridge (audio-level RMS → RingMesh pulse, ~30 Hz).
+        //
+        // BLOCKER-1: `transcriptStore: self.turnTranscriptStore` — the voice
+        // adapter appends user-side text to the transcript store after every
+        // submit/cancelAndSubmit so MemoryExtractionCoordinator's drain finds
+        // non-nil pair text.
+        //
+        // WARNING-5: this method runs AFTER installAgent (install order
+        // locked in applicationWillFinishLaunching). If the agent install
+        // failed (orchestrator nil), the voice subsystem stays dormant.
         let bannerAdapter = AppDelegateBannerAdapter(coordinator: bannerCoordinator)
-        let orchestratorAdapter = NullOrchestratorAdapter()
-        let busAdapter = NullBusEmitterAdapter()
+
+        guard let agentOrch = self.agentOrchestrator else {
+            systemLogger?.warning("installVoice: agentOrchestrator nil — voice adapters dormant")
+            return
+        }
+
+        let orchAdapter = VoiceOrchestratorAdapter(
+            orchestrator: agentOrch,
+            transcriptStore: self.turnTranscriptStore,
+            bannerCoordinator: self.bannerCoordinator
+        )
+        self.voiceOrchestratorAdapter = orchAdapter
+
+        // TTSEngineActor construction is deferred (no production engine
+        // wiring yet); pass nil so VoiceTTSAdapter no-ops gracefully.
+        let ttsAdapter = VoiceTTSAdapter(engine: nil)
+
+        // OutboundBatcher wired with the live webviewBridge as its sink.
+        // The batcher coalesces high-frequency audio-level RMS at ~30 Hz
+        // before crossing the JS-call boundary.
+        let busAdapter: any BusOutboundEmitter
+        if let bridge = self.webviewBridge {
+            let batcher = OutboundBatcher(sink: bridge)
+            self.outboundBatcher = batcher
+            busAdapter = VoiceBusEmitterAdapter(batcher: batcher)
+        } else {
+            // No bridge yet — voice still installs but audio-level emissions
+            // are dropped. The dormant case in tests / pre-handshake launch.
+            systemLogger?.warning("installVoice: webviewBridge nil — audio-level emissions dropped")
+            busAdapter = DormantVoiceBusEmitter()
+        }
 
         let vc = VoiceController(
             wakeWordStream: wakeWordDAG.wakeWordStream,
             vadFactory: { sileroVAD },
             sttFactory: { STTBackendSelector.make(backend: "speech_analyzer") },
-            tts: NullTTSAdapter(),
-            orchestrator: orchestratorAdapter,
+            tts: ttsAdapter,
+            orchestrator: orchAdapter,
             bannerCoordinator: bannerAdapter,
             bus: busAdapter,
             voiceHudCont: voiceCont
@@ -853,8 +929,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // 5e. Plan 09-04 — voice event translator subscriber. BLOCKER-2:
+        //     per-turn assistant-text accumulator keyed by TurnID; emits to
+        //     voiceOrchestratorAdapter ONLY for voice-originated turns
+        //     (queried via Plan 2's turnSourceWasVoice). Without this filter,
+        //     a text-originated `.turnEnd` would drive VoiceController back
+        //     to .idle from .listening — silently breaking voice.
+        //
+        //     The `.voice` priority protects `.turnEnd` and `.error` per
+        //     OrchestratorEventBroadcaster's matrix, so the trigger events
+        //     are never dropped under load.
+        //
+        //     Filtering at .tokenDelta append time keeps `perTurnAssistantText`
+        //     bounded by in-flight VOICE turns only — text-only sessions
+        //     don't grow the dictionary.
+        let voiceSub = await broadcaster.subscribe(priority: .voice, capacity: 64)
+        self.voiceEventTranslatorTask = Task { [weak self] in
+            var perTurnAssistantText: [TurnID: String] = [:]
+            for await event in voiceSub.stream {
+                if Task.isCancelled { break }
+                guard let self else { break }
+                switch event {
+                case let .tokenDelta(turnId, text):
+                    let isVoice = await self.agentOrchestrator?.turnSourceWasVoice(turnId) ?? false
+                    guard isVoice else { continue }
+                    perTurnAssistantText[turnId, default: ""] += text
+                case let .turnEnd(turnId, _):
+                    let isVoice = await self.agentOrchestrator?.turnSourceWasVoice(turnId) ?? false
+                    if isVoice {
+                        // Flush accumulated assistant text and emit. nil → ""
+                        // when the voice turn produced zero token deltas (e.g.
+                        // refusal); emitting empty still drives VoiceController
+                        // back to .idle, which is the desired terminal state.
+                        let finalText = perTurnAssistantText.removeValue(forKey: turnId) ?? ""
+                        self.voiceOrchestratorAdapter?.emitTurnEnded(finalText: finalText)
+                    } else {
+                        // Text-originated turn — drop without emitting.
+                        perTurnAssistantText.removeValue(forKey: turnId)
+                    }
+                case let .error(turnId, _):
+                    let isVoice = await self.agentOrchestrator?.turnSourceWasVoice(turnId) ?? false
+                    if isVoice {
+                        self.voiceOrchestratorAdapter?.emitError()
+                        perTurnAssistantText.removeValue(forKey: turnId)
+                    }
+                default:
+                    break
+                }
+            }
+        }
+
         systemLogger?.info(
-            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach subscribers active)"
+            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach + voice subscribers active)"
         )
     }
 
@@ -873,6 +999,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let cb = ContextBuilder()
         if cb.matchesFrameAttachPhrase(text), let fac = self.frameAttachController {
             await fac.requestAttach(reason: .phraseDetected(in: text))
+        }
+    }
+
+    // MARK: - Plan 09-04 chat-panel handlers (D-12 + WARNING-4 + BLOCKER-1 user-side)
+
+    /// D-12 — webview chat-panel "Send" button. Submits a fresh turn via
+    /// `AgentOrchestrator.submit(.text(text))`. WARNING-4: the phrase-trigger
+    /// helper fires BEFORE submit so a phrase-matched send arms the frame
+    /// attach slot. BLOCKER-1: appends user text to TurnTranscriptStore
+    /// AFTER the orchestrator returns a turnId so MemoryExtractionCoordinator
+    /// finds non-nil pair text on the matching `.turnEnd`.
+    @MainActor
+    func handleChatSubmit(_ text: String) async {
+        guard let orch = self.agentOrchestrator else {
+            systemLogger?.warning("handleChatSubmit: agentOrchestrator nil — dropping submission")
+            return
+        }
+        await self.tryPhraseAttachIfMatch(text)
+        let outcome = await orch.submit(.text(text))
+        await self.appendUserTextIfRunning(outcome, text: text)
+        await self.handleTextOutcome(outcome)
+    }
+
+    /// D-12 — webview chat-panel barge-in. Cancels the in-flight turn (if
+    /// any) and submits the new text via `cancelAndSubmit(.text(text))`.
+    /// WARNING-4: phrase trigger ALSO fires here — both submit sites carry
+    /// the same user-text shape; both must respect "what am I looking at"
+    /// detection (without this, barge-in after a phrase-matched send
+    /// silently drops the frame).
+    @MainActor
+    func handleChatCancelAndSubmit(_ text: String) async {
+        guard let orch = self.agentOrchestrator else {
+            systemLogger?.warning("handleChatCancelAndSubmit: agentOrchestrator nil — dropping submission")
+            return
+        }
+        await self.tryPhraseAttachIfMatch(text)
+        let outcome = await orch.cancelAndSubmit(.text(text))
+        await self.appendUserTextIfRunning(outcome, text: text)
+        await self.handleTextOutcome(outcome)
+    }
+
+    /// BLOCKER-1 user-side append helper. Called from BOTH chat handlers
+    /// after the orchestrator returns. On `.ran`/`.superseded`, appends the
+    /// user text under the turn's id; on `.rejected`, no-op (no turn was
+    /// allocated, so MemoryExtractionCoordinator's drain will not look up
+    /// pair content for this submission).
+    @MainActor
+    private func appendUserTextIfRunning(_ outcome: SubmitOutcome, text: String) async {
+        let turnId: TurnID
+        switch outcome {
+        case .ran(let id):
+            turnId = id
+        case .superseded(_, let newId, _):
+            turnId = newId
+        case .rejected:
+            return
+        }
+        await self.turnTranscriptStore?.append(turnId: turnId, role: .user, deltaText: text)
+    }
+
+    /// D-10 text-path rejection toast. On `.rejected`, sends a
+    /// `BusOutbound.submitRejected(reason:)` to the webview using
+    /// `RejectReasonCopy.body(for:)` — byte-identical to the voice-path
+    /// HUD banner. On `.ran`/`.superseded` returns silently (turnEnd
+    /// events flow via the broadcaster).
+    @MainActor
+    private func handleTextOutcome(_ outcome: SubmitOutcome) async {
+        switch outcome {
+        case .ran, .superseded:
+            return
+        case .rejected(let reason):
+            let body = RejectReasonCopy.body(for: reason)
+            try? await self.webviewBridge?.send(.submitRejected(reason: body))
         }
     }
 
@@ -1155,7 +1354,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Plan 09-02 / D-15 — inbound dispatch. The HUD camera-icon button
         // posts `BusInbound.frameAttachRequested`; route it into
         // `FrameAttachController.requestAttach(reason: .hudButton)`.
-        // (Plan 4 will extend this switch with chatSubmit + chatCancelAndSubmit.)
+        //
+        // Plan 09-04 / D-12 — chat-panel inbound. `chatSubmit` and
+        // `chatCancelAndSubmit` route into the AgentOrchestrator's text
+        // submit paths; rejection outcomes surface as `submitRejected`
+        // toasts via `handleTextOutcome`.
         bridge.onInbound = { [weak self] inbound async throws -> BusReply? in
             guard let self else { return nil }
             switch inbound {
@@ -1165,6 +1368,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return nil
             case .frameAttachRequested:
                 await self.frameAttachController?.requestAttach(reason: .hudButton)
+                return .success
+            case .chatSubmit(let text):
+                await self.handleChatSubmit(text)
+                return .success
+            case .chatCancelAndSubmit(let text):
+                await self.handleChatCancelAndSubmit(text)
                 return .success
             }
         }
@@ -1357,7 +1566,8 @@ struct NoopBusGateway: BusGateway {
 // MARK: - Voice subsystem adapters (Plan 06-05)
 //
 // These thin adapters bridge the Voice package protocol seams to App-target types.
-// Phase 7 (orchestrator wiring) replaces NullOrchestratorAdapter with a real adapter.
+// Plan 09-04 replaced the three Null placeholder adapters with real production
+// adapters in App/Voice/{VoiceOrchestratorAdapter,VoiceTTSAdapter,VoiceBusEmitterAdapter}.swift.
 
 /// Bridges `VoiceBannerInterface` → `HUDBannerCoordinator`.
 ///
@@ -1390,15 +1600,12 @@ final class AppDelegateBannerAdapter: VoiceBannerInterface, @unchecked Sendable 
     }
 }
 
-/// Bridges `BusOutboundEmitter` → `OutboundBatcher` from the Bus package.
-///
-/// `OutboundBatcher.postAudio(_:)` already exists from Phase 2 Bus wiring.
-/// This adapter routes the 30 Hz RMS values to the batcher's `postAudio` method.
-/// Phase 6+Bus wiring provides the real `OutboundBatcher` instance; for now,
-/// this is a no-op until the Bus phase integration is finalized.
-struct NullBusEmitterAdapter: BusOutboundEmitter {
+/// Plan 09-04 fallback when no `webviewBridge` is available at installVoice
+/// time (early test harness; pre-handshake degenerate launch). The real
+/// production path uses `VoiceBusEmitterAdapter` wrapping an `OutboundBatcher`.
+struct DormantVoiceBusEmitter: BusOutboundEmitter {
     func postAudio(_ rms: Float) async {
-        // Phase 7: forward to OutboundBatcher.postAudio(rms) for RingMesh pulse
+        // Audio-level emissions are dropped when the bridge is unavailable.
     }
 }
 

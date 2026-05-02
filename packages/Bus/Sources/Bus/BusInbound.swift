@@ -3,8 +3,8 @@ import Foundation
 /// Messages the webview sends to the Swift side.
 ///
 /// Minimal P2 scope (per RESEARCH §Deferred Ideas) — handshake ack, a UI-ready
-/// ping, and Phase 9 / D-15's frame-attach trigger from the HUD camera button.
-/// Plan 4 adds user-input + tool-confirm cases.
+/// ping, Phase 9 / D-15's frame-attach trigger from the HUD camera button,
+/// and Phase 9 / Plan 4 / D-12's chat-panel submit + cancelAndSubmit cases.
 ///
 /// Hand-written `Codable` mirrors `BusOutbound` — same `type` discriminator,
 /// same exhaustive-switch drift preventer.
@@ -15,6 +15,13 @@ public enum BusInbound: Equatable, Sendable {
     /// onInbound handler routes this into
     /// `FrameAttachController.requestAttach(reason: .hudButton)`.
     case frameAttachRequested
+    /// Plan 09-04 / D-12 — chat-panel "Send" button. Submits a fresh turn
+    /// via `AgentOrchestrator.submit(.text(text))`. Rejected outcomes
+    /// surface as `BusOutbound.submitRejected` toasts in the chat panel.
+    case chatSubmit(text: String)
+    /// Plan 09-04 / D-12 — chat-panel barge-in. Cancels the in-flight turn
+    /// (if any) and submits the new text via `cancelAndSubmit(.text(text))`.
+    case chatCancelAndSubmit(text: String)
 }
 
 extension BusInbound: Codable {
@@ -22,11 +29,14 @@ extension BusInbound: Codable {
         case helloAck
         case uiReady
         case frameAttachRequested
+        case chatSubmit
+        case chatCancelAndSubmit
     }
 
     private enum CodingKeys: String, CodingKey {
         case type
         case version
+        case text
     }
 
     public init(from decoder: Decoder) throws {
@@ -40,6 +50,12 @@ extension BusInbound: Codable {
             self = .uiReady
         case .frameAttachRequested:
             self = .frameAttachRequested
+        case .chatSubmit:
+            let text = try container.decode(String.self, forKey: .text)
+            self = .chatSubmit(text: text)
+        case .chatCancelAndSubmit:
+            let text = try container.decode(String.self, forKey: .text)
+            self = .chatCancelAndSubmit(text: text)
         }
         // NO default — adding a case without a matching arm is a compile error.
     }
@@ -54,6 +70,12 @@ extension BusInbound: Codable {
             try container.encode(Discriminator.uiReady, forKey: .type)
         case .frameAttachRequested:
             try container.encode(Discriminator.frameAttachRequested, forKey: .type)
+        case .chatSubmit(let text):
+            try container.encode(Discriminator.chatSubmit, forKey: .type)
+            try container.encode(text, forKey: .text)
+        case .chatCancelAndSubmit(let text):
+            try container.encode(Discriminator.chatCancelAndSubmit, forKey: .type)
+            try container.encode(text, forKey: .text)
         }
     }
 }

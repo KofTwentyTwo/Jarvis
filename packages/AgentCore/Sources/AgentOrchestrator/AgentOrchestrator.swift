@@ -12,7 +12,7 @@ import Logging
 /// - `submit(_:)` — start a fresh turn; rejected with `.turnInFlight` if busy.
 /// - `cancelAndSubmit(_:)` — barge-in primitive; cancels the in-flight turn,
 ///   awaits its task to drain (no actor-reentrancy race), then starts a new
-///   turn returning `.superseded(priorId:reason:)`.
+///   turn returning `.superseded(priorId:newTurnId:reason:)`.
 ///
 /// **Per-turn lifecycle:**
 /// 1. Allocate `TurnID` + `TurnNonce` (SEC-06).
@@ -290,7 +290,7 @@ public actor AgentOrchestrator {
         currentTurn = TurnExecution(id: turnId, task: task, startedAt: Date(), retryOf: retryOf)
 
         if let priorId = supersededPrior {
-            return .superseded(priorId: priorId, reason: .bargedIn)
+            return .superseded(priorId: priorId, newTurnId: turnId, reason: .bargedIn)
         }
         return .ran(turnId: turnId)
     }

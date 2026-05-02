@@ -19,8 +19,8 @@ function readFixture(name: string): { raw: string; parsed: unknown } {
 }
 
 describe("BUS_PROTOCOL_VERSION", () => {
-  it("equals 2.2.0 (must match Swift constant — Plan 09-02 frameAttachRequested bump)", () => {
-    expect(BUS_PROTOCOL_VERSION).toBe("2.2.0");
+  it("equals 2.3.0 (must match Swift constant — Plan 09-04 chatSubmit + chatCancelAndSubmit + submitRejected bump)", () => {
+    expect(BUS_PROTOCOL_VERSION).toBe("2.3.0");
   });
 });
 
@@ -40,6 +40,7 @@ describe("BusOutbound round-trip", () => {
     "toolCallEnd.json",
     "turnStarted.json",
     "turnEnded.json",
+    "submitRejected.json",
   ];
 
   for (const name of outboundFixtures) {
@@ -65,6 +66,22 @@ describe("BusInbound round-trip", () => {
 
   it("decodes and re-encodes frameAttachRequested.json (Plan 09-02 / D-15)", () => {
     const { raw, parsed } = readFixture("frameAttachRequested.json");
+    const result = decodeInbound(raw);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(JSON.parse(encodeInbound(result.value))).toEqual(parsed);
+  });
+
+  it("decodes and re-encodes chatSubmit.json (Plan 09-04 / D-12)", () => {
+    const { raw, parsed } = readFixture("chatSubmit.json");
+    const result = decodeInbound(raw);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(JSON.parse(encodeInbound(result.value))).toEqual(parsed);
+  });
+
+  it("decodes and re-encodes chatCancelAndSubmit.json (Plan 09-04 / D-12)", () => {
+    const { raw, parsed } = readFixture("chatCancelAndSubmit.json");
     const result = decodeInbound(raw);
     expect(result.ok).toBe(true);
     if (!result.ok) return;

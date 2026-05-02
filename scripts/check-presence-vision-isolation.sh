@@ -49,10 +49,20 @@ fi
 # before evaluating co-occurrence; AppDelegate.swift legitimately holds
 # both PresenceSignalBus AND VoiceController references but never feeds
 # presence into the TTS or runTurn paths.
+#
+# Plan 09-04 adjustment: `cancelAndSubmit` was previously forbidden, but Plan 4
+# legitimately adds chat-panel barge-in handlers (`handleChatCancelAndSubmit`)
+# that call `orchestrator.cancelAndSubmit(.text(...))`. These call sites are
+# in inbound-bus handlers, NOT in presence-subscriber paths. The architectural
+# invariant — presence enrichment lives OUTSIDE UntrustedWrapper.composeSystemPrompt
+# (SEC-06) — is enforced in AgentOrchestrator.runTurn itself and verified by
+# AgentOrchestratorPresenceEnrichmentTests. The structural Layer 3 check
+# retains TTSEngine* and AgentOrchestrator.runTurn (private symbol) as
+# tripwires.
 APP_PRESENCE_FILES=$(grep -rl 'PresenceSignalBus\b' App/ --include='*.swift' 2>/dev/null || true)
 for f in $APP_PRESENCE_FILES; do
     FORBIDDEN=$(sed -E 's|^[[:space:]]*//.*$||' "$f" \
-        | grep -E 'TTSEngine|TTSEngineActor|cancelAndSubmit|AgentOrchestrator\.runTurn' || true)
+        | grep -E 'TTSEngine|TTSEngineActor|AgentOrchestrator\.runTurn' || true)
     if [[ -n "$FORBIDDEN" ]]; then
         echo "VISION-03 violation (Layer 3): file references both PresenceSignalBus AND a forbidden TTS/runTurn token: $f" >&2
         echo "$FORBIDDEN" >&2

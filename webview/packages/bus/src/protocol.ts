@@ -9,9 +9,13 @@
  *
  * Plan 09-02 bumped 2.1.0 -> 2.2.0 (additive BusInbound case
  * frameAttachRequested for the HUD camera-icon button → FrameAttachController).
+ *
+ * Plan 09-04 bumped 2.2.0 -> 2.3.0 (additive BusInbound cases chatSubmit +
+ * chatCancelAndSubmit for chat-panel submit + barge-in; additive BusOutbound
+ * case submitRejected for D-10 text-path rejection toast).
  */
 
-export const BUS_PROTOCOL_VERSION = "2.2.0";
+export const BUS_PROTOCOL_VERSION = "2.3.0";
 
 export type HudState =
   | "idle"
@@ -53,7 +57,14 @@ export type BusOutbound =
   | { type: "toolCallEnd"; id: string; ok: boolean; previewOrError: string }
   | { type: "turnStarted"; id: string }
   | { type: "turnEnded"; id: string; terminator: TurnTerminator }
-  | { type: "sessionHistory"; turns: TurnRow[] };
+  | { type: "sessionHistory"; turns: TurnRow[] }
+  /**
+   * Plan 09-04 / D-10 — emitted when AgentOrchestrator.submit(.text(...))
+   * returns SubmitOutcome.rejected. The chat panel renders this as a
+   * transient toast. Body string is byte-identical to the voice-path HUD
+   * banner (single source of truth: RejectReasonCopy.swift).
+   */
+  | { type: "submitRejected"; reason: string };
 
 export type BusInbound =
   | { type: "helloAck"; version: string }
@@ -63,7 +74,17 @@ export type BusInbound =
    * the user clicks it; AppDelegate routes it to
    * FrameAttachController.requestAttach(reason: .hudButton).
    */
-  | { type: "frameAttachRequested" };
+  | { type: "frameAttachRequested" }
+  /**
+   * Plan 09-04 / D-12 — chat-panel "Send" button. AppDelegate routes this
+   * to AgentOrchestrator.submit(.text(text)).
+   */
+  | { type: "chatSubmit"; text: string }
+  /**
+   * Plan 09-04 / D-12 — chat-panel barge-in. AppDelegate routes this to
+   * AgentOrchestrator.cancelAndSubmit(.text(text)).
+   */
+  | { type: "chatCancelAndSubmit"; text: string };
 
 export type DecodeResult<T> =
   | { ok: true; value: T }
@@ -213,6 +234,9 @@ export function decodeOutbound(json: string): DecodeResult<BusOutbound> {
       }
       return { ok: true, value: { type: "sessionHistory", turns: decodedTurns } };
     }
+    case "submitRejected":
+      if (typeof parsed.reason !== "string") return { ok: false, error: "submitRejected: reason must be string" };
+      return { ok: true, value: { type: "submitRejected", reason: parsed.reason } };
     default: {
       // Compile-time exhaustiveness. After all cases above narrow `type`, the
       // default branch should see `type: never`. Adding a new BusOutbound
@@ -249,6 +273,12 @@ export function decodeInbound(json: string): DecodeResult<BusInbound> {
     case "frameAttachRequested":
       // Plan 09-02 / D-15 — no payload fields; the case alone is the signal.
       return { ok: true, value: { type: "frameAttachRequested" } };
+    case "chatSubmit":
+      if (typeof parsed.text !== "string") return { ok: false, error: "chatSubmit: text must be string" };
+      return { ok: true, value: { type: "chatSubmit", text: parsed.text } };
+    case "chatCancelAndSubmit":
+      if (typeof parsed.text !== "string") return { ok: false, error: "chatCancelAndSubmit: text must be string" };
+      return { ok: true, value: { type: "chatCancelAndSubmit", text: parsed.text } };
     default: {
       const _exhaustive: never = type;
       void _exhaustive;
