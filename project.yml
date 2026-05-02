@@ -65,6 +65,11 @@ packages:
   # wired in Plan 07-06.
   Vision:
     path: packages/Vision
+  # DevOverlay package — diagnostic floating panel showing live agent state,
+  # tool calls, token counts, and per-turn latency. Hidden by default; toggled
+  # from the menu bar (Show Dev Overlay item).
+  DevOverlay:
+    path: packages/DevOverlay
   # Plan 08-01: Phase 8 evaluation harness — `Harness` library + `jarvis-eval`
   # executable target. Consumed by tests / CI shipping-gate (`scripts/shipping-gate.sh`).
   # The xcodegen entry exposes the local SPM package; the executable is
@@ -195,6 +200,11 @@ targets:
       # colliding with Apple's Vision framework — see packages/Vision/Package.swift.
       - package: Vision
         product: JarvisVision
+      # DevOverlay diagnostic panel — toggled from the menu-bar 'Show Dev
+      # Overlay' item. AppDelegate.installDevOverlay() constructs the
+      # DevOverlayWindow on first toggle and routes the menu action to it.
+      - package: DevOverlay
+        product: DevOverlay
       # Plan 05-02 / 05-03: build the helper apps before the Jarvis copyFiles
       # phase consumes them. xcodegen orders target dependencies before copy
       # phases.

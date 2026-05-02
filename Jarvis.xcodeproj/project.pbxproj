@@ -47,6 +47,7 @@
 		896984D88C412595C0F6F97E /* HudStateIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 511D7B2406F485ED0D4B9E0D /* HudStateIntent.swift */; };
 		8E4590089A7955545E2146D3 /* HudStateCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */; };
 		8EF7109838AD91E95506BD1B /* MCPRuntimeWiring.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF3EF4CDCC653EF50D99AF7 /* MCPRuntimeWiring.swift */; };
+		8F0E066DCBA697FB0A2E59EA /* DevOverlay in Frameworks */ = {isa = PBXBuildFile; productRef = C50C1F6C67DE7D3A738845BD /* DevOverlay */; };
 		92BBF98C9A7B9B7835FC0949 /* Replay in Frameworks */ = {isa = PBXBuildFile; productRef = 8E74C5DEAD36FEDB6342A54D /* Replay */; };
 		93FDBFFCCEFC0848F1C5E630 /* AppDelegateBusWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6BA7673B5FD73B588D9084 /* AppDelegateBusWiringTests.swift */; };
 		94512D113669E85D50AC6C8C /* AgentOrchestrator in Frameworks */ = {isa = PBXBuildFile; productRef = 9DC9B6B513D7CCE63399A43B /* AgentOrchestrator */; };
@@ -200,6 +201,7 @@
 		E5B2103B1A123E512CC56B63 /* WizardState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardState.swift; sourceTree = "<group>"; };
 		E9CF7C158A5A7699A9CA32DE /* mcp-clipboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mcp-clipboard.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jarvis.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FAA5549717CB3455817BEA7A /* DevOverlay */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DevOverlay; path = packages/DevOverlay; sourceTree = SOURCE_ROOT; };
 		FB5CCC9470306930471B8F6E /* Harness */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Harness; path = packages/Harness; sourceTree = SOURCE_ROOT; };
 		FFBE24D9C8E23A56E1C1EF57 /* JarvisEntitlementProbeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisEntitlementProbeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FFCA2C937A1629F873729B75 /* MCPTimeMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPTimeMain.swift; sourceTree = "<group>"; };
@@ -265,6 +267,7 @@
 				3649FFF2495A8C4DDDB3B65B /* Voice in Frameworks */,
 				B72852E1EF52C0E6F8170852 /* Memory in Frameworks */,
 				EB03A8906003E55271CAF133 /* JarvisVision in Frameworks */,
+				8F0E066DCBA697FB0A2E59EA /* DevOverlay in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -496,6 +499,7 @@
 				A1E748E1EAA90C94FA7F3707 /* AgentCore */,
 				639B5F162E847B0CFC679E30 /* Bus */,
 				2E9C7A0B14B3AE5C9100CACF /* Config */,
+				FAA5549717CB3455817BEA7A /* DevOverlay */,
 				FB5CCC9470306930471B8F6E /* Harness */,
 				00C01D284ECCFC986C7F2E16 /* Keychain */,
 				5DE981947E40847F9BAF5641 /* Logging */,
@@ -612,6 +616,7 @@
 				254100776001B345FD91877C /* Voice */,
 				59F56604A76635EC59D2671B /* Memory */,
 				C1168750998C14962FE14DEC /* JarvisVision */,
+				C50C1F6C67DE7D3A738845BD /* DevOverlay */,
 			);
 			productName = Jarvis;
 			productReference = F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */;
@@ -749,6 +754,7 @@
 				7C9A86EDAF8C4170A3BD03EB /* XCLocalSwiftPackageReference "packages/AgentCore" */,
 				C9F5C5BB642801B788644312 /* XCLocalSwiftPackageReference "packages/Bus" */,
 				EFF4B62688DB8BC3E515BD34 /* XCLocalSwiftPackageReference "packages/Config" */,
+				E2A4E8E430F3095E56586E3D /* XCLocalSwiftPackageReference "packages/DevOverlay" */,
 				44849C6250CB0961C60F92EF /* XCLocalSwiftPackageReference "packages/Harness" */,
 				22F43C6F6F358E8483EC4DE0 /* XCLocalSwiftPackageReference "packages/Keychain" */,
 				984FAE3C0A7E82CA2D8C6CB0 /* XCLocalSwiftPackageReference "packages/Logging" */,
@@ -1860,6 +1866,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = packages/Memory;
 		};
+		E2A4E8E430F3095E56586E3D /* XCLocalSwiftPackageReference "packages/DevOverlay" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = packages/DevOverlay;
+		};
 		EFF4B62688DB8BC3E515BD34 /* XCLocalSwiftPackageReference "packages/Config" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = packages/Config;
@@ -1968,6 +1978,10 @@
 		C1168750998C14962FE14DEC /* JarvisVision */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = JarvisVision;
+		};
+		C50C1F6C67DE7D3A738845BD /* DevOverlay */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DevOverlay;
 		};
 		D5E0D943EBC768ADB9C87F13 /* Logging */ = {
 			isa = XCSwiftPackageProductDependency;

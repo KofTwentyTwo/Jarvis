@@ -1,6 +1,7 @@
 import AppKit
 import Bus
 import Config
+import DevOverlay
 import Keychain
 import JarvisLogging
 import Shell
@@ -362,24 +363,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Plan 02-03 (bridge) + Plan 03-05 (coordinator + index.html load).
         installBus()
 
-        // 5. Keychain fetch — missing key → banner (priority 1).
+        // 5. Keychain fetch.
+        //
+        // Banner suppression: when the API key is missing, the first-launch
+        // wizard is going to open in step 8 to ask for it — enqueuing
+        // `.keychainEmpty` here would stack a "No API key configured" HUD
+        // banner on top of the wizard's own apiKey stage. Only enqueue when
+        // the wizard *won't* open (e.g. wizard was dismissed pre-entry on a
+        // prior launch and the user reopened without re-entering Setup),
+        // which we detect post-wizard-construction below.
         let apiKeyStored: Bool
         do {
             _ = try keychainStore.get(.anthropic)
             apiKeyStored = true
         } catch KeychainError.itemNotFound {
-            bannerCoordinator?.enqueue(.keychainEmpty)
             apiKeyStored = false
         } catch {
             systemLogger?.error("Keychain fetch error: \(String(describing: error))")
             apiKeyStored = false
         }
 
-        // 6. Input Monitoring probe — denial enqueues `.inputMonitoringDenied`.
-        let inputMonitoringGranted = hidProbe.requestListenEventAccess()
-        if !inputMonitoringGranted {
-            bannerCoordinator?.enqueue(.inputMonitoringDenied)
-        }
+        // 6. Input Monitoring — query-only check (no prompt).
+        //
+        // Two reasons to NOT call `requestListenEventAccess` at launch:
+        //   1. It can fire a TCC dialog OUTSIDE the wizard's TCC stage,
+        //      surprising the user with a permission prompt before they've
+        //      even seen the wizard.
+        //   2. The wizard's TCC stage is the right place for the prompt —
+        //      it has the explainer copy + the System Settings fallback.
+        //
+        // Use IOHIDCheckAccess (query-only) to detect a prior grant. If
+        // denied/unknown AND the wizard is going to open, skip the banner
+        // (the wizard's TCC stage handles it). Only enqueue the banner when
+        // the wizard won't be opening to address it.
+        let inputMonitoringGranted = hidProbe.isListenEventAccessGranted()
 
         // 7. Hotkey binder — empty at launch; wizard binds a shortcut later.
         hotkeyBinder = HotkeyBinder()
@@ -388,8 +405,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let state = WizardState(keychain: keychainStore)
         wizardState = state
         wizardController = OnboardingWizardController(state: state)
-        if !apiKeyStored {
+        let willOpenWizard = !apiKeyStored
+        if willOpenWizard {
             openWizard(firstLaunch: true)
+        }
+
+        // 8b. Now that the wizard's open/closed decision is settled, enqueue
+        //     the missing-prerequisite banners only if the wizard ISN'T going
+        //     to address them. This avoids stacking redundant banners on top
+        //     of a wizard that's already asking for the same thing.
+        if !apiKeyStored && !willOpenWizard {
+            bannerCoordinator?.enqueue(.keychainEmpty)
+        }
+        if !inputMonitoringGranted && !willOpenWizard {
+            bannerCoordinator?.enqueue(.inputMonitoringDenied)
         }
 
         // 9. Plan 05-05 / ME-04 closure (CR-02 REVIEW 05): instantiate
@@ -1234,7 +1263,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = item
         let menu = MenuBarContextMenu.build(
             setupAction: { [weak self] in self?.openWizard(firstLaunch: false) },
-            devOverlayToggleAction: { [weak self] in self?.showDevOverlayStubBanner() },
+            devOverlayToggleAction: { [weak self] in self?.toggleDevOverlay() },
             stateDumpAction: { [weak self] in self?.copyStateDump() }
         )
         let controller = MenuBarIconController(statusItem: item, contextMenu: menu)
@@ -1475,14 +1504,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menu-bar actions
 
-    private func showDevOverlayStubBanner() {
-        bannerCoordinator?.enqueue(BannerContent(
-            id: "dev-overlay-stub",
-            priority: 99,
-            title: "Dev Overlay lands in Phase 4",
-            body: "The overlay itself is a P4 deliverable.",
-            action: nil
-        ))
+    /// Lazily constructed on first toggle so the panel doesn't allocate
+    /// resources during launch.
+    private var devOverlayWindow: DevOverlayWindow?
+
+    private func toggleDevOverlay() {
+        if devOverlayWindow == nil {
+            devOverlayWindow = DevOverlayWindow()
+        }
+        devOverlayWindow?.toggle()
     }
 
     /// Writes ONLY boolean presence indicators to the clipboard. The API key
