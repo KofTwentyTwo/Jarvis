@@ -301,7 +301,7 @@ Plans:
 - [x] 09-01-PLAN.md — Broadcaster + installAgent + LiveOrchestratorEvents (closes INT-07-01; ME-01..05) (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 09-02-PLAN.md — VisionRouter dispatch + FrameAttach lifecycle (closes INT-07-02 + INT-07-04; VIS-01..05, VIS-07) (Wave 2)
+- [x] 09-02-PLAN.md — VisionRouter dispatch + FrameAttach lifecycle (closes INT-07-02 + INT-07-04; VIS-01..05, VIS-07) (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 09-03-PLAN.md — Presence enrichment via PresenceStateSnapshot + system-prompt injection (closes INT-07-03; VIS-06, AGENT-09) (Wave 3)
