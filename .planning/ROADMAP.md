@@ -307,7 +307,7 @@ Plans:
 - [x] 09-03-PLAN.md — Presence enrichment via PresenceStateSnapshot + system-prompt injection (closes INT-07-03; VIS-06, AGENT-09) (Wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 09-04-PLAN.md — Voice + Text adapter wiring + rejection surfaces; deletes NullVoiceAdapters.swift (AGENT-09) (Wave 4)
+- [x] 09-04-PLAN.md — Voice + Text adapter wiring + rejection surfaces; deletes NullVoiceAdapters.swift (AGENT-09) (Wave 4)
 
 **Success criteria (preview, refined during /gsd-plan-phase 9):**
 1. AppDelegate constructs and holds an `AgentOrchestrator`; tool dispatcher chain from Phase 5 is the orchestrator's `toolDispatcher`.
