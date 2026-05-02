@@ -37,15 +37,20 @@
         console.error("[bus] missing discriminator");
         return;
       }
-      if (this._handler) { this._handler(msg); return; }
+      // Hello is owned by the stub regardless of whether the bundle
+      // handler has registered. Two reasons:
+      //   1. Pre-handler: nobody else can ack — the stub's auto-ack is
+      //      the only path that gets the Swift handshake out of .sentHello.
+      //   2. Post-handler: the bundle's outbound switch has `case 'hello':
+      //      break` — it intentionally ignores hello at the application
+      //      layer. If we route hello to the bundle handler, no ack is
+      //      sent and the handshake times out. So we ack here and stop.
       if (msg.type === "hello") {
-        // Hello arrives before the bundle's handler is ready — auto-ack so
-        // the Swift handshake state machine can advance. The full bundle's
-        // handler treats hello as a no-op anyway (case `hello`: break).
         this.send({ type: "helloAck", version: this.protocolVersion });
-      } else {
-        this._pendingMessages.push(msg);
+        return;
       }
+      if (this._handler) { this._handler(msg); return; }
+      this._pendingMessages.push(msg);
     },
     send: function (inbound) {
       if (!window.webkit || !window.webkit.messageHandlers || !window.webkit.messageHandlers.jarvisBus) {
