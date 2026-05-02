@@ -45,6 +45,15 @@ public actor AgentOrchestrator {
     /// caveat that the resolved provider may not be vision-capable — callers
     /// who care about that pre-route through their own dispatcher).
     private let visionRouter: VisionRouter?
+
+    /// Plan 09-03 / D-13 + D-14 — read-only ambient presence snapshot.
+    /// `runTurn` queries `currentEnrichment()` during system-prompt
+    /// composition and appends a plain sentence (e.g., "User is at the
+    /// desk.") OUTSIDE the nonce-wrapped untrusted region. Defaulted-nil so
+    /// existing test sites compile unchanged; the snapshot is read-only on
+    /// the orchestrator side. VISION-03 boundary: the orchestrator only
+    /// touches the `String?` return type — never the underlying PresenceEvent.
+    private let presenceSnapshot: PresenceStateSnapshot?
     private let logger: Logger
 
     // MARK: - Outbound channel
@@ -88,7 +97,8 @@ public actor AgentOrchestrator {
         sessionId: SessionID,
         systemPrompt: String,
         availableTools: [ToolSchema] = [],
-        visionRouter: VisionRouter? = nil
+        visionRouter: VisionRouter? = nil,
+        presenceSnapshot: PresenceStateSnapshot? = nil
     ) {
         self.configStore = configStore
         self.providerFactory = providerFactory
@@ -98,6 +108,7 @@ public actor AgentOrchestrator {
         self.systemPrompt = systemPrompt
         self.availableToolsList = availableTools
         self.visionRouter = visionRouter
+        self.presenceSnapshot = presenceSnapshot
         self.logger = Logger(label: JarvisLogChannel.agent.rawValue)
         self.events = BoundedAsyncChannel<OrchestratorEvent>(capacity: 256, policy: .suspend)
     }
@@ -242,8 +253,21 @@ public actor AgentOrchestrator {
         let composedSystem = UntrustedWrapper.composeSystemPrompt(
             base: systemPrompt, nonce: nonce
         )
+        // Plan 09-03 / D-13 + D-14: append presence enrichment OUTSIDE the
+        // nonce-wrapped untrusted region. The presence sentence is trusted
+        // (rendered locally by PresenceStateSnapshot from a typed enum), so
+        // it does not need to ride inside the wrapper. Suppression rule
+        // (D-14) is enforced inside `currentEnrichment()` — when nil we
+        // omit the suffix entirely.
+        let presenceLine = await presenceSnapshot?.currentEnrichment()
+        let finalSystem: String
+        if let presenceLine, !presenceLine.isEmpty {
+            finalSystem = "\(composedSystem)\n\n\(presenceLine)"
+        } else {
+            finalSystem = composedSystem
+        }
         let initialMessages: [LLMMessage] = [
-            LLMMessage(role: .system, content: [.text(composedSystem)]),
+            LLMMessage(role: .system, content: [.text(finalSystem)]),
             LLMMessage(role: .user, content: [.text(input.userText)]),
         ]
 

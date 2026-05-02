@@ -747,7 +747,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 3. Construct the orchestrator. Plan 09-02 (D-01) — passes
         //    `visionRouter:` so image-bearing turns dispatch through the
         //    pre-stream branch + post-response escalation hook.
-        //    `presenceSnapshot:` wiring lands in Plan 3.
+        //    Plan 09-03 (D-13/D-14) — passes `presenceSnapshot:` so runTurn
+        //    can append ambient presence enrichment to the system prompt.
         let orchestrator = AgentOrchestrator(
             configStore: configStore,
             providerFactory: providerFactory,
@@ -756,7 +757,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sessionId: SessionID.fresh(),
             systemPrompt: "You are Jarvis, a personal macOS assistant.",
             availableTools: [],
-            visionRouter: self.visionRouter
+            visionRouter: self.visionRouter,
+            presenceSnapshot: PresenceStateSnapshot.shared
         )
         self.agentOrchestrator = orchestrator
 
