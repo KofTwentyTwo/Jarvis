@@ -78,7 +78,7 @@ final class OrchestratorCancelTests: XCTestCase {
         // actor-reentrancy guard.
         let secondOutcome = await orch.cancelAndSubmit(.text("second"))
 
-        guard case .superseded(let priorReturned, let reason) = secondOutcome else {
+        guard case .superseded(let priorReturned, _, let reason) = secondOutcome else {
             return XCTFail("expected .superseded, got \(secondOutcome)")
         }
         XCTAssertEqual(priorReturned, priorId)
@@ -152,7 +152,7 @@ final class OrchestratorCancelTests: XCTestCase {
         XCTAssertEqual(beforeCancel, priorId)
 
         let second = await orch.cancelAndSubmit(.text("second"))
-        guard case .superseded(let returnedPrior, _) = second else {
+        guard case .superseded(let returnedPrior, _, _) = second else {
             return XCTFail("expected .superseded")
         }
         XCTAssertEqual(returnedPrior, priorId)
