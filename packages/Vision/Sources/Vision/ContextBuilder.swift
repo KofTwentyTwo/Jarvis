@@ -29,28 +29,15 @@ public struct ContextBuilder: Sendable {
         EscalationPhraseDetector.matchesCloudOptIn(text, config: config)
     }
 
-    /// Plan 07-06 wiring stub for D-10 system-prompt presence enrichment.
-    ///
-    /// AppDelegate.installVision calls this with the `PresenceSignalBus.stream`
-    /// so a future per-turn ContextBuilder consumer can inject "user is at
-    /// desk" / "last seen N minutes ago" into the system prompt.
-    /// 07-06's responsibility is only to ensure the call site exists; the
-    /// actual presence-state -> prompt enrichment is deferred to a follow-on
-    /// plan (Phase 8 hardening or a dedicated context-enrichment plan).
-    ///
-    /// The implementation drains the stream into a Task that records the
-    /// latest event into a process-wide `Atomic<PresenceEvent?>`-shaped
-    /// holder. 07-06 ships only the no-op drain — no per-turn injection
-    /// occurs yet. This preserves the VISION-03 boundary: the static
-    /// function has no reference to TTSEngine or AgentOrchestrator submit
-    /// paths.
+    /// Plan 09-03 / D-13 — drain `PresenceSignalBus.stream` into the
+    /// process-wide `PresenceStateSnapshot.shared` actor so that
+    /// `AgentOrchestrator.runTurn` can read the latest event during system
+    /// prompt composition. VISION-03 holds: the snapshot returns only
+    /// `String?` to its consumer.
     public static func installPresence(_ stream: AsyncStream<PresenceEvent>) {
         Task.detached {
-            for await _ in stream {
-                // 07-06 deferred wiring: the consumer that injects presence
-                // into the per-turn system prompt lands in a future plan.
-                // For now we drain the stream so the producer side never
-                // blocks; the most-recent event is dropped.
+            for await event in stream {
+                await PresenceStateSnapshot.shared.record(event)
             }
         }
     }
