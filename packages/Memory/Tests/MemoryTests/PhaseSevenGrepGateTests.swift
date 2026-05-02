@@ -8,10 +8,17 @@ import XCTest
 /// scripts manually. The shell scripts are still the canonical CI gate.
 ///
 /// A fifth test (`testAppDelegateInstallOrder`) asserts the correct call
-/// order in `applicationWillFinishLaunching`: installMemory before
-/// installVoice (memory ready before first voice-driven turn) and
-/// installVision after installVoice (camera lifecycle is independent /
-/// can be deferred).
+/// order in `applicationWillFinishLaunching`. Phase 9 / Plan 4 (WARNING-5)
+/// LOCKED the order to vision → agent → voice because installAgent's
+/// orchestrator constructor consumes self.visionRouter (Plan 2) and the
+/// broadcaster's frame-attach release subscriber needs frameAttachController,
+/// while installVoice's adapters require self.agentOrchestrator +
+/// self.turnTranscriptStore (both constructed in installAgent). The
+/// canonical structural gate is `scripts/check-install-order.sh`; this test
+/// is the swift-test mirror, scoped to the assertions Memory cares about:
+/// installMemory must precede installVoice (memory ready before first
+/// voice-driven turn) and installVision must precede installVoice (so the
+/// orchestrator that voice adapters bridge to has a real visionRouter).
 final class PhaseSevenGrepGateTests: XCTestCase {
 
     // MARK: - Repo-root walker (same shape as EmbeddingDimSymbolTests)
@@ -74,10 +81,11 @@ final class PhaseSevenGrepGateTests: XCTestCase {
             "MEM-02: literal 768 forbidden outside MemoryConstants.embeddingDim.")
     }
 
-    /// Companion gate: AppDelegate calls installMemory() before installVoice()
-    /// and installVision() after installVoice() in applicationWillFinishLaunching.
-    /// Memory must be ready before the first voice-driven turn lands; vision is
-    /// independent and may be deferred.
+    /// Companion gate: AppDelegate's install order in applicationWillFinishLaunching
+    /// is vision → agent → voice (Phase 9 / Plan 4 / WARNING-5). Memory's invariants
+    /// against that fixed sequence: installMemory before installVoice (memory ready
+    /// before first voice-driven turn) and installVision before installVoice (so the
+    /// orchestrator the voice adapters bridge to has a real visionRouter).
     func testAppDelegateInstallOrder() throws {
         let root = try Self.repoRoot()
         let appDelegate = root.appendingPathComponent("App/AppDelegate.swift")
@@ -105,8 +113,8 @@ final class PhaseSevenGrepGateTests: XCTestCase {
         if let m = memLine, let v = voiceLine, let vi = visLine {
             XCTAssertLessThan(m, v,
                 "installMemory must be called BEFORE installVoice (memory ready before first turn).")
-            XCTAssertLessThan(v, vi,
-                "installVision must be called AFTER installVoice (camera lifecycle independent / deferred).")
+            XCTAssertLessThan(vi, v,
+                "installVision must be called BEFORE installVoice (Phase 9 Plan 4 WARNING-5: voice adapters depend on the orchestrator's visionRouter, set during installAgent which runs after installVision and before installVoice). See scripts/check-install-order.sh for the canonical structural gate.")
         }
     }
 }
