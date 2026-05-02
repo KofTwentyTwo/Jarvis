@@ -161,6 +161,15 @@ final class CodableRoundTripTests: XCTestCase {
         )
     }
 
+    /// Plan 09-02 / D-15 — additive `frameAttachRequested` case (HUD camera-icon
+    /// button). No payload fields; the case alone is the signal.
+    func test_roundTrip_frameAttachRequested() throws {
+        try assertInboundRoundTrips(
+            fixture: "frameAttachRequested",
+            expect: .frameAttachRequested
+        )
+    }
+
     // MARK: - Shape invariants (these prove hand-written Codable is load-bearing)
 
     /// If SE-0295 synthesis leaked, we'd see `{"hudState":{"state":"idle"}}`.

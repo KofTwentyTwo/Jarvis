@@ -17,7 +17,10 @@ import PackageDescription
 
 let package = Package(
     name: "Memory",
-    platforms: [.macOS(.v13)],
+    // Plan 09-02 cascade — bumped from v13 to v14 because Memory depends on
+    // AgentCore (now v14 due to JarvisVision dependency in AgentOrchestrator's
+    // vision-dispatch path).
+    platforms: [.macOS(.v14)],
     products: [
         .library(name: "Memory", targets: ["Memory"]),
     ],

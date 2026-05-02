@@ -15,7 +15,12 @@ import Foundation
 /// TEXT-03 chat-panel hydration. The TS mirror in webview/packages/bus must
 /// add the matching case before integration goes live (Plan 07-06 closes the
 /// loop; check-bus-protocol-version.sh will fail until the TS mirror lands).
-public let BUS_PROTOCOL_VERSION: String = "2.1.0"
+///
+/// Plan 09-02 — bumped 2.1.0 → 2.2.0 for additive BusInbound case
+/// `frameAttachRequested` (HUD camera-icon button → FrameAttachController).
+/// MINOR per HUD-05 versioning (additive; older webviews still decode the
+/// outbound shape).
+public let BUS_PROTOCOL_VERSION: String = "2.2.0"
 
 /// UI states the HUD can occupy. Encoded as its `rawValue` inside
 /// `BusOutbound.hudState(_:)` — see `BusOutbound.encode(to:)`.
