@@ -1002,6 +1002,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - Plan 09-04 chat-panel handlers (D-12 + WARNING-4 + BLOCKER-1 user-side)
+
+    /// D-12 — webview chat-panel "Send" button. Submits a fresh turn via
+    /// `AgentOrchestrator.submit(.text(text))`. WARNING-4: the phrase-trigger
+    /// helper fires BEFORE submit so a phrase-matched send arms the frame
+    /// attach slot. BLOCKER-1: appends user text to TurnTranscriptStore
+    /// AFTER the orchestrator returns a turnId so MemoryExtractionCoordinator
+    /// finds non-nil pair text on the matching `.turnEnd`.
+    @MainActor
+    func handleChatSubmit(_ text: String) async {
+        guard let orch = self.agentOrchestrator else {
+            systemLogger?.warning("handleChatSubmit: agentOrchestrator nil — dropping submission")
+            return
+        }
+        await self.tryPhraseAttachIfMatch(text)
+        let outcome = await orch.submit(.text(text))
+        await self.appendUserTextIfRunning(outcome, text: text)
+        await self.handleTextOutcome(outcome)
+    }
+
+    /// D-12 — webview chat-panel barge-in. Cancels the in-flight turn (if
+    /// any) and submits the new text via `cancelAndSubmit(.text(text))`.
+    /// WARNING-4: phrase trigger ALSO fires here — both submit sites carry
+    /// the same user-text shape; both must respect "what am I looking at"
+    /// detection (without this, barge-in after a phrase-matched send
+    /// silently drops the frame).
+    @MainActor
+    func handleChatCancelAndSubmit(_ text: String) async {
+        guard let orch = self.agentOrchestrator else {
+            systemLogger?.warning("handleChatCancelAndSubmit: agentOrchestrator nil — dropping submission")
+            return
+        }
+        await self.tryPhraseAttachIfMatch(text)
+        let outcome = await orch.cancelAndSubmit(.text(text))
+        await self.appendUserTextIfRunning(outcome, text: text)
+        await self.handleTextOutcome(outcome)
+    }
+
+    /// BLOCKER-1 user-side append helper. Called from BOTH chat handlers
+    /// after the orchestrator returns. On `.ran`/`.superseded`, appends the
+    /// user text under the turn's id; on `.rejected`, no-op (no turn was
+    /// allocated, so MemoryExtractionCoordinator's drain will not look up
+    /// pair content for this submission).
+    @MainActor
+    private func appendUserTextIfRunning(_ outcome: SubmitOutcome, text: String) async {
+        let turnId: TurnID
+        switch outcome {
+        case .ran(let id):
+            turnId = id
+        case .superseded(_, let newId, _):
+            turnId = newId
+        case .rejected:
+            return
+        }
+        await self.turnTranscriptStore?.append(turnId: turnId, role: .user, deltaText: text)
+    }
+
+    /// D-10 text-path rejection toast. On `.rejected`, sends a
+    /// `BusOutbound.submitRejected(reason:)` to the webview using
+    /// `RejectReasonCopy.body(for:)` — byte-identical to the voice-path
+    /// HUD banner. On `.ran`/`.superseded` returns silently (turnEnd
+    /// events flow via the broadcaster).
+    @MainActor
+    private func handleTextOutcome(_ outcome: SubmitOutcome) async {
+        switch outcome {
+        case .ran, .superseded:
+            return
+        case .rejected(let reason):
+            let body = RejectReasonCopy.body(for: reason)
+            try? await self.webviewBridge?.send(.submitRejected(reason: body))
+        }
+    }
+
     // MARK: - Vision install (Plan 07-06 — mirrors installVoice)
 
     /// Constructs and starts the vision subsystem.
@@ -1281,7 +1354,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Plan 09-02 / D-15 — inbound dispatch. The HUD camera-icon button
         // posts `BusInbound.frameAttachRequested`; route it into
         // `FrameAttachController.requestAttach(reason: .hudButton)`.
-        // (Plan 4 will extend this switch with chatSubmit + chatCancelAndSubmit.)
+        //
+        // Plan 09-04 / D-12 — chat-panel inbound. `chatSubmit` and
+        // `chatCancelAndSubmit` route into the AgentOrchestrator's text
+        // submit paths; rejection outcomes surface as `submitRejected`
+        // toasts via `handleTextOutcome`.
         bridge.onInbound = { [weak self] inbound async throws -> BusReply? in
             guard let self else { return nil }
             switch inbound {
@@ -1291,6 +1368,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return nil
             case .frameAttachRequested:
                 await self.frameAttachController?.requestAttach(reason: .hudButton)
+                return .success
+            case .chatSubmit(let text):
+                await self.handleChatSubmit(text)
+                return .success
+            case .chatCancelAndSubmit(let text):
+                await self.handleChatCancelAndSubmit(text)
                 return .success
             }
         }

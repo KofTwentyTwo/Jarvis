@@ -23,6 +23,12 @@ public enum BusOutbound: Equatable, Sendable {
     /// (Plan 07-06) carrying the most-recent turns for the active session.
     /// Additive (MINOR) bump per Phase 2 protocol versioning.
     case sessionHistory(turns: [TurnRow])
+    /// Plan 09-04 / D-10 text-path rejection toast. Emitted by AppDelegate's
+    /// `handleTextOutcome` when `AgentOrchestrator.submit(.text(...))` returns
+    /// `SubmitOutcome.rejected`. Body strings come from `RejectReasonCopy`
+    /// — byte-identical to the voice-path HUD banner so users see the same
+    /// wording regardless of input source.
+    case submitRejected(reason: String)
 }
 
 /// Local mirror of Memory.TurnRow used by `BusOutbound.sessionHistory`.
@@ -72,6 +78,7 @@ extension BusOutbound: Codable {
         case turnStarted
         case turnEnded
         case sessionHistory
+        case submitRejected
     }
 
     /// All `CodingKeys` across every case. Swift's keyed container does not
@@ -90,6 +97,7 @@ extension BusOutbound: Codable {
         case previewOrError
         case terminator
         case turns
+        case reason
     }
 
     public init(from decoder: Decoder) throws {
@@ -128,6 +136,9 @@ extension BusOutbound: Codable {
         case .sessionHistory:
             let turns = try container.decode([TurnRow].self, forKey: .turns)
             self = .sessionHistory(turns: turns)
+        case .submitRejected:
+            let reason = try container.decode(String.self, forKey: .reason)
+            self = .submitRejected(reason: reason)
         }
         // NO default branch — adding a Discriminator case without also adding
         // a matching switch arm here is a compile error. That is the entire
@@ -169,6 +180,9 @@ extension BusOutbound: Codable {
         case .sessionHistory(let turns):
             try container.encode(Discriminator.sessionHistory, forKey: .type)
             try container.encode(turns, forKey: .turns)
+        case .submitRejected(let reason):
+            try container.encode(Discriminator.submitRejected, forKey: .type)
+            try container.encode(reason, forKey: .reason)
         }
         // Exhaustive at encode site — adding a case without encoding it is a
         // compile error, mirroring the init(from:) drift preventer.

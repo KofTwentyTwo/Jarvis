@@ -170,6 +170,32 @@ final class CodableRoundTripTests: XCTestCase {
         )
     }
 
+    /// Plan 09-04 / D-12 — chat-panel submit.
+    func test_roundTrip_chatSubmit() throws {
+        try assertInboundRoundTrips(
+            fixture: "chatSubmit",
+            expect: .chatSubmit(text: "hello")
+        )
+    }
+
+    /// Plan 09-04 / D-12 — chat-panel barge-in.
+    func test_roundTrip_chatCancelAndSubmit() throws {
+        try assertInboundRoundTrips(
+            fixture: "chatCancelAndSubmit",
+            expect: .chatCancelAndSubmit(text: "stop")
+        )
+    }
+
+    /// Plan 09-04 / D-10 — text-path rejection toast. Body string is
+    /// byte-identical to the voice-path HUD banner (single source of truth:
+    /// RejectReasonCopy).
+    func test_roundTrip_submitRejected() throws {
+        try assertOutboundRoundTrips(
+            fixture: "submitRejected",
+            expect: .submitRejected(reason: "Already thinking — wait or say cancel.")
+        )
+    }
+
     // MARK: - Shape invariants (these prove hand-written Codable is load-bearing)
 
     /// If SE-0295 synthesis leaked, we'd see `{"hudState":{"state":"idle"}}`.
