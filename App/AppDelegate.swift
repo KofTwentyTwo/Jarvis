@@ -1263,6 +1263,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = item
         let menu = MenuBarContextMenu.build(
             setupAction: { [weak self] in self?.openWizard(firstLaunch: false) },
+            settingsAction: { [weak self] in self?.openWizard(firstLaunch: false) },
             devOverlayToggleAction: { [weak self] in self?.toggleDevOverlay() },
             stateDumpAction: { [weak self] in self?.copyStateDump() }
         )

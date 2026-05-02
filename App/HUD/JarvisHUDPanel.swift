@@ -88,7 +88,11 @@ public final class JarvisHUDPanel: NSPanel {
     public override var canBecomeKey: Bool { true }
     public override var canBecomeMain: Bool { false }
 
-    public var isSummoned: Bool { self.isVisible }
+    /// "Summoned" = visible AND in front of every other app (key window).
+    /// Just `isVisible` isn't enough — an NSPanel can be visible but
+    /// occluded behind another app, in which case the hotkey should
+    /// bring it forward, not dismiss it.
+    public var isSummoned: Bool { self.isVisible && self.isKeyWindow }
 
     /// Summon on the screen holding the mouse cursor (fallback: main).
     /// Fresh-center each summon per UI-SPEC line 548 "Not saved per-display in P1".
@@ -102,7 +106,12 @@ public final class JarvisHUDPanel: NSPanel {
                 display: true
             )
         }
-        self.orderFrontRegardless()
+        // Activate the app first, then make the panel key+front. Without
+        // NSApp.activate, a global hotkey pressed while another app is
+        // frontmost only orderFront's the panel into a process that isn't
+        // active, so it sits behind the active app's windows.
+        NSApp.activate(ignoringOtherApps: true)
+        self.makeKeyAndOrderFront(nil)
         NSAccessibility.post(
             element: self as Any,
             notification: .announcementRequested,

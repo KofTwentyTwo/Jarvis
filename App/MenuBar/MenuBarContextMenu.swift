@@ -6,17 +6,18 @@ import ObjectiveC.runtime
 public enum MenuBarContextMenu {
     public static func build(
         setupAction: @escaping () -> Void,
+        settingsAction: @escaping () -> Void,
         devOverlayToggleAction: @escaping () -> Void,
         stateDumpAction: @escaping () -> Void
     ) -> NSMenu {
         let menu = NSMenu()
 
         menu.addItem(makeItem(title: "Setup…", action: setupAction))
-
-        let settings = NSMenuItem(title: "Settings…", action: nil, keyEquivalent: "")
-        settings.isEnabled = false
-        settings.toolTip = "Coming soon"
-        menu.addItem(settings)
+        // Settings… opens the wizard at the first stage so the user can
+        // change their API key, re-grant permissions, or rebind the
+        // hotkey. Until a dedicated settings panel ships, the wizard is
+        // the canonical interface for those exact settings.
+        menu.addItem(makeItem(title: "Settings…", action: settingsAction))
 
         menu.addItem(NSMenuItem.separator())
 
