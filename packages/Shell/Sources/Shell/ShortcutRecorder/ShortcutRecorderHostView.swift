@@ -34,8 +34,30 @@ public final class ShortcutRecorderHostView: NSView {
 
     public weak var delegate: Delegate?
     private var monitor: Any?
+    private var placeholderText: String = "Click to record shortcut…"
+    private var recordedDisplay: String?
+
+    public override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+    }
+
+    public required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+    }
 
     public override var acceptsFirstResponder: Bool { true }
+
+    /// Click anywhere on the view to focus it. Without this override, AppKit
+    /// has no path to make this NSView first responder when the user clicks,
+    /// because SwiftUI's hosting context forwards the click through but the
+    /// default NSView implementation doesn't request focus on its own.
+    public override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+    }
 
     public override func becomeFirstResponder() -> Bool {
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) {
@@ -43,7 +65,9 @@ public final class ShortcutRecorderHostView: NSView {
             guard let self else { return event }
             return self.process(event: event) ? nil : event
         }
-        return super.becomeFirstResponder()
+        let became = super.becomeFirstResponder()
+        needsDisplay = true
+        return became
     }
 
     public override func resignFirstResponder() -> Bool {
@@ -51,7 +75,45 @@ public final class ShortcutRecorderHostView: NSView {
             NSEvent.removeMonitor(m)
             monitor = nil
         }
-        return super.resignFirstResponder()
+        let resigned = super.resignFirstResponder()
+        needsDisplay = true
+        return resigned
+    }
+
+    public override func draw(_ dirtyRect: NSRect) {
+        let isFocused = window?.firstResponder === self
+        let bg = isFocused
+            ? NSColor.controlAccentColor.withAlphaComponent(0.12)
+            : NSColor.controlBackgroundColor
+        let border = isFocused
+            ? NSColor.controlAccentColor
+            : NSColor.separatorColor
+        bg.setFill()
+        let path = NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6)
+        path.fill()
+        border.setStroke()
+        path.lineWidth = isFocused ? 2 : 1
+        path.stroke()
+
+        let label = recordedDisplay ?? (isFocused ? "Press a shortcut…" : placeholderText)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 13),
+            .foregroundColor: recordedDisplay != nil
+                ? NSColor.labelColor
+                : NSColor.secondaryLabelColor,
+        ]
+        let size = (label as NSString).size(withAttributes: attrs)
+        let origin = NSPoint(
+            x: bounds.midX - size.width / 2,
+            y: bounds.midY - size.height / 2
+        )
+        (label as NSString).draw(at: origin, withAttributes: attrs)
+    }
+
+    /// Update the visible label after a successful recording.
+    public func setRecordedDisplay(_ text: String?) {
+        recordedDisplay = text
+        needsDisplay = true
     }
 
     /// Returns true if the event was consumed. Tests call this directly.

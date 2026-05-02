@@ -31,6 +31,7 @@ public struct ShortcutRecorderView: NSViewRepresentable {
 
     public func updateNSView(_ view: ShortcutRecorderHostView, context: Context) {
         context.coordinator.parent = self
+        view.setRecordedDisplay(shortcut?.displayString)
     }
 
     public func makeCoordinator() -> Coordinator {
