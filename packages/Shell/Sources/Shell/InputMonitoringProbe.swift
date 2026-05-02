@@ -3,8 +3,16 @@ import IOKit.hid
 
 /// Abstracts `IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)` so tests can
 /// inject a deterministic grant/deny result without touching real TCC state.
+///
+/// Two surfaces:
+/// - `requestListenEventAccess()` — may prompt the user (calls IOHIDRequestAccess)
+/// - `isListenEventAccessGranted()` — query-only, never prompts (calls IOHIDCheckAccess)
+///
+/// The query-only path is what the wizard uses on relaunch to detect a grant
+/// the user made in System Settings between sessions, without re-prompting.
 public protocol HIDAccessProbe: Sendable {
     func requestListenEventAccess() -> Bool
+    func isListenEventAccessGranted() -> Bool
 }
 
 /// Production probe. Calls `IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)`
@@ -15,6 +23,12 @@ public struct SystemHIDAccessProbe: HIDAccessProbe {
     public init() {}
     public func requestListenEventAccess() -> Bool {
         IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+    }
+    /// IOHIDCheckAccess returns the cached TCC decision without prompting.
+    /// `kIOHIDAccessTypeGranted` == 0; anything else (denied / unknown) is
+    /// not granted.
+    public func isListenEventAccessGranted() -> Bool {
+        IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
     }
 }
 
