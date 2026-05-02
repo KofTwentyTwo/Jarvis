@@ -66,6 +66,7 @@
 		C336B40332A148A5A1F2DDC8 /* WebviewBundleLoadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16929275D5323F505DF12E9 /* WebviewBundleLoadTests.swift */; };
 		C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */; };
 		C9F3B34208084769106C4B07 /* HudStateCoordinatorBusWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46CB8B7693CEA625D7331C3E /* HudStateCoordinatorBusWiringTests.swift */; };
+		CCA51A998B128C9C03ED0662 /* AppDelegateFrameAttachAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FB47EBED48DF63272C6D77F /* AppDelegateFrameAttachAdapters.swift */; };
 		CD22CB0656265A2623BA7FD0 /* AnthropicKeyValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39DD53A4E2CCED58C85B63FC /* AnthropicKeyValidatorTests.swift */; };
 		CFBEF67D687A1227C9C2A6BD /* HUDBannerCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */; };
 		CFFC4AB8D77907C477B1E947 /* JarvisMCP in Frameworks */ = {isa = PBXBuildFile; productRef = DE970D2B3CA1AB0097A120D3 /* JarvisMCP */; };
@@ -165,6 +166,7 @@
 		8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinatorTests.swift; sourceTree = "<group>"; };
 		8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardTCCStageTests.swift; sourceTree = "<group>"; };
 		8C8267C7BE6D4B16FEE6004E /* webview */ = {isa = PBXFileReference; lastKnownFileType = folder; name = webview; path = App/Resources/webview; sourceTree = SOURCE_ROOT; };
+		8FB47EBED48DF63272C6D77F /* AppDelegateFrameAttachAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateFrameAttachAdapters.swift; sourceTree = "<group>"; };
 		909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateWiringTests.swift; sourceTree = "<group>"; };
 		90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisApp.swift; sourceTree = "<group>"; };
 		960E9FC636D6FF3DD68E5FE9 /* Replay */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Replay; path = packages/Replay; sourceTree = SOURCE_ROOT; };
@@ -281,6 +283,7 @@
 				D80B1ECFB5748E20A6ADF0EB /* Resources */,
 				7B0D5E57F282044CD98E347B /* Tests */,
 				5CBAF02B001A7FF406642CCA /* Theme */,
+				2B9B2D87FD5CAD4688A29148 /* Vision */,
 				BB5926219D1C87B282AAC541 /* Voice */,
 				922FCD26000A64044B1FF187 /* Wizard */,
 			);
@@ -302,6 +305,14 @@
 				D554BFB452EC88ECA9392A2E /* PasteboardReader.swift */,
 			);
 			path = "mcp-clipboard";
+			sourceTree = "<group>";
+		};
+		2B9B2D87FD5CAD4688A29148 /* Vision */ = {
+			isa = PBXGroup;
+			children = (
+				8FB47EBED48DF63272C6D77F /* AppDelegateFrameAttachAdapters.swift */,
+			);
+			path = Vision;
 			sourceTree = "<group>";
 		};
 		35E7CF3C8F80086AD447480E /* MenuBar */ = {
@@ -1215,6 +1226,7 @@
 				50C095E6F675D26E9C399179 /* AnthropicKeyValidator.swift in Sources */,
 				8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */,
 				2245DEFA1E6C3880E3C78E56 /* AppDelegateContextBuilderAdapter.swift in Sources */,
+				CCA51A998B128C9C03ED0662 /* AppDelegateFrameAttachAdapters.swift in Sources */,
 				0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */,
 				C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */,
 				A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */,

@@ -5,10 +5,13 @@
  * constant must be byte-identical. Plan 04 adds a build-time parity check.
  *
  * Plan 07-03 bumped Swift 2.0.0 -> 2.1.0 (additive sessionHistory case);
- * Plan 07-06 mirrors the bump here so the build-time parity check passes.
+ * Plan 07-06 mirrored that bump here.
+ *
+ * Plan 09-02 bumped 2.1.0 -> 2.2.0 (additive BusInbound case
+ * frameAttachRequested for the HUD camera-icon button → FrameAttachController).
  */
 
-export const BUS_PROTOCOL_VERSION = "2.1.0";
+export const BUS_PROTOCOL_VERSION = "2.2.0";
 
 export type HudState =
   | "idle"
@@ -54,7 +57,13 @@ export type BusOutbound =
 
 export type BusInbound =
   | { type: "helloAck"; version: string }
-  | { type: "uiReady" };
+  | { type: "uiReady" }
+  /**
+   * Plan 09-02 / D-15 / VIS-07. The HUD's camera-icon button posts this when
+   * the user clicks it; AppDelegate routes it to
+   * FrameAttachController.requestAttach(reason: .hudButton).
+   */
+  | { type: "frameAttachRequested" };
 
 export type DecodeResult<T> =
   | { ok: true; value: T }
@@ -237,6 +246,9 @@ export function decodeInbound(json: string): DecodeResult<BusInbound> {
       return { ok: true, value: { type: "helloAck", version: parsed.version } };
     case "uiReady":
       return { ok: true, value: { type: "uiReady" } };
+    case "frameAttachRequested":
+      // Plan 09-02 / D-15 — no payload fields; the case alone is the signal.
+      return { ok: true, value: { type: "frameAttachRequested" } };
     default: {
       const _exhaustive: never = type;
       void _exhaustive;

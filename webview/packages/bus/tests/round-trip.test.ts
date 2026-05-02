@@ -19,8 +19,8 @@ function readFixture(name: string): { raw: string; parsed: unknown } {
 }
 
 describe("BUS_PROTOCOL_VERSION", () => {
-  it("equals 2.1.0 (must match Swift constant — Plan 07-03 sessionHistory bump)", () => {
-    expect(BUS_PROTOCOL_VERSION).toBe("2.1.0");
+  it("equals 2.2.0 (must match Swift constant — Plan 09-02 frameAttachRequested bump)", () => {
+    expect(BUS_PROTOCOL_VERSION).toBe("2.2.0");
   });
 });
 
@@ -57,6 +57,14 @@ describe("BusOutbound round-trip", () => {
 describe("BusInbound round-trip", () => {
   it("decodes and re-encodes helloAck.json", () => {
     const { raw, parsed } = readFixture("helloAck.json");
+    const result = decodeInbound(raw);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(JSON.parse(encodeInbound(result.value))).toEqual(parsed);
+  });
+
+  it("decodes and re-encodes frameAttachRequested.json (Plan 09-02 / D-15)", () => {
+    const { raw, parsed } = readFixture("frameAttachRequested.json");
     const result = decodeInbound(raw);
     expect(result.ok).toBe(true);
     if (!result.ok) return;

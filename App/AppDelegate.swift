@@ -203,9 +203,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var disablePresence: DisablePresence?
 
     /// T1/T2/T3 vision routing (Plan 07-05). Wired into the orchestrator's
-    /// runTurn dispatcher branch (deferred — AgentOrchestrator is itself not
-    /// yet wired in AppDelegate; see SUMMARY's Deferred wiring section).
+    /// runTurn dispatcher branch in Plan 09-02 (D-01 — AgentOrchestrator
+    /// constructor now accepts `visionRouter:`).
     var visionRouter: VisionRouter?
+
+    /// Plan 09-02 / D-15. The frame-attach controller owns the dual-trigger
+    /// ingest path (HUD camera-icon button + matched phrase) and the D-15
+    /// SOLE-emission-site discard. nil until installVision completes; the
+    /// orchestrator's broadcaster frame-attach subscriber drives
+    /// `onAssistantTurnComplete()` after every image-bearing `.turnEnd`.
+    var frameAttachController: FrameAttachController?
+
+    /// Plan 09-02 / D-16 release subscriber Task. Drains the broadcaster's
+    /// `.frameAttach` priority subscription and, on `.turnEnd` for an
+    /// image-bearing turn (per `agentOrchestrator.turnHadImage`), calls
+    /// `frameAttachController.onAssistantTurnComplete()` to release the
+    /// captured frame's in-memory bytes.
+    private var frameAttachReleaseTask: Task<Void, Never>?
 
     /// Camera-degradation watcher Task — surfaces TCC denial / mid-session
     /// revocation as HUD banners (S-4 graceful denial).
@@ -447,11 +461,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 14. Plan 09-01: install agent subsystem. Awaits the memory install
         //     task so the MemoryExtractionCoordinator is constructed before
         //     installAgent subscribes it to the broadcaster's memory child
-        //     stream. visionRouter / presenceSnapshot wiring is added by
-        //     Plans 2 + 3; this plan constructs the orchestrator with the
-        //     existing 7-arg signature.
+        //     stream.
+        //
+        //     Plan 09-02: also awaits the vision install task so installAgent
+        //     can pass `visionRouter:` and `frameAttachController` (both set
+        //     by installVision) into the orchestrator constructor + the
+        //     broadcaster's frame-attach release subscriber. Sequential
+        //     install order is now LOCKED: memory + vision must complete
+        //     before agent (D-15 + D-01).
         agentInstallTask = Task { @MainActor [weak self] in
             await self?.memoryInstallTask?.value
+            await self?.visionInstallTask?.value
             await self?.installAgent()
         }
     }
@@ -493,6 +513,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         memoryEventSubscriberTask?.cancel()
         transcriptSubscriberTask?.cancel()
         devOverlaySubscriberTask?.cancel()
+        // Plan 09-02 / D-16: tear down frame-attach release subscriber.
+        frameAttachReleaseTask?.cancel()
         if let broadcaster = eventBroadcaster {
             Task { await broadcaster.stop() }
         }
@@ -722,8 +744,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 3. Construct the orchestrator with the existing 7-arg signature.
-        //    visionRouter + presenceSnapshot wiring is added by Plans 2 + 3.
+        // 3. Construct the orchestrator. Plan 09-02 (D-01) — passes
+        //    `visionRouter:` so image-bearing turns dispatch through the
+        //    pre-stream branch + post-response escalation hook.
+        //    `presenceSnapshot:` wiring lands in Plan 3.
         let orchestrator = AgentOrchestrator(
             configStore: configStore,
             providerFactory: providerFactory,
@@ -731,7 +755,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             replayLog: replayLog,
             sessionId: SessionID.fresh(),
             systemPrompt: "You are Jarvis, a personal macOS assistant.",
-            availableTools: []
+            availableTools: [],
+            visionRouter: self.visionRouter
         )
         self.agentOrchestrator = orchestrator
 
@@ -800,9 +825,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // 5d. Plan 09-02 / D-16 — frame-attach release subscriber. Watches
+        //     for `.turnEnd`; when the turn carried an image (per
+        //     `agentOrchestrator.turnHadImage(_:)`), call
+        //     `frameAttachController.onAssistantTurnComplete()` to release
+        //     the captured frame's in-memory bytes.
+        //
+        //     The `.frameAttach` priority protects `.turnEnd` (per
+        //     OrchestratorEventBroadcaster's protection matrix), so a
+        //     saturated subscriber buffer never drops the very event we
+        //     gate on. If `frameAttachController` is nil (no replayLog at
+        //     vision-install time), the drain harmlessly ignores image
+        //     turns — the privacy invariant lives on the producer side.
+        let frameSub = await broadcaster.subscribe(priority: .frameAttach, capacity: 64)
+        self.frameAttachReleaseTask = Task { [weak self] in
+            for await event in frameSub.stream {
+                if Task.isCancelled { break }
+                guard let self else { break }
+                if case let .turnEnd(turnId, _) = event {
+                    let hadImage = await self.agentOrchestrator?.turnHadImage(turnId) ?? false
+                    if hadImage {
+                        await self.frameAttachController?.onAssistantTurnComplete()
+                    }
+                }
+            }
+        }
+
         systemLogger?.info(
-            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay subscribers active)"
+            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach subscribers active)"
         )
+    }
+
+    // MARK: - Plan 09-02 phrase-detection helper
+
+    /// D-13 phrase-attach hook for Plan 4's chat handlers. Called from BOTH
+    /// `chatSubmit` AND `chatCancelAndSubmit` per WARNING-4 — without that,
+    /// barge-in after a phrase-matched submit silently drops the frame.
+    ///
+    /// On match, calls `frameAttachController.requestAttach(reason:
+    /// .phraseDetected(in: text))` BEFORE the orchestrator's `submit(.text(text))`.
+    /// The user still has to confirm `[Send]` in the HUD; this just arms the
+    /// pending-frame slot so the camera capture is ready.
+    @MainActor
+    func tryPhraseAttachIfMatch(_ text: String) async {
+        let cb = ContextBuilder()
+        if cb.matchesFrameAttachPhrase(text), let fac = self.frameAttachController {
+            await fac.requestAttach(reason: .phraseDetected(in: text))
+        }
     }
 
     // MARK: - Vision install (Plan 07-06 — mirrors installVoice)
@@ -902,8 +971,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         visionRouter = router
 
+        // 7. Plan 09-02 / D-15 — FrameAttachController.
+        //    Adapters live in App/Vision/AppDelegateFrameAttachAdapters.swift;
+        //    they wrap CameraCapture (CaptureSource) + the FrameAttachReplaySink
+        //    actor (which itself accepts a ReplayLogProtocol). FrameAttachController's
+        //    SOLE-emission-site discard invariant is intact regardless of the
+        //    adapters (it lives in packages/Vision/Sources/Vision/FrameAttachController.swift,
+        //    enforced by FrameAttachDiscardSiteGrepTests).
+        if let replayLog = self.replayLog {
+            let captureAdapter = FrameAttachCaptureSourceAdapter(cameraCapture: capture)
+            let replayAdapter = FrameAttachReplaySinkAdapter(replayLog: replayLog)
+            let visionSink = FrameAttachReplaySink(replayLog: replayAdapter)
+            let bridgedSink = FrameAttachControllerReplaySinkBridge(underlying: visionSink)
+            let frameAttach = FrameAttachController(
+                captureSession: captureAdapter,
+                replaySink: bridgedSink
+            )
+            self.frameAttachController = frameAttach
+        } else {
+            systemLogger?.warning(
+                "installVision: replayLog absent — FrameAttachController not instantiated"
+            )
+        }
+
         systemLogger?.info(
-            "installVision: presence + VisionRouter wired (T2 sidecar deferred; AgentOrchestrator runTurn dispatch deferred)"
+            "installVision: presence + VisionRouter + FrameAttachController wired (T2 sidecar deferred)"
         )
     }
 
@@ -1056,6 +1148,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // at `.booting` by the RESEARCH Open Q #4 boot gate.
             self?.hudStateCoordinator?.markReady()
             self?.onBusArmed?()
+        }
+
+        // Plan 09-02 / D-15 — inbound dispatch. The HUD camera-icon button
+        // posts `BusInbound.frameAttachRequested`; route it into
+        // `FrameAttachController.requestAttach(reason: .hudButton)`.
+        // (Plan 4 will extend this switch with chatSubmit + chatCancelAndSubmit.)
+        bridge.onInbound = { [weak self] inbound async throws -> BusReply? in
+            guard let self else { return nil }
+            switch inbound {
+            case .helloAck, .uiReady:
+                // helloAck is intercepted inline by WebviewBridge; uiReady is
+                // a no-op marker. Both arrive here for consistency.
+                return nil
+            case .frameAttachRequested:
+                await self.frameAttachController?.requestAttach(reason: .hudButton)
+                return .success
+            }
         }
 
         // Load the R3F bundle. Missing index.html is a hard-block — without
