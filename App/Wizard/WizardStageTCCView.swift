@@ -59,30 +59,71 @@ struct WizardStageTCCView: View {
     }
 
     private var inputMonitoringRow: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Input Monitoring (needed now)").font(.headline)
-                Text("Lets Jarvis see a global hotkey press even when another app is focused. Without this, Jarvis only responds when its window is frontmost.")
-                    .foregroundColor(Color(NSColor.secondaryLabelColor))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Spacer(minLength: 16)
-            if !state.inputMonitoringProbed {
-                Button("Grant Access") {
-                    state.inputMonitoringGranted = onGrantInputMonitoring()
-                    state.inputMonitoringProbed = true
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Input Monitoring (needed now)").font(.headline)
+                    Text("Lets Jarvis see a global hotkey press even when another app is focused. Without this, Jarvis only responds when its window is frontmost.")
+                        .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            } else if state.inputMonitoringGranted {
-                Label("Granted", systemImage: "checkmark.circle.fill")
-                    .foregroundColor(Color(NSColor.systemGreen))
-            } else {
-                Button("Denied — Open System Settings") {
-                    if let url = URL(string:
-                        "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
-                        NSWorkspace.shared.open(url)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 16)
+                if state.inputMonitoringGranted {
+                    Label("Granted", systemImage: "checkmark.circle.fill")
+                        .foregroundColor(Color(NSColor.systemGreen))
+                } else if !state.inputMonitoringProbed {
+                    Button("Grant Access") {
+                        state.inputMonitoringGranted = onGrantInputMonitoring()
+                        state.inputMonitoringProbed = true
+                    }
+                } else {
+                    Button("Re-check") {
+                        // Re-fire the probe. If the user granted in System
+                        // Settings between sessions or in another window,
+                        // this picks up the new grant; if still denied, the
+                        // helper text below points them at System Settings.
+                        state.inputMonitoringGranted = onGrantInputMonitoring()
                     }
                 }
+            }
+            // Only show the System Settings helper after the user has tried
+            // the in-app prompt and it didn't grant — covers both "user
+            // clicked Deny" and the macOS-quirk case where ad-hoc signed
+            // Debug builds don't auto-list in System Settings until the
+            // first IOHIDRequestAccess call has been made.
+            if state.inputMonitoringProbed && !state.inputMonitoringGranted {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        Text("Not granted. Open System Settings → Privacy & Security → Input Monitoring, find ‘Jarvis’ in the list, and turn it on. Then click Re-check above.")
+                            .foregroundColor(Color(NSColor.secondaryLabelColor))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack(spacing: 8) {
+                        Button("Open System Settings") {
+                            if let url = URL(string:
+                                "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        Text("If Jarvis is missing from the list, click + and choose Jarvis.app from your build folder.")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .font(.system(size: 12))
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(NSColor.windowBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color(NSColor.separatorColor), lineWidth: 1)
+                )
             }
         }
     }
