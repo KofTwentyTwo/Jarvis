@@ -1,14 +1,22 @@
 // Injected at document-start in WKContentWorld("JarvisBusWorld").
 // Installs window.jarvisBus with the minimum surface needed to complete
-// the handshake. bus-harness.html's <script type="module"> can load the full
-// TS-compiled version and REPLACE window.jarvisBus when the module
-// evaluates — but the injection ensures a handler exists even before
-// the module fetch completes (race prevention per RESEARCH §pitfall 3).
+// the handshake.
+//
+// IMPORTANT — protocolVersion drift hazard: the full TS bundle's installer
+// (Vy() in the minified output) shape-checks window.jarvisBus and SKIPS
+// replacement when send/receive/onOutbound already exist. That means this
+// placeholder IS the version reported in helloAck — the full bundle never
+// overwrites it. Drift here surfaces as a runtime "HUD bundle was built
+// against bus protocol vX.Y.Z; the app expects vA.B.C" hard-fail.
+//
+// MUST be bumped in lock-step with packages/Bus/Sources/Bus/Protocol.swift
+// and webview/packages/bus/src/protocol.ts. scripts/check-bus-protocol-version.sh
+// enforces three-way parity at build time.
 (function () {
   "use strict";
   if (window.jarvisBus) { return; }
   window.jarvisBus = {
-    protocolVersion: "2.0.0",
+    protocolVersion: "2.3.0",
     _handler: null,
     _pendingHello: null,
     receive: function (payload) {

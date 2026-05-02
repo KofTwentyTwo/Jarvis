@@ -24,6 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 : "${SWIFT_FILE:=$REPO/packages/Bus/Sources/Bus/Protocol.swift}"
 : "${TS_FILE:=$REPO/webview/packages/bus/src/protocol.ts}"
+: "${INJECTION_FILE:=$REPO/packages/Bus/Sources/Bus/Resources/Injection.js}"
 : "${SWIFT_FIXTURES:=$REPO/packages/Bus/Tests/BusTests/Fixtures}"
 : "${TS_FIXTURES:=$REPO/webview/packages/bus/fixtures}"
 
@@ -34,6 +35,7 @@ err() {
 
 [[ -f "$SWIFT_FILE" ]] || err "Swift protocol file not found: $SWIFT_FILE"
 [[ -f "$TS_FILE" ]] || err "TS protocol file not found: $TS_FILE"
+[[ -f "$INJECTION_FILE" ]] || err "Injection file not found: $INJECTION_FILE"
 
 # Extract Swift constant:
 #   public let BUS_PROTOCOL_VERSION: String = "x.y.z"
@@ -55,6 +57,30 @@ if [[ "$SWIFT_VER" != "$TS_VER" ]]; then
         echo "  Swift ($SWIFT_FILE): $SWIFT_VER"
         echo "  TS    ($TS_FILE):    $TS_VER"
         echo "  Bump both to the same value before building. This is SEC-09's build-breaker."
+    } >&2
+    exit 1
+fi
+
+# Extract Injection.js placeholder:
+#   protocolVersion: "x.y.z"
+# This stub is injected at document-start in WKContentWorld and is NOT replaced
+# by the full TS bundle (the bundle's installer skip-replaces when send/receive/
+# onOutbound already exist on window.jarvisBus). The placeholder IS the version
+# reported in helloAck — drift here causes runtime "HUD bundle was built against
+# bus protocol vX.Y.Z" failures.
+INJECTION_VER=$(grep -E 'protocolVersion[[:space:]]*:[[:space:]]*"' "$INJECTION_FILE" \
+    | sed -E 's/.*"([^"]+)".*/\1/' \
+    | head -n 1)
+[[ -n "$INJECTION_VER" ]] || err "protocolVersion not found or malformed in $INJECTION_FILE"
+
+if [[ "$INJECTION_VER" != "$SWIFT_VER" ]]; then
+    {
+        echo "FAIL: BUS_PROTOCOL_VERSION mismatch in Injection.js"
+        echo "  Swift     ($SWIFT_FILE):     $SWIFT_VER"
+        echo "  Injection ($INJECTION_FILE): $INJECTION_VER"
+        echo "  Bump Injection.js's protocolVersion literal to match. The injected"
+        echo "  stub is what window.jarvisBus.protocolVersion reports at runtime —"
+        echo "  the full bundle does not overwrite it."
     } >&2
     exit 1
 fi
