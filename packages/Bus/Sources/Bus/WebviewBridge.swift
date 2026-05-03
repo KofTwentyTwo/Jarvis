@@ -145,7 +145,6 @@ public final class WebviewBridge: NSObject {
     /// `hello` frame over the outbound path. Called by `AppDelegate` on
     /// `WKNavigationDelegate.webView(_:didFinish:)`.
     public func startHandshake() {
-        BusBootDiag.info("WebviewBridge.startHandshake: state -> .sentHello, sending hello v\(BUS_PROTOCOL_VERSION)")
         let deadline = Date().addingTimeInterval(2.0)
         handshakeState = .sentHello(deadline: deadline)
         scheduleTimeout()
@@ -153,9 +152,7 @@ public final class WebviewBridge: NSObject {
             guard let self else { return }
             do {
                 try await self.sendRaw(.hello(version: BUS_PROTOCOL_VERSION))
-                BusBootDiag.info("WebviewBridge.startHandshake: hello sent successfully")
             } catch {
-                BusBootDiag.error("WebviewBridge.startHandshake: failed to send hello: \(String(describing: error))")
                 self.logger.error("bus: failed to send hello: \(error)")
                 // Don't short-circuit — let the 2s timeout Task classify this.
             }
@@ -169,69 +166,9 @@ public final class WebviewBridge: NSObject {
     /// before the handshake completes.
     public func send(_ message: BusOutbound) async throws {
         guard handshakeState == .armed else {
-            BusBootDiag.error("bridge.send: dropped \(messageDescription(message)) — handshakeState=\(String(describing: handshakeState))")
             throw BusError.bridgeNotReady
         }
-        BusBootDiag.info("bridge.send: dispatching \(messageDescription(message))")
-        do {
-            try await sendRaw(message)
-            BusBootDiag.info("bridge.send: \(messageDescription(message)) delivered to JS receive()")
-            // Diagnostic: read back the JS-side bus stub state so we know
-            // whether the handler was registered (message dispatched) vs not
-            // (message buffered to _pendingMessages).
-            await diagnoseJSReceiveState(after: messageDescription(message))
-        } catch {
-            BusBootDiag.error("bridge.send: \(messageDescription(message)) FAILED: \(String(describing: error))")
-            throw error
-        }
-    }
-
-    /// Reads `window.jarvisBus._handler != null` and `_pendingMessages.length`
-    /// so we can tell from Swift whether outbound messages are reaching the
-    /// bundle's onOutbound handler or just sitting in the stub's queue.
-    /// Runs an immediate snapshot AND a delayed snapshot 1500 ms later to
-    /// capture late bundle init.
-    private func diagnoseJSReceiveState(after label: String) async {
-        await snapshotJSBus(label: "\(label) (t+0)")
-        Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(1500))
-            await self?.snapshotJSBus(label: "\(label) (t+1500ms)")
-        }
-    }
-
-    private func snapshotJSBus(label: String) async {
-        do {
-            let result = try await evaluator.callAsync(
-                functionBody: """
-                const bus = window.jarvisBus;
-                if (!bus) return 'no-bus';
-                const handler = bus._handler ? 'handler-set' : 'handler-null';
-                const pending = (bus._pendingMessages && bus._pendingMessages.length) || 0;
-                const ver = bus.protocolVersion;
-                const root = document.getElementById('root');
-                const rootHasChildren = root && root.children.length > 0 ? 'rendered' : 'empty';
-                return 'handler=' + handler + ' pending=' + pending + ' v=' + ver + ' react=' + rootHasChildren;
-                """,
-                arguments: [:],
-                contentWorld: contentWorld
-            )
-            BusBootDiag.info("snapshotJSBus \(label): \(String(describing: result))")
-        } catch {
-            BusBootDiag.error("snapshotJSBus \(label): query failed: \(String(describing: error))")
-        }
-    }
-
-    /// Compact one-line description for diagnostic logging. Avoids enum
-    /// destructuring (case-pattern matching) so the HUD-08 single-writer
-    /// grep gate doesn't false-positive — it greps for any reference to
-    /// the hudState case literally and its comment-line filter is
-    /// limited to single-colon formats so `///` doc-comments still trip it.
-    private func messageDescription(_ msg: BusOutbound) -> String {
-        if let data = try? encoder.encode(msg),
-           let json = String(data: data, encoding: .utf8) {
-            return String(json.prefix(80))
-        }
-        return "<unencodable BusOutbound>"
+        try await sendRaw(message)
     }
 
     /// Raw outbound path — bypasses the armed-state gate. Used by:
@@ -310,18 +247,15 @@ public final class WebviewBridge: NSObject {
     /// directly — this is the cleanest idiomatic seam for testing an
     /// actor-ish class.
     func handleHelloAck(_ jsVersion: String) {
-        BusBootDiag.info("WebviewBridge.handleHelloAck: jsVersion=\(jsVersion) swiftVersion=\(BUS_PROTOCOL_VERSION)")
         timeoutTask?.cancel()
         timeoutTask = nil
 
         if jsVersion == BUS_PROTOCOL_VERSION {
             handshakeState = .armed
-            BusBootDiag.info("WebviewBridge.handleHelloAck: state -> .armed, calling onHandshakeArmed")
             logger.info("bus handshake armed at v\(jsVersion)")
             onHandshakeArmed?()
         } else {
             handshakeState = .mismatched(swift: BUS_PROTOCOL_VERSION, js: jsVersion)
-            BusBootDiag.error("WebviewBridge.handleHelloAck: state -> .mismatched (swift=\(BUS_PROTOCOL_VERSION), js=\(jsVersion))")
             logger.critical("bus handshake mismatch: swift=\(BUS_PROTOCOL_VERSION) js=\(jsVersion)")
             alertPresenter(
                 "Jarvis HUD couldn't start",
