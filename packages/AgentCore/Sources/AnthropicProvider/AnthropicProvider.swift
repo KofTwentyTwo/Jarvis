@@ -171,6 +171,8 @@ public actor AnthropicProvider: LLMProvider {
                 return
             }
 
+            let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? -1
+
             // Check HTTP status. Non-2xx → drain body, emit providerError, finish.
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 var bodyBuffer = Data()
@@ -184,6 +186,13 @@ public actor AnthropicProvider: LLMProvider {
                     // Ignore — we already have the status code.
                 }
                 let bodyString = String(data: bodyBuffer, encoding: .utf8) ?? ""
+                let outcome = StreamOutcome(
+                    httpStatus: http.statusCode,
+                    bytesRead: bodyBuffer.count,
+                    framesParsed: 0,
+                    messageStopSeen: false
+                )
+                log.info("AnthropicProvider stream outcome: \(outcome.summary, privacy: .public)")
                 continuation.yield(.providerError(.api(
                     statusCode: http.statusCode,
                     body: bodyString
@@ -192,12 +201,18 @@ public actor AnthropicProvider: LLMProvider {
                 return
             }
 
-            // Wire SSELineReader → SSEDecoder.
+            // Wire SSELineReader → SSEDecoder. Count frames so the
+            // post-stream `StreamOutcome` log line tells production triage
+            // whether the failure was 200+0-frames (cache_control class) vs
+            // 200+frames+early-EOF (mid-stream drop). Closes the diagnostic
+            // gap from the 2026-05-03 audit. Coverage: StreamOutcomeTests.
             let reader = SSELineReader(bytes: bytes)
             var state = SSEDecoder.State()
+            var framesParsed = 0
             do {
                 for try await frame in reader.frames() {
                     if Task.isCancelled { break }
+                    framesParsed += 1
                     SSEDecoder.dispatch(frame: frame, state: &state) { event in
                         continuation.yield(event)
                     }
@@ -209,6 +224,17 @@ public actor AnthropicProvider: LLMProvider {
                         continuation.yield(event)
                     }
                 }
+                let outcome = StreamOutcome(
+                    httpStatus: httpStatus,
+                    // Bytes counter is best-effort; SSELineReader consumes
+                    // the byte stream internally. framesParsed is the
+                    // load-bearing diagnostic — bytesRead==0 here means
+                    // "we don't measure it" rather than "literally zero".
+                    bytesRead: framesParsed > 0 ? -1 : 0,
+                    framesParsed: framesParsed,
+                    messageStopSeen: state.messageStopEmitted
+                )
+                log.info("AnthropicProvider stream outcome: \(outcome.summary, privacy: .public)")
                 continuation.finish()
             } catch {
                 log.error("SSE read error: \(error.localizedDescription, privacy: .public)")

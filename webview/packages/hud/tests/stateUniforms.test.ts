@@ -28,7 +28,13 @@ const TABLE: Array<{
 }> = [
   { state: 'booting', pulse: 0.3, rotate: 0.1, color: '#6b7280' },
   { state: 'reconfiguring', pulse: 0.8, rotate: 0.3, color: '#F59E0B' },
-  { state: 'idle', pulse: 0.0, rotate: 0.0, color: 'theme' },
+  // 2026-05-03 audit fix: idle state was pulse:0.0 / rotate:0.0, which made
+  // the rings render as static dots in production. The previous table value
+  // was a unit-test-locked-in bug (the visible STANDBY screen showed dots,
+  // not animated rings). Restored to a gentle ambient (pulse 0.4, rotate
+  // 0.05) — distinct from booting (faster rotate) and from thinking
+  // (much higher pulse). Cross-ref: .planning/audit-2026-05-03/hud-audit.md.
+  { state: 'idle', pulse: 0.4, rotate: 0.05, color: 'theme' },
   { state: 'thinking', pulse: 1.5, rotate: 1.0, color: 'theme' },
   { state: 'listening', pulse: 3.0, rotate: 0.0, color: 'theme' },
   { state: 'speaking', pulse: 2.0, rotate: 0.2, color: 'theme' },
@@ -101,6 +107,17 @@ describe('stateUniforms', () => {
     expect(got.r).toBeCloseTo(0x6b / 255)
     expect(got.g).toBeCloseTo(0x72 / 255)
     expect(got.b).toBeCloseTo(0x80 / 255)
+  })
+
+  // U7 — regression guard for the 2026-05-03 audit finding: every animated
+  // state must have non-zero pulse OR non-zero rotate. (`booting` shows the
+  // pattern: pulse 0.3 + rotate 0.1.) An all-zero state renders as static
+  // dots, which is what produced the F-A1-01 "rings static at STANDBY"
+  // screen. This test fails fast if anyone accidentally re-zeros a state.
+  it.each(ALL_STATES)('STATE_PARAMS[%s] is not all-static', (state) => {
+    const params = STATE_PARAMS[state]
+    const isAnimated = params.pulse > 0 || params.rotate > 0
+    expect(isAnimated).toBe(true)
   })
 
   // U6

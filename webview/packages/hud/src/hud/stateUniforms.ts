@@ -27,7 +27,12 @@ export const STATE_PARAMS: Record<HudState, StateParams> = {
     color: '#F59E0B',
     densityMod: 'gaps',
   },
-  idle: { pulse: 0.0, rotate: 0.0, color: 'theme', densityMod: 'none' },
+  // 2026-05-03 audit fix: was pulse:0.0 / rotate:0.0 — the all-static
+  // configuration that rendered the STANDBY screen as dots instead of
+  // animated rings (F-A1-01). Gentle ambient now: distinct from booting
+  // (slower rotate, similar pulse) and from thinking (much higher pulse).
+  // See .planning/audit-2026-05-03/hud-audit.md.
+  idle: { pulse: 0.4, rotate: 0.05, color: 'theme', densityMod: 'none' },
   thinking: { pulse: 1.5, rotate: 1.0, color: 'theme', densityMod: 'none' },
   listening: {
     pulse: 3.0,

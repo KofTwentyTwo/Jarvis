@@ -271,6 +271,17 @@ public actor AgentOrchestrator {
             LLMMessage(role: .user, content: [.text(input.userText)]),
         ]
 
+        // Phase E (2026-05-03 audit fix): gate `extended1h` cache hints on
+        // system-prompt size. Anthropic returns 200 OK + immediate-EOF for
+        // extended-cache-ttl markers below the cache breakpoint (~1024
+        // tokens for Opus 4.7). The orchestrator's default system prompt
+        // is ~10 tokens; passing the hint unconditionally produced
+        // streamTruncatedFinal on every chat submit. Once memory hydration
+        // / presence enrichment grows the prompt past the threshold, the
+        // hint resumes automatically. Coverage:
+        // CacheHintsEligibilityTests + RequestBodyTests R5a/R5b.
+        let cacheHintsForThisTurn = CacheHints.eligibleForSystemPrompt(finalSystem)
+
         await events.send(.stateChange(.thinking))
 
         // Strong self capture: the orchestrator owns the task; the task lives
@@ -283,7 +294,8 @@ public actor AgentOrchestrator {
                 perTurn: perTurn,
                 wrapper: wrapper,
                 input: input,
-                t2AvailableForThisTurn: t2AvailableForThisTurn
+                t2AvailableForThisTurn: t2AvailableForThisTurn,
+                cacheHints: cacheHintsForThisTurn
             )
         }
 
@@ -304,7 +316,8 @@ public actor AgentOrchestrator {
         perTurn: PerTurnSnapshot,
         wrapper: UntrustedWrapper,
         input: TurnInput,
-        t2AvailableForThisTurn: Bool
+        t2AvailableForThisTurn: Bool,
+        cacheHints: CacheHints?
     ) async {
         // `source` was a parameter prior to Plan 09-02; it's now derived from
         // `input.source` to match the AGENT-09 retry path (which still
@@ -348,7 +361,7 @@ public actor AgentOrchestrator {
                     toolChoice: toolChoice,
                     model: modelIDFor(currentPerTurn.resolvedProvider),
                     maxOutputTokens: currentPerTurn.maxOutputTokens(),
-                    cacheHints: CacheHints(systemPromptTTL: .extended1h)
+                    cacheHints: cacheHints
                 )
             } else {
                 stream = currentProvider.stream(
@@ -357,7 +370,7 @@ public actor AgentOrchestrator {
                     toolChoice: toolChoice,
                     model: modelIDFor(currentPerTurn.resolvedProvider),
                     maxOutputTokens: currentPerTurn.maxOutputTokens(),
-                    cacheHints: CacheHints(systemPromptTTL: .extended1h)
+                    cacheHints: cacheHints
                 )
             }
 

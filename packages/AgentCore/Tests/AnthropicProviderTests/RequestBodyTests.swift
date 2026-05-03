@@ -60,6 +60,62 @@ final class RequestBodyTests: XCTestCase {
                        "5m is the default — no cache_control marker")
     }
 
+    // MARK: - R5: cache eligibility integration with encoder
+
+    /// R5a — 2026-05-03 audit fix integration. The orchestrator passes
+    /// `CacheHints.eligibleForSystemPrompt(prompt)` so a sub-1024-token
+    /// prompt gates to nil. Verify the encoder produces the same body
+    /// shape as the no-hints case for that nil. Without this gate,
+    /// every chat submit produces 200 OK + immediate-EOF on the
+    /// `extended-cache-ttl` path (`streamTruncatedFinal`).
+    func testEligibilityGate_smallSystemPrompt_emitsNoCacheControl() throws {
+        let smallPrompt = "You are Jarvis, a personal macOS assistant."
+        let hints = CacheHints.eligibleForSystemPrompt(smallPrompt)
+        XCTAssertNil(hints, "precondition for the integration test")
+
+        let body = try RequestBody.encode(
+            messages: [
+                LLMMessage(role: .system, content: [.text(smallPrompt)]),
+                LLMMessage(role: .user, content: [.text("hi")]),
+            ],
+            tools: [],
+            toolChoice: .auto,
+            model: .opus47,
+            maxOutputTokens: 1024,
+            cacheHints: hints
+        )
+        let str = String(data: body, encoding: .utf8) ?? ""
+        XCTAssertFalse(
+            str.contains("cache_control"),
+            "small prompt + eligibility-gated hints MUST produce a request body free of cache_control"
+        )
+        XCTAssertFalse(str.contains("\"ttl\":\"1h\""))
+    }
+
+    /// R5b — large prompt passes the gate; cache_control is emitted as
+    /// before. Locks in the positive path so we don't accidentally suppress
+    /// caching when it would actually help.
+    func testEligibilityGate_largeSystemPrompt_emitsCacheControl() throws {
+        let largePrompt = String(repeating: "x", count: 4096)
+        let hints = CacheHints.eligibleForSystemPrompt(largePrompt)
+        XCTAssertNotNil(hints)
+
+        let body = try RequestBody.encode(
+            messages: [
+                LLMMessage(role: .system, content: [.text(largePrompt)]),
+                LLMMessage(role: .user, content: [.text("hi")]),
+            ],
+            tools: [],
+            toolChoice: .auto,
+            model: .opus47,
+            maxOutputTokens: 1024,
+            cacheHints: hints
+        )
+        let str = String(data: body, encoding: .utf8) ?? ""
+        XCTAssertTrue(str.contains("\"ttl\":\"1h\""))
+        XCTAssertTrue(str.contains("\"type\":\"ephemeral\""))
+    }
+
     // MARK: - R3 + R4: tool_choice serialization
 
     func testToolChoiceNoneSerialization() throws {

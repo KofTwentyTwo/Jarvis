@@ -882,9 +882,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             selection in
             switch selection {
             case .anthropic:
-                return AnthropicProvider(apiKeyProvider: { @Sendable in
-                    (try? keychainStoreLocal.get(.anthropic)) ?? ""
-                })
+                // Phase E (2026-05-03 audit fix): use the propagating
+                // builder so a real KeychainError surfaces as
+                // `LLMProviderError.transport(...)` and reaches the chat
+                // panel via BusForwarder. The previous `(try? get) ?? ""`
+                // pattern silently substituted an empty `x-api-key` header
+                // and made auth failures indistinguishable from a stale
+                // key — the user only saw `streamTruncatedFinal` after
+                // Anthropic's 401 → SSE EOF cascade.
+                // Coverage: AnthropicAPIKeyProviderTests.
+                return AnthropicProvider(
+                    apiKeyProvider: AnthropicAPIKeyProvider.make(keychain: keychainStoreLocal)
+                )
             case .ollama:
                 return OllamaProvider(baseURL: URL(string: "http://127.0.0.1:11434")!)
             }
@@ -1314,9 +1323,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let t1 = OllamaProvider(baseURL: URL(string: "http://127.0.0.1:11434")!)
         let t3: any LLMProvider
         let keychainStoreLocal = self.keychainStore
-        t3 = AnthropicProvider(apiKeyProvider: { [keychainStoreLocal] in
-            (try? keychainStoreLocal.get(.anthropic)) ?? ""
-        })
+        // Phase E (2026-05-03 audit fix): see installAgent for rationale.
+        // Same propagating builder used here so vision turns also surface
+        // KeychainError instead of silently sending an empty x-api-key.
+        t3 = AnthropicProvider(
+            apiKeyProvider: AnthropicAPIKeyProvider.make(keychain: keychainStoreLocal)
+        )
         let router = VisionRouter(
             t1Provider: t1,
             t2Provider: t1,                  // sidecar plan pending — T2 reuses T1 provider
