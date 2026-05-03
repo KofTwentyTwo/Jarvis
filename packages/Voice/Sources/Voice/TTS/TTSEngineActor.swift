@@ -33,7 +33,7 @@ public actor TTSEngineActor {
 
     // MARK: - Private state
 
-    private let orpheus: OrpheusTTS
+    private let orpheus: OrpheusTTS?
     private let tier1: AVSpeechSynth
     private let fallback: TTSKitFallback?
 
@@ -50,11 +50,23 @@ public actor TTSEngineActor {
 
     /// Create a `TTSEngineActor`.
     ///
+    /// Track B-3 (2026-05-03 voice audit fix): `orpheus` is now optional.
+    /// The previous non-optional contract forced production callers to
+    /// download Orpheus 3B weights from HuggingFace at first launch
+    /// (~6GB) before any TTS could happen. Result: no production code
+    /// path ever constructed a `TTSEngineActor`, and
+    /// `VoiceTTSAdapter(engine: nil)` no-op'd every synthesis call —
+    /// users never heard Jarvis speak. With orpheus as optional, tier-1
+    /// (`AVSpeechSynthesizer`, instant, free) wires alone; tier-2
+    /// requests gracefully fall back to tier-1 when Orpheus is absent.
+    /// Coverage: `TTSEngineActorTier1Tests`.
+    ///
     /// - Parameters:
     ///   - orpheus: The tier-2 Orpheus actor (serial executor prevents Metal deadlock).
+    ///     Pass `nil` to wire tier-1 only — tier-2 calls degrade to tier-1.
     ///   - tier1: The tier-1 AVSpeechSynth wrapper.
     ///   - fallback: Optional TTSKit fallback (feature-flag gated; nil = disabled).
-    public init(orpheus: OrpheusTTS, tier1: AVSpeechSynth, fallback: TTSKitFallback?) {
+    public init(orpheus: OrpheusTTS?, tier1: AVSpeechSynth, fallback: TTSKitFallback?) {
         self.orpheus = orpheus
         self.tier1 = tier1
         self.fallback = fallback
@@ -93,8 +105,18 @@ public actor TTSEngineActor {
         let tier1Copy = tier1
         let fallbackCopy = fallback
 
+        // Graceful degrade: if tier-2 is requested but Orpheus is not
+        // wired (Track B-3 audit fix — production wiring previously
+        // never constructed Orpheus due to ~6GB weight download), fall
+        // back to tier-1 silently. The user hears Jarvis through
+        // AVSpeechSynthesizer instead of Orpheus; voice character
+        // degrades but the app speaks.
+        let resolvedTier: TTSTier = (tier == .tier2 && orpheus == nil)
+            ? .tier1
+            : tier
+
         let task: Task<Void, Error> = Task {
-            switch tier {
+            switch resolvedTier {
             case .tier1:
                 let avVoice = AVSpeechSynthesisVoice(identifier: voice)
                     ?? AVSpeechSynthesisVoice(language: voice)
@@ -103,6 +125,12 @@ public actor TTSEngineActor {
                 cont.yield(.finished)
 
             case .tier2:
+                guard let orpheusActor = orpheusCopy else {
+                    // Defensive: resolvedTier above should have rerouted
+                    // tier-2-without-orpheus to tier-1. If we reach here
+                    // somehow, throw rather than force-unwrap.
+                    throw TTSError.sinkUnavailable
+                }
                 // Build a temporary sink for this synthesis.
                 // In production (Plan 06-05), the sink is owned by AudioGraphOwner.
                 let engine = AVAudioEngine()
@@ -123,7 +151,7 @@ public actor TTSEngineActor {
 
                 // Actor-to-actor call: TTSEngineActor → OrpheusTTS.synthesize
                 // OrpheusTTS's serial executor prevents concurrent Metal kernel calls.
-                try await orpheusCopy.synthesize(text, voice: voice, into: sink) { firstAudioDate in
+                try await orpheusActor.synthesize(text, voice: voice, into: sink) { firstAudioDate in
                     cont.yield(.firstAudio(at: firstAudioDate))
                 }
                 cont.yield(.finished)
@@ -168,7 +196,7 @@ public actor TTSEngineActor {
 
         // Fire both cancellations concurrently, then wait.
         taskToCancel?.cancel()
-        await orpheus.cancel()
+        if let orpheus { await orpheus.cancel() }
         _ = try? await taskToCancel?.value
     }
 }

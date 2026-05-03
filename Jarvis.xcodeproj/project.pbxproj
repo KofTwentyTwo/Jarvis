@@ -21,6 +21,7 @@
 		2C4F2BE06A3AC37B492486DD /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7557878944CE73793FEA61CF /* SettingsWindowController.swift */; };
 		339AAD7A8C3E4A6AF4825F0D /* VoiceTTSAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718CFD37BC47D00448B86C8D /* VoiceTTSAdapter.swift */; };
 		3649FFF2495A8C4DDDB3B65B /* Voice in Frameworks */ = {isa = PBXBuildFile; productRef = 254100776001B345FD91877C /* Voice */; };
+		38E9EAF5506E27D6D47B1F52 /* VoiceOutputWiring.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24DBC3C9C1B4A6BE1326CB2 /* VoiceOutputWiring.swift */; };
 		3A6BFB4974C5891335CD12D5 /* Voice in Frameworks */ = {isa = PBXBuildFile; productRef = F8C32F1B64110815E54CFE4F /* Voice */; };
 		461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */; };
 		4DF8C0C925F0D09AE39F3380 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = B97DB4370CDF8433823F370C /* MCP */; };
@@ -204,6 +205,7 @@
 		D5077B9E3E7541D72CE0EB1B /* MCPAppleScriptMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPAppleScriptMain.swift; sourceTree = "<group>"; };
 		D554BFB452EC88ECA9392A2E /* PasteboardReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardReader.swift; sourceTree = "<group>"; };
 		DE712EB628AF5CD6E935E8AF /* HudStateCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinator.swift; sourceTree = "<group>"; };
+		E24DBC3C9C1B4A6BE1326CB2 /* VoiceOutputWiring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceOutputWiring.swift; sourceTree = "<group>"; };
 		E5B2103B1A123E512CC56B63 /* WizardState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardState.swift; sourceTree = "<group>"; };
 		E9CF7C158A5A7699A9CA32DE /* mcp-clipboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mcp-clipboard.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2EA89B09E63D9954B6EA5A4 /* Jarvis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jarvis.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -477,6 +479,7 @@
 				A8329406FB8C3A6F017CB832 /* RejectReasonCopy.swift */,
 				1C47026AC23B268604965C5C /* VoiceBusEmitterAdapter.swift */,
 				590D5A359A5C3E915D274436 /* VoiceOrchestratorAdapter.swift */,
+				E24DBC3C9C1B4A6BE1326CB2 /* VoiceOutputWiring.swift */,
 				718CFD37BC47D00448B86C8D /* VoiceTTSAdapter.swift */,
 			);
 			path = Voice;
@@ -604,6 +607,7 @@
 				E0992BE4761F337F2AC5BF62 /* Sources */,
 				C593366D9BBD0DC5F45EA023 /* Resources */,
 				886D43D159942AB5C149B33B /* Frameworks */,
+				F77FB129C80991128E902F70 /* Copy voice models into Contents/Resources/Models/ */,
 				DD1590A06D57152C1B673573 /* Create Contents/Helpers directory */,
 				45D1C390727A1C150595B1D8 /* Copy MCP helpers into Contents/Helpers/ */,
 				318A7B75FBCC334BEF639033 /* Verify entitlements (pre-codesign) */,
@@ -1175,6 +1179,25 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/scripts/check-presence-vision-isolation.sh\"\n";
 		};
+		F77FB129C80991128E902F70 /* Copy voice models into Contents/Resources/Models/ */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy voice models into Contents/Resources/Models/";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/copy-voice-models.sh\"\n";
+		};
 		F902CE3B015FE94FD67700D8 /* Verify entitlements (post-codesign) */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -1286,6 +1309,7 @@
 				2C4F2BE06A3AC37B492486DD /* SettingsWindowController.swift in Sources */,
 				8684EF1EAC5D350C2CCAB3CF /* VoiceBusEmitterAdapter.swift in Sources */,
 				B8F411ADE70402B71887E377 /* VoiceOrchestratorAdapter.swift in Sources */,
+				38E9EAF5506E27D6D47B1F52 /* VoiceOutputWiring.swift in Sources */,
 				339AAD7A8C3E4A6AF4825F0D /* VoiceTTSAdapter.swift in Sources */,
 				2BCA466CFD785F3BC989C35F /* WizardStageAPIKeyView.swift in Sources */,
 				E49FEEFE453A055F65DA31FF /* WizardStageHotkeyView.swift in Sources */,

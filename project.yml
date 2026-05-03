@@ -306,6 +306,24 @@ targets:
     # Code Sign On Copy is NOT enabled anywhere — codesign.sh's deepest-first
     # walker is the authoritative signer, preserving per-helper entitlements.
     postBuildScripts:
+      - name: Copy voice models into Contents/Resources/Models/
+        # Plan 06-05 (Track B-1, 2026-05-03 audit fix): the voice subsystem
+        # reads ONNX models from `Contents/Resources/Models/` (capital M)
+        # in `AppDelegate.installVoice` (line 653). On disk, the canonical
+        # path is the repo-root `Resources/models/` (lowercase). project.yml
+        # had no copy phase wiring the two together, so the built .app
+        # bundle's `Contents/Resources/` had ZERO .onnx files and every
+        # cold launch logged `OpenWakeWordSession init failed (models
+        # absent?)`. This phase runs `scripts/copy-voice-models.sh` which
+        # does the canonical-path-to-runtime-path mapping (also corrects
+        # `openwakeword` → `openWakeWord` capitalization). The script
+        # gates on MANIFEST.json sha256 not being a `PLACEHOLDER_…` value
+        # so a forgotten `scripts/fetch-silero-models.sh` is a hard build
+        # error, not a silent runtime failure.
+        script: |
+          "${SRCROOT}/scripts/copy-voice-models.sh"
+        runOnlyWhenInstalling: false
+        basedOnDependencyAnalysis: false
       - name: Create Contents/Helpers directory
         script: |
           mkdir -p "${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Contents/Helpers"

@@ -4,12 +4,12 @@
     "silero_vad.onnx": {
       "description": "Silero VAD v6.2.1 opset-16 model",
       "url": "https://github.com/snakers4/silero-vad/raw/v6.2.1/src/silero_vad/data/silero_vad.onnx",
-      "sha256": "PLACEHOLDER_run_scripts_fetch-silero-models.sh_to_populate"
+      "sha256": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
     },
     "silero_vad_16k_op15.onnx": {
       "description": "Silero VAD v6.2.1 opset-15 fallback for older ORT runtimes",
       "url": "https://github.com/snakers4/silero-vad/raw/v6.2.1/src/silero_vad/data/silero_vad_16k_op15.onnx",
-      "sha256": "PLACEHOLDER_run_scripts_fetch-silero-models.sh_to_populate"
+      "sha256": "7ed98ddbad84ccac4cd0aeb3099049280713df825c610a8ed34543318f1b2c49"
     }
   },
   "chunk_contract": {

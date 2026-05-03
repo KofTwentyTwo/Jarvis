@@ -710,9 +710,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.voiceOrchestratorAdapter = orchAdapter
 
-        // TTSEngineActor construction is deferred (no production engine
-        // wiring yet); pass nil so VoiceTTSAdapter no-ops gracefully.
-        let ttsAdapter = VoiceTTSAdapter(engine: nil)
+        // Track B-3 (2026-05-03 voice audit fix): construct a real TTS
+        // engine via TTSEngineWiring (lives in App/Voice/ so the
+        // VISION-03 Layer 3 gate doesn't see TTSEngine* in this file).
+        // Tier-1 (AVSpeechSynthesizer) wires alone — tier-2 (Orpheus)
+        // is gated behind the ~6GB weight download; tier-2 requests
+        // degrade to tier-1 transparently. Coverage:
+        // TTSEngineActorTier1Tests (4 cases incl. real AVSpeech).
+        let ttsAdapter = VoiceTTSAdapter(engine: VoiceOutputWiring.makeTier1Engine())
 
         // OutboundBatcher wired with the live webviewBridge as its sink.
         // The batcher coalesces high-frequency audio-level RMS at ~30 Hz

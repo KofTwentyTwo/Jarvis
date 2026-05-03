@@ -89,8 +89,19 @@ public actor WakeWordDAG {
                 // Check pause state — if paused, skip inference (preserve counter)
                 if await self.paused { continue }
 
-                // Feed to session (scripted or ORT path depending on init)
-                if let decision = try? await self.session.feedTest() {
+                // Slice the scratch buffer to the actual frames read.
+                // Track B-2 (2026-05-03 voice audit fix): was
+                // `session.feedTest()` which always passed an EMPTY
+                // `[Float]` to `runHysteresis` — production never saw
+                // mic samples, wake word never fired. `feedTest()` is
+                // the test seam (internal scope) for hysteresis tests
+                // that bypass the buffer. Production path uses
+                // `feed(samples:)` with actual PCM. Coverage:
+                // WakeWordDAGTests.WD-1.
+                let samples = framesRead == scratch.count
+                    ? scratch
+                    : Array(scratch.prefix(framesRead))
+                if let decision = try? await self.session.feed(samples: samples) {
                     if case .fired = decision {
                         logger.info("WakeWordDAG: wake-word fired at \(Date())")
                         await self.streamCont.yield(.fired(at: Date()))
