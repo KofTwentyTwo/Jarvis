@@ -145,6 +145,44 @@ blockers + confirmed the known C1, plus two warnings. Full report:
 - **Where:** `packages/Bus/Sources/Bus/BusOutbound.swift:25` declares the case; webview decoder ready; no production caller.
 - **Severity rationale:** 🟡 — pairs with the chat-input fix; once chat works, history hydration on `webviewReady` is the next missing wire.
 
+### Phase E follow-on findings (2026-05-03 INT-3 smoke session)
+
+These were uncovered while smoke-testing INT-3. Each is a **pre-existing latent bug** that the v0.12.0 unit-level GSD verifications missed because the audit was source-grep, not runtime-trace. All three are now fixed AND have unit-level coverage that would have caught the regression.
+
+#### F-E-RACE-1 ✅ `installAgent` lost the race against MCPRuntime build (FIXED)
+
+- **Where:** `App/AppDelegate.swift:applicationWillFinishLaunching` — `agentInstallTask` awaited `memoryInstallTask` + `visionInstallTask` but NOT the MCP runtime build task.
+- **What:** MCPRuntime build is ~1s due to helper child-process spawn (mcp-time / mcp-clipboard / mcp-applescript). `installAgent` short-circuits on `mcpRuntime == nil` with the warning `"installAgent: deps not ready (mcp/replay/config) — skipping"`. Every cold launch logged this warning followed by `MCPRuntime built — N tools` ~900ms later, leaving the orchestrator + broadcaster + ALL six broadcaster subscribers dormant for the entire process lifetime.
+- **Symptom:** user-typed text dropped with `"handleChatSubmit: agentOrchestrator nil — dropping submission"`. v0.12.0 milestone audit said "5 broadcaster subscribers wired" — accurate at source-grep level, false at runtime.
+- **Fix:** captured `mcpInstallTask` Task handle and added `await mcpInstallTask?.value` to `agentInstallTask`'s await chain.
+- **Why milestone audit missed it:** static cross-tree grep cannot see Task ordering. The boundary gates are similarly blind. The fix for the bug class itself is F1 (top-level integration tests that cold-launch the app and assert one text turn round-trips).
+
+#### F-E-FK-1 ✅ `installAgent` never called `replayLog.beginSession` (FIXED)
+
+- **Where:** `App/AppDelegate.swift:installAgent` constructed the orchestrator with `sessionId: SessionID.fresh()` but never inserted that ID into `sessions`.
+- **What:** Every `replayLog.startTurn` violated the FK `turns.session_id REFERENCES sessions(session_id)` and threw. The orchestrator caught the throw at `AgentOrchestrator.swift:241` and returned `SubmitOutcome.rejected(reason: .configError)` for every text turn — surfacing in the chat panel as "Config error — see ~/Library/Logs/Jarvis/system.log."
+- **Symptom:** when the orchestrator IS finally wired (after F-E-RACE-1), every chat submit is rejected with configError. SQLite confirms: `SELECT COUNT(*) FROM sessions; -- 0`.
+- **Fix:** `installAgent` now calls `try await replayLog.beginSession(appVersion:, buildSHA:)` and passes the returned `SessionID` to the orchestrator.
+- **Test added:** `packages/Replay/Tests/ReplayTests/SessionForeignKeyTests.swift` — 3 cases (FK1: startTurn-without-beginSession-throws; FK2: startTurn-after-beginSession-succeeds; FK3: multiple-startTurns-share-one-session). Closes the bug class regardless of any future AppDelegate refactor.
+
+#### F-E-WIRE-1 ✅ `OutboundBatcher` constructed only inside `installVoice` (FIXED)
+
+- **Where:** `App/AppDelegate.swift:installVoice` constructed the OutboundBatcher only AFTER OpenWakeWord/Silero models loaded successfully. Voice DAG short-circuit (missing model files in Debug builds) left `self.outboundBatcher == nil`.
+- **What:** every `outboundBatcher?.flushAndSend(...)` chained-optional in the .bus subscriber silently dropped tokenDelta / turnStarted / turnEnded / submitRejected. The chat panel got nothing back from the orchestrator even after F-E-RACE-1 + F-E-FK-1 were both fixed.
+- **Fix:** hoisted batcher construction into `installAgent` (only depends on `webviewBridge`, not voice models). `installVoice` now reuses `self.outboundBatcher` rather than overwriting.
+
+### Refactor: BusForwarder extracted to AgentOrchestrator + unit-tested (this session)
+
+- **Why:** the prior bus subscriber lived inline in `App/AppDelegate.swift`. The App target's xctest harness is upstream-broken on Xcode 26 (`scripts/check-app-builds.sh` is a build-only gate), so the inline subscriber's translation logic — including the StopReason → TurnTerminator mapping, turnStarted synthesis, error → submitRejected forwarding — had ZERO test coverage. The 2026-05-03 smoke session showed this empirically: every fix to the inline subscriber required relaunching the app and typing in the chat input, which the user vetoed mid-session.
+- **What:** `packages/AgentCore/Sources/AgentOrchestrator/BusForwarder.swift` now owns the translation rules. `BusForwarderSink` protocol is the boundary. App provides `AppBusForwarderSink` (5-line file: translates `BusForwarder.Terminator` to wire-format `Bus.TurnTerminator`, dispatches across `OutboundBatcher` actor).
+- **Tests added:** `packages/AgentCore/Tests/AgentOrchestratorTests/BusForwarderTests.swift` — 16 cases: terminator mapping (5 — exhaustive on `StopReason`), tokenDelta forwarding (3 — synthesize start, dedupe start across same-turn deltas, two-turn handoff), turnEnd forwarding (4 — mapped terminator, synthesize-start-on-bare-turnEnd, streamTruncated→errored, state reset), error forwarding (2 — submitRejected emission, no spurious lifecycle), ignored-events (1 — stateChange/thinkingDelta/usage/toolCardUpdate are no-ops), malformed-id guard (1).
+- **Verification:** AgentCore 194/194; Replay 33/33; Bus 55/56 (F-A2-01 pre-existing); all 15 boundary gates PASS; `scripts/check-app-builds.sh` PASS.
+
+### Carry-forward (NOT closed this session)
+
+- **streamTruncatedFinal cause unknown.** Anthropic returns 200 OK + SSE that EOFs before `message_stop`, twice (retry then final). HTTP 401 / network drop / model name issues all rule out via `curl` reproduction against the same endpoint with same headers. Likely API key in Keychain is malformed or stale. Cannot read Keychain to confirm without escalated permission. Suggested next step: add a one-time HTTP-status diagnostic log to `AnthropicProvider` (gated behind a feature flag), or re-enter the API key via the Settings panel.
+- **F1 #2 chat-turn integration test.** The unit tests added this session cover Swift-side and JS-side logic individually. A real-WKWebView end-to-end test (mount the bundle, submit text from JS, assert tokenDelta reaches the page) would catch any future cross-layer regression in the chain. Separate scope.
+
 ### B3 — `/gsd-validate-phase 1..9` (DEFERRED)
 
 Per Phase E priority: blockers first, Nyquist coverage fill is downstream of fix loop. Will be re-spawned after blockers close.

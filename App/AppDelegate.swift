@@ -134,6 +134,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// lifetime of the process.
     var mcpRuntime: MCPRuntime?
 
+    /// Task spawned in `applicationWillFinishLaunching` that builds the
+    /// MCPRuntime. Held so `agentInstallTask` can await it before
+    /// `installAgent()` runs — without this, MCPRuntime build (which is
+    /// ~1s due to helper child-process spawn) consistently loses the
+    /// race against `installAgent`'s `mcpRuntime != nil` precondition,
+    /// silently skipping orchestrator install on every launch. Verified
+    /// via system log: `installAgent: deps not ready (mcp/replay/config)
+    /// — skipping` precedes `MCPRuntime built — N tools` by ~900 ms
+    /// every cold launch, leaving the orchestrator + broadcaster + every
+    /// downstream subscriber dormant for the process lifetime.
+    private var mcpInstallTask: Task<Void, Never>?
+
     /// Drain task spawned in `applicationWillFinishLaunching` — reads
     /// envelopes from `orchToReplayChannel` and forwards to `replayLog`.
     /// CR-02: production consumer for ME-04. Previously this task
@@ -470,7 +482,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //     non-fatal — we log and proceed without MCP, the same way
         //     a missing API key proceeds without the agent.
         let bundleURL = Bundle.main.bundleURL
-        Task { @MainActor [weak self] in
+        mcpInstallTask = Task { @MainActor [weak self] in
             guard let self = self, let channel = self.orchToReplayChannel else { return }
             let busAdapter = NoopBusGateway()  // CR-02: orchestrator wiring (later plan) replaces with real bus adapter.
             do {
@@ -524,9 +536,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //     can pass `visionRouter:` and `frameAttachController` (both set
         //     by installVision) into the orchestrator constructor + the
         //     broadcaster's frame-attach release subscriber.
+        //
+        //     Phase E follow-up (this commit): also awaits `mcpInstallTask`.
+        //     `installAgent` requires `self.mcpRuntime != nil` and silently
+        //     short-circuits otherwise. MCP runtime build is ~1s due to
+        //     helper child-process spawn (mcp-time / mcp-clipboard /
+        //     mcp-applescript), which consistently lost the race against
+        //     installAgent on every cold launch — every system log to date
+        //     shows `installAgent: deps not ready — skipping` precede
+        //     `MCPRuntime built` by ~900 ms, leaving the orchestrator +
+        //     broadcaster + ALL six broadcaster subscribers dormant for the
+        //     process lifetime. Audited only via static source grep, so the
+        //     milestone-audit findings of "5 subscribers wired" in
+        //     v0.12.0-MILESTONE-AUDIT.md were structurally correct but
+        //     runtime-false until this gate lands.
         agentInstallTask = Task { @MainActor [weak self] in
             await self?.memoryInstallTask?.value
             await self?.visionInstallTask?.value
+            await self?.mcpInstallTask?.value
             await self?.installAgent()
         }
 
@@ -690,15 +717,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // OutboundBatcher wired with the live webviewBridge as its sink.
         // The batcher coalesces high-frequency audio-level RMS at ~30 Hz
         // before crossing the JS-call boundary.
+        //
+        // Phase E (2026-05-03): the batcher is now constructed in
+        // installAgent (so the .bus forwarder works even when voice DAG
+        // short-circuits on missing models). Reuse it here. If installAgent
+        // also failed to set it (no webviewBridge), fall back to the
+        // dormant emitter so audio-level still degrades gracefully.
         let busAdapter: any BusOutboundEmitter
-        if let bridge = self.webviewBridge {
-            let batcher = OutboundBatcher(sink: bridge)
-            self.outboundBatcher = batcher
+        if let batcher = self.outboundBatcher {
             busAdapter = VoiceBusEmitterAdapter(batcher: batcher)
         } else {
-            // No bridge yet — voice still installs but audio-level emissions
-            // are dropped. The dormant case in tests / pre-handshake launch.
-            systemLogger?.warning("installVoice: webviewBridge nil — audio-level emissions dropped")
+            systemLogger?.warning("installVoice: outboundBatcher nil — audio-level emissions dropped")
             busAdapter = DormantVoiceBusEmitter()
         }
 
@@ -866,12 +895,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //    pre-stream branch + post-response escalation hook.
         //    Plan 09-03 (D-13/D-14) — passes `presenceSnapshot:` so runTurn
         //    can append ambient presence enrichment to the system prompt.
+        //
+        //    Phase E (2026-05-03 smoke test): also calls
+        //    `replayLog.beginSession(...)` to insert the parent row in the
+        //    `sessions` table. Without this, every `startTurn` violates the
+        //    `turns.session_id REFERENCES sessions(session_id)` FK and the
+        //    orchestrator returns `SubmitOutcome.rejected(reason:
+        //    .configError)` for every text turn — surfacing in the chat
+        //    panel as "Config error — see ~/Library/Logs/Jarvis/system.log."
+        //    Production code prior to this commit only ever called
+        //    `beginSession` from tests, so the sessions table was empty on
+        //    every cold launch and no turn could persist. App version + build
+        //    string come from Info.plist; if absent we fall back to "dev".
+        let info = Bundle.main.infoDictionary ?? [:]
+        let appVersion = info["CFBundleShortVersionString"] as? String ?? "dev"
+        let buildSHA = info["CFBundleVersion"] as? String ?? "dev"
+        let sessionId: SessionID
+        do {
+            sessionId = try await replayLog.beginSession(
+                appVersion: appVersion,
+                buildSHA: buildSHA
+            )
+        } catch {
+            systemLogger?.error(
+                "installAgent: replayLog.beginSession failed — turns will be rejected: \(String(describing: error))"
+            )
+            return
+        }
         let orchestrator = AgentOrchestrator(
             configStore: configStore,
             providerFactory: providerFactory,
             toolDispatcher: mcpRuntime.dispatcher,
             replayLog: replayLog,
-            sessionId: SessionID.fresh(),
+            sessionId: sessionId,
             systemPrompt: "You are Jarvis, a personal macOS assistant.",
             availableTools: [],
             visionRouter: self.visionRouter,
@@ -883,6 +939,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let broadcaster = OrchestratorEventBroadcaster(upstream: orchestrator.events)
         await broadcaster.start()
         self.eventBroadcaster = broadcaster
+
+        // Phase E (2026-05-03): hoist OutboundBatcher construction up out of
+        // `installVoice`. Previously the batcher was only built inside
+        // installVoice AFTER the OpenWakeWord/Silero models were loaded, so
+        // any voice-DAG short-circuit (missing model files in Debug builds)
+        // left `self.outboundBatcher == nil` for the whole process. Every
+        // `outboundBatcher?.flushAndSend(...)` chained-optional in the .bus
+        // subscriber then silently dropped tokenDelta / turnStarted /
+        // turnEnded / submitRejected — the chat panel got nothing back from
+        // the orchestrator. The batcher only needs the WebviewBridge as a
+        // sink (no voice models required), so it belongs here. installVoice
+        // now reuses `self.outboundBatcher` rather than constructing its
+        // own, keeping the single-sink invariant intact.
+        if self.outboundBatcher == nil, let bridge = self.webviewBridge {
+            self.outboundBatcher = OutboundBatcher(sink: bridge)
+        } else if self.webviewBridge == nil {
+            systemLogger?.warning("installAgent: webviewBridge nil — outboundBatcher not constructed; bus forwarder will drop events")
+        }
 
         let transcriptStore = TurnTranscriptStore()
         self.turnTranscriptStore = transcriptStore
@@ -1022,81 +1096,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 5f. Phase E (BLOCKER-INT-2 from v0.12.0-MILESTONE-AUDIT.md) —
         //     bus-forwarding subscriber. Drains the broadcaster's `.bus`
-        //     subscription and forwards `.tokenDelta` / `.turnEnd` into the
-        //     OutboundBatcher so the JS-side HUD chat panel receives
-        //     streaming tokens AND turn lifecycle events. Without this
-        //     subscriber, every orchestrator-emitted `.tokenDelta` is fanned
-        //     out to the other 5 subscribers (memory, transcript,
-        //     devOverlay, frameAttach, voice) but NEVER leaves Swift — the
-        //     chat panel renders an empty `chatEvents` array forever.
+        //     subscription via `BusForwarder.drain` (lives in AgentCore so
+        //     it's unit-testable; full per-branch coverage in
+        //     `BusForwarderTests.swift`). The sink below is the App-only
+        //     piece — translates BusForwarder's protocol-agnostic enum into
+        //     actual `BusOutbound` wire events through OutboundBatcher.
         //
-        //     **Why we synthesize `turnStarted` from the first tokenDelta of
-        //     a new turn id:** `OrchestratorEvent` does not carry an explicit
-        //     `turnStart` case (the start is implicit from the first per-turn
-        //     event). The JS-side bus dispatcher silently drops `tokenDelta`
-        //     when `currentTurnId === null`, so we MUST emit a `turnStarted`
-        //     before any tokens reach the page. Tracking `lastEmittedTurnId`
-        //     locally makes this stateful in the subscriber task without
-        //     touching the orchestrator's event surface.
-        //
-        //     **StopReason → TurnTerminator mapping:** the JS protocol
-        //     classifies turn outcomes more coarsely than the orchestrator;
-        //     `endTurn` / `toolUse` / `maxTokens` all collapse to
-        //     `.completed`, while `refusal` and `streamTruncated` collapse
-        //     to `.errored`. `cancelled` and `superseded` are reachable only
-        //     via cancellation paths the orchestrator does not yet emit; we
-        //     leave that mapping out until the cancel-and-submit flow
-        //     surfaces them.
-        //
-        //     `outboundBatcher` is constructed in installVoice (which runs
-        //     AFTER installAgent per the locked install order). Capture
-        //     `[weak self]` and dereference at event-receipt time so the
-        //     subscriber survives the construction-order skew.
-        //
-        //     `OutboundBatcher.postToken` itself coalesces tokens at ~30 Hz
+        //     `OutboundBatcher.postToken` coalesces tokens at ~30 Hz
         //     internally; combined with `.bus` priority's drop-eligible
         //     classification of `.tokenDelta`, extreme overload tail-drops
         //     individual deltas instead of back-pressuring the orchestrator.
-        //     `flushAndSend` for `turnStarted` / `turnEnded` drains pending
-        //     tokens first so lifecycle events never overtake their data.
+        //     `flushAndSend` for `turnStarted` / `turnEnded` /
+        //     `submitRejected` drains pending tokens first so lifecycle
+        //     events never overtake their data.
         let busSub = await broadcaster.subscribe(priority: .bus, capacity: 256)
         self.busSubscriberTask = Task { [weak self] in
-            var lastEmittedTurnId: TurnID?
-            for await event in busSub.stream {
-                if Task.isCancelled { break }
-                guard let self else { break }
-                switch event {
-                case let .tokenDelta(turnId, text):
-                    if lastEmittedTurnId != turnId {
-                        if let uuid = UUID(uuidString: turnId.rawValue) {
-                            try? await self.outboundBatcher?.flushAndSend(
-                                .turnStarted(id: uuid)
-                            )
-                        }
-                        lastEmittedTurnId = turnId
-                    }
-                    await self.outboundBatcher?.postToken(text)
-                case let .turnEnd(turnId, stopReason):
-                    // Ensure the JS side has an active turn before turnEnded
-                    // arrives: if `.turnEnd` fires without any preceding
-                    // tokenDelta (e.g. immediate refusal, tool-only turn),
-                    // synthesize the start first so the JS bus dispatcher's
-                    // `endTurn()` can't precede a `beginTurn()` it never saw.
-                    if let uuid = UUID(uuidString: turnId.rawValue) {
-                        if lastEmittedTurnId != turnId {
-                            try? await self.outboundBatcher?.flushAndSend(
-                                .turnStarted(id: uuid)
-                            )
-                        }
-                        let terminator = Self.busTurnTerminator(for: stopReason)
-                        try? await self.outboundBatcher?.flushAndSend(
-                            .turnEnded(id: uuid, terminator: terminator)
-                        )
-                    }
-                    lastEmittedTurnId = nil
-                default:
-                    break
-                }
+            guard let self else { return }
+            // Capture the batcher reference at task-start. If the batcher
+            // was never constructed (no webviewBridge), drain the stream
+            // anyway so events aren't backpressured into the broadcaster.
+            if let batcher = self.outboundBatcher {
+                let sink = AppBusForwarderSink(batcher: batcher)
+                await BusForwarder.drain(events: busSub.stream, sink: sink)
+            } else {
+                self.systemLogger?.warning(
+                    "busSubscriberTask: outboundBatcher nil — events will drain without forwarding"
+                )
+                for await _ in busSub.stream { if Task.isCancelled { break } }
             }
         }
 
@@ -1105,22 +1131,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    /// StopReason → TurnTerminator mapping used by the `.bus` subscriber when
-    /// translating `OrchestratorEvent.turnEnd` into `BusOutbound.turnEnded`
-    /// (BLOCKER-INT-2 / Phase E). The JS side classifies turn outcomes more
-    /// coarsely than the orchestrator: `endTurn` / `toolUse` / `maxTokens`
-    /// all read as `.completed`; `refusal` and `streamTruncated` collapse to
-    /// `.errored`. `cancelled` and `superseded` from `TurnTerminator` are
-    /// produced by cancel-and-submit / barge-in flows that do not yet emit
-    /// distinct `StopReason` cases — when they do, extend this switch.
-    static func busTurnTerminator(for stopReason: StopReason) -> TurnTerminator {
-        switch stopReason {
-        case .endTurn, .toolUse, .maxTokens:
-            return .completed
-        case .refusal, .streamTruncated:
-            return .errored
-        }
-    }
+    // (StopReason → TurnTerminator mapping moved to
+    // `BusForwarder.terminator(for:)` in AgentCore. The App-side translation
+    // from the protocol-agnostic `BusForwarder.Terminator` to the wire
+    // `Bus.TurnTerminator` lives in `AppBusForwarderSink.swift`.)
 
     // MARK: - Plan 09-02 phrase-detection helper
 
