@@ -40,6 +40,20 @@ public actor OrchestratorEventBroadcaster {
         /// Same protection rules as `.memory` — used by AppDelegate's
         /// transcript collector to feed `TurnTranscriptStore` from `.tokenDelta`.
         case transcript
+        /// Webview-bus forwarding subscriber — drains orchestrator events
+        /// out to the JS-side HUD via `OutboundBatcher` / `WebviewBridge`.
+        /// `.tokenDelta` and `.thinkingDelta` are drop-eligible (the
+        /// `OutboundBatcher` itself coalesces tokens at ~30 Hz, so tail-
+        /// drop on extreme overload is acceptable). Everything else
+        /// (`.turnEnd`, `.toolCardUpdate`, `.usage`, `.error`,
+        /// `.stateChange`) is protected — those drive HUD chrome
+        /// transitions that MUST reach the user.
+        ///
+        /// AUDIT-AND-FIX-PLAN.md / Phase E follow-up: closes
+        /// BLOCKER-INT-2 (`tokenDelta` / `turnStarted` / `turnEnded` never
+        /// emitted to webview) by giving AppDelegate a canonical
+        /// priority to subscribe under for bus-forwarding.
+        case bus
     }
 
     private let upstream: BoundedAsyncChannel<OrchestratorEvent>
@@ -142,8 +156,12 @@ public actor OrchestratorEventBroadcaster {
         priority: Priority
     ) -> Bool {
         switch priority {
-        case .memory, .transcript:
-            // D-07: only .tokenDelta / .thinkingDelta are eligible for drop.
+        case .memory, .transcript, .bus:
+            // D-07 / Phase E (BLOCKER-INT-2): only .tokenDelta /
+            // .thinkingDelta are drop-eligible. Bus forwarder shares
+            // the rule — OutboundBatcher coalesces tokens at ~30 Hz,
+            // so tail-dropping individual deltas under extreme overload
+            // is preferable to back-pressuring the orchestrator.
             switch event {
             case .tokenDelta, .thinkingDelta: return false
             default: return true

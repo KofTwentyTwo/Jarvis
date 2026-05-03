@@ -278,6 +278,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// text-originated turns NEVER drive `VoiceController` back to `.idle`.
     private var voiceEventTranslatorTask: Task<Void, Never>?
 
+    /// Phase E follow-up (BLOCKER-INT-2 from `.planning/v0.12.0-MILESTONE-AUDIT.md`).
+    /// Drains the broadcaster's `.bus` subscription and forwards
+    /// `.tokenDelta` chunks into `outboundBatcher.postToken(_:)` so they
+    /// reach the JS-side HUD chat panel. Without this subscriber, the
+    /// orchestrator emits tokens that never leave Swift — the chat panel
+    /// renders an empty `chatEvents` array forever.
+    private var busSubscriberTask: Task<Void, Never>?
+
     /// Plan 09-04 — OutboundBatcher used by `VoiceBusEmitterAdapter` to
     /// route the 30 Hz audio-level RMS into the bus's RingMesh pulse.
     /// Constructed in installVoice; webviewBridge is the sink.
@@ -578,6 +586,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         frameAttachReleaseTask?.cancel()
         // Plan 09-04: tear down voice event translator subscriber.
         voiceEventTranslatorTask?.cancel()
+        // Phase E (BLOCKER-INT-2): tear down bus-forwarding subscriber.
+        busSubscriberTask?.cancel()
         if let broadcaster = eventBroadcaster {
             Task { await broadcaster.stop() }
         }
@@ -1010,8 +1020,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // 5f. Phase E (BLOCKER-INT-2 from v0.12.0-MILESTONE-AUDIT.md) —
+        //     bus-forwarding subscriber. Drains the broadcaster's `.bus`
+        //     subscription and forwards `.tokenDelta` chunks into
+        //     `outboundBatcher.postToken(_:)` so the JS-side HUD chat panel
+        //     receives streaming tokens. Without this subscriber, every
+        //     orchestrator-emitted `.tokenDelta` is fanned out to the other
+        //     5 subscribers (memory, transcript, devOverlay, frameAttach,
+        //     voice) but NEVER leaves Swift — the chat panel renders an
+        //     empty `chatEvents` array forever.
+        //
+        //     `outboundBatcher` is constructed in installVoice (which runs
+        //     AFTER installAgent per the locked install order). Capture
+        //     `[weak self]` and dereference at event-receipt time so the
+        //     subscriber survives the construction-order skew.
+        //
+        //     `OutboundBatcher.postToken` itself coalesces tokens at ~30 Hz
+        //     internally; combined with `.bus` priority's drop-eligible
+        //     classification of `.tokenDelta`, extreme overload tail-drops
+        //     individual deltas instead of back-pressuring the orchestrator.
+        let busSub = await broadcaster.subscribe(priority: .bus, capacity: 256)
+        self.busSubscriberTask = Task { [weak self] in
+            for await event in busSub.stream {
+                if Task.isCancelled { break }
+                guard let self else { break }
+                if case let .tokenDelta(_, text) = event {
+                    await self.outboundBatcher?.postToken(text)
+                }
+            }
+        }
+
         systemLogger?.info(
-            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach + voice subscribers active)"
+            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach + voice + bus subscribers active)"
         )
     }
 

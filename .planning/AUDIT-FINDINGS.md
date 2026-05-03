@@ -99,12 +99,19 @@ blockers + confirmed the known C1, plus two warnings. Full report:
 - **Affected REQ-IDs:** HUD-07, MCP-01..04, TOOL-01..03.
 - **Severity rationale:** 🔴 — tool-call HUD cards are a Phase 3/5 user-facing promise; whole modality is mute.
 
-#### F-B2-INT-2 🔴 tokenDelta / turnStarted / turnEnded never emitted to webview
+#### F-B2-INT-2 🟡 tokenDelta forwarded; turnStarted/turnEnded follow-up (PARTIALLY FIXED)
 
-- **Where:** `packages/Bus/Sources/Bus/OutboundBatcher.swift:44` (the outbound emitter exists but no caller); `App/AppDelegate.swift:828-1015` (broadcaster has 5 subscribers but no `.bus` subscriber).
-- **What:** Cross-tree grep confirms zero call sites of `OutboundBatcher.postToken` outside its declaration. `BusOutbound.{tokenDelta,turnStarted,turnEnded}` cases have NO Swift production emit sites — only their own decode round-trips. The orchestrator emits `OrchestratorEvent.tokenDelta` correctly (`AgentOrchestrator.swift:382`); five subscribers consume it (memory, transcript, devOverlay, frameAttach, voice); none forward to the webview.
-- **Affected REQ-IDs:** TEXT-01, TEXT-02, AGENT-04, AGENT-10, HUD-04..06.
-- **Severity rationale:** 🔴 — tokens never reach the chat panel; even a working LLM turn produces nothing user-visible.
+- **Original where:** `packages/Bus/Sources/Bus/OutboundBatcher.swift:44` (outbound emitter existed but no caller); `App/AppDelegate.swift:828-1015` (broadcaster had 5 subscribers but no `.bus` subscriber).
+- **Original what:** Cross-tree grep confirmed zero call sites of `OutboundBatcher.postToken` outside its declaration. `BusOutbound.{tokenDelta,turnStarted,turnEnded}` cases had NO Swift production emit sites.
+- **What was fixed (this session):** Added `case .bus` to `OrchestratorEventBroadcaster.Priority` with appropriate protection rules (mirrors `.memory`/`.transcript`: only `.tokenDelta` / `.thinkingDelta` are drop-eligible). Added a `busSubscriberTask` in `AppDelegate.installAgent` that drains `.bus` subscription, pattern-matches `OrchestratorEvent.tokenDelta`, and forwards the chunk to `outboundBatcher.postToken(_:)`. Cleanup wired in the cancel section. Unit test for the new Priority case lands in `OrchestratorEventBroadcasterTests.test_protectionMatrixIsCorrect_perPriority`.
+- **What's still open:** `turnStarted` / `turnEnded` are NOT yet forwarded. Translation needed:
+  - Orchestrator emits `OrchestratorEvent.turnEnd(turnId: TurnID, stopReason: StopReason)`. Bus expects `BusOutbound.turnEnded(id: UUID, terminator: TurnTerminator)`. Need a TurnID → UUID conversion + StopReason → TurnTerminator mapping.
+  - There's no equivalent `turnStarted` on the orchestrator side; that signal lives inside `OrchestratorEvent.stateChange(TurnState)` or could be synthesized from the first `.tokenDelta` per turn (which is what Phase 4 SUMMARY's "synthesized client-side from first tokenDelta" assumption means — webview side, not Swift side).
+- **Severity downgraded** 🔴 → 🟡: with token forwarding in place, the chat panel will now stream tokens during a live turn — once BLOCKER-INT-3 (chat input UI) is closed and user can submit a turn. The "complete the message on turn end" finalization still requires the follow-up.
+- **Verification:**
+  - `scripts/check-app-builds.sh` PASS.
+  - AgentCore tests 178/178 pass (broadcaster .bus protection rule asserted).
+  - Bus tests 56/56 except F-A2-01 pre-existing.
 
 #### F-B2-INT-3 🔴 HUD has no chat input UI; `chatSubmit` has no producer
 

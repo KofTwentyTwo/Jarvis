@@ -286,6 +286,18 @@ final class OrchestratorEventBroadcasterTests: XCTestCase {
                 ".voice priority protection wrong for \(label)"
             )
         }
+
+        // bus: same rules as memory/transcript — only tokenDelta /
+        // thinkingDelta are drop-eligible. Phase E (BLOCKER-INT-2) added
+        // this priority so AppDelegate has a canonical bus-forwarding sub.
+        for (label, event) in allEvents {
+            let isProtected = await broadcaster.isProtectedForPriority(event, priority: .bus)
+            let lossy = (label == "tokenDelta" || label == "thinkingDelta")
+            XCTAssertEqual(
+                isProtected, !lossy,
+                ".bus priority protection wrong for \(label)"
+            )
+        }
     }
 
     // MARK: - Helpers
