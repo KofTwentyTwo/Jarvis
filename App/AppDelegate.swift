@@ -85,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var bannerCoordinator: HUDBannerCoordinator?
     var hotkeyBinder: HotkeyBinder?
     var wizardController: OnboardingWizardController?
+    var settingsWindowController: SettingsWindowController?
     var wizardState: WizardState?
     var webviewBridge: WebviewBridge?
 
@@ -405,6 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let state = WizardState(keychain: keychainStore)
         wizardState = state
         wizardController = OnboardingWizardController(state: state)
+        settingsWindowController = SettingsWindowController(state: state)
         let willOpenWizard = !apiKeyStored
         if willOpenWizard {
             openWizard(firstLaunch: true)
@@ -1263,7 +1265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = item
         let menu = MenuBarContextMenu.build(
             setupAction: { [weak self] in self?.openWizard(firstLaunch: false) },
-            settingsAction: { [weak self] in self?.openWizard(firstLaunch: false) },
+            settingsAction: { [weak self] in self?.openSettings() },
             devOverlayToggleAction: { [weak self] in self?.toggleDevOverlay() },
             stateDumpAction: { [weak self] in self?.copyStateDump() }
         )
@@ -1484,6 +1486,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.bindHotkeyFromWizard()
             },
             firstLaunch: firstLaunch
+        )
+    }
+
+    private func openSettings() {
+        guard let controller = settingsWindowController else { return }
+        let validator = AnthropicKeyValidator()
+        controller.open(
+            keychain: keychainStore,
+            validator: validator,
+            onGrantInputMonitoring: { [weak self] in
+                guard let self else { return false }
+                let probe = InputMonitoringProbe(probe: self.hidProbe)
+                return probe.check(sink: AdHocBannerSink(self.bannerCoordinator))
+            },
+            onHotkeyChanged: { [weak self] _ in
+                // The hotkey edit has already written through to
+                // `WizardState.hotkey`/UserDefaults; rebind the global
+                // monitor so the new shortcut takes effect immediately
+                // without requiring a relaunch.
+                self?.bindHotkeyFromWizard()
+            }
         )
     }
 

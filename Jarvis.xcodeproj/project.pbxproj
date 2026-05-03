@@ -36,6 +36,8 @@
 		66B4B219EF4EC3EBDE5D1A4B /* AppDelegateWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */; };
 		6A2D9DE01C3C53094A820DDF /* JarvisEntitlementProbeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36AC239C99B913A4767C0EE8 /* JarvisEntitlementProbeTests.swift */; };
 		6AD395C3C083197537B81713 /* AgentCore in Frameworks */ = {isa = PBXBuildFile; productRef = 73CDBE39012C4ECD47291B0E /* AgentCore */; };
+		223D37B942B449AFAAF551E4 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 647FBB6690184E67B45CBD6A /* SettingsView.swift */; };
+		ECFF0E0EC3814E1289173EBB /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34C33FA9A40043428BA1E36C /* SettingsWindowController.swift */; };
 		7270A6A54B0DC1510EB9C56A /* WizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33A1960A6404CD790036C46 /* WizardView.swift */; };
 		781E23F05F4EBBD3D3CB8E3F /* AppleScriptRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F80410112AAA66BF53BBC28 /* AppleScriptRunner.swift */; };
 		78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF7206DB98EC02734975536 /* HudState.swift */; };
@@ -183,6 +185,8 @@
 		A16929275D5323F505DF12E9 /* WebviewBundleLoadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebviewBundleLoadTests.swift; sourceTree = "<group>"; };
 		A1E748E1EAA90C94FA7F3707 /* AgentCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentCore; path = packages/AgentCore; sourceTree = SOURCE_ROOT; };
 		A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateEntitlementTests.swift; sourceTree = "<group>"; };
+		34C33FA9A40043428BA1E36C /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
+		647FBB6690184E67B45CBD6A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A33A1960A6404CD790036C46 /* WizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardView.swift; sourceTree = "<group>"; };
 		A58FE5BCBC3DE6663E859C0A /* WizardStageAPIKeyViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageAPIKeyViewTests.swift; sourceTree = "<group>"; };
 		A8329406FB8C3A6F017CB832 /* RejectReasonCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RejectReasonCopy.swift; sourceTree = "<group>"; };
@@ -292,6 +296,7 @@
 				EE585F62F46C659EDFC48DE7 /* MCP */,
 				35E7CF3C8F80086AD447480E /* MenuBar */,
 				D80B1ECFB5748E20A6ADF0EB /* Resources */,
+				81FE5D170EC949848685465B /* Settings */,
 				7B0D5E57F282044CD98E347B /* Tests */,
 				5CBAF02B001A7FF406642CCA /* Theme */,
 				2B9B2D87FD5CAD4688A29148 /* Vision */,
@@ -422,6 +427,15 @@
 				208C83303CC662AB2390C1C3 /* mcp-clipboard */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		81FE5D170EC949848685465B /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				647FBB6690184E67B45CBD6A /* SettingsView.swift */,
+				34C33FA9A40043428BA1E36C /* SettingsWindowController.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 		922FCD26000A64044B1FF187 /* Wizard */ = {
@@ -1264,6 +1278,8 @@
 				7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */,
 				63C78894699F60D1DE3A6715 /* RejectReasonCopy.swift in Sources */,
 				A30C09AE5D98B07A92945E1F /* ReplayingToolResultObserver.swift in Sources */,
+				223D37B942B449AFAAF551E4 /* SettingsView.swift in Sources */,
+				ECFF0E0EC3814E1289173EBB /* SettingsWindowController.swift in Sources */,
 				8684EF1EAC5D350C2CCAB3CF /* VoiceBusEmitterAdapter.swift in Sources */,
 				B8F411ADE70402B71887E377 /* VoiceOrchestratorAdapter.swift in Sources */,
 				339AAD7A8C3E4A6AF4825F0D /* VoiceTTSAdapter.swift in Sources */,

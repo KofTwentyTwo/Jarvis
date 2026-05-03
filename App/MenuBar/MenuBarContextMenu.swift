@@ -13,10 +13,11 @@ public enum MenuBarContextMenu {
         let menu = NSMenu()
 
         menu.addItem(makeItem(title: "Setup…", action: setupAction))
-        // Settings… opens the wizard at the first stage so the user can
-        // change their API key, re-grant permissions, or rebind the
-        // hotkey. Until a dedicated settings panel ships, the wizard is
-        // the canonical interface for those exact settings.
+        // Settings… opens the freeform settings panel
+        // (`SettingsWindowController`). The user can change the API key,
+        // re-grant Input Monitoring, or rebind the global hotkey from there.
+        // Distinct from Setup… (the sequential first-run wizard); both
+        // surfaces share the same underlying `WizardState`.
         menu.addItem(makeItem(title: "Settings…", action: settingsAction))
 
         menu.addItem(NSMenuItem.separator())
