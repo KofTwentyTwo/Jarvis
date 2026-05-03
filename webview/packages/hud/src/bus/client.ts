@@ -136,6 +136,25 @@ export function attachBus(): void {
         // Plan 03-03's ring shader uses a synthetic sine; Phase 6 binds this
         // to the real mic RMS. Intentional no-op for P3.
         break
+      case 'submitRejected': {
+        // Plan 09-04 / D-10. Render rejection inline as an error event so the
+        // user sees why their text turn didn't start. A dedicated transient
+        // toast slot is a future polish; surfacing inline keeps the chronology
+        // honest right now.
+        const turnId = store.currentTurnId ?? 'rejected'
+        store.pushEvent({
+          kind: 'error',
+          id: `rejected:${Date.now()}`,
+          message: msg.reason,
+          turnId,
+        })
+        break
+      }
+      case 'sessionHistory':
+        // Plan 07-06 added the case; AppDelegate.installMemory does not yet
+        // hydrate (= WARN-INT-2). Until then we acknowledge but no-op so the
+        // exhaustiveness sentinel below remains tight.
+        break
       default: {
         const _exhaustive: never = msg
         void _exhaustive

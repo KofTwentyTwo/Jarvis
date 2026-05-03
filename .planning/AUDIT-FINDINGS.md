@@ -99,26 +99,37 @@ blockers + confirmed the known C1, plus two warnings. Full report:
 - **Affected REQ-IDs:** HUD-07, MCP-01..04, TOOL-01..03.
 - **Severity rationale:** 🔴 — tool-call HUD cards are a Phase 3/5 user-facing promise; whole modality is mute.
 
-#### F-B2-INT-2 🟡 tokenDelta forwarded; turnStarted/turnEnded follow-up (PARTIALLY FIXED)
+#### F-B2-INT-2 ✅ tokenDelta + turnStarted + turnEnded forwarded (FIXED)
 
 - **Original where:** `packages/Bus/Sources/Bus/OutboundBatcher.swift:44` (outbound emitter existed but no caller); `App/AppDelegate.swift:828-1015` (broadcaster had 5 subscribers but no `.bus` subscriber).
 - **Original what:** Cross-tree grep confirmed zero call sites of `OutboundBatcher.postToken` outside its declaration. `BusOutbound.{tokenDelta,turnStarted,turnEnded}` cases had NO Swift production emit sites.
-- **What was fixed (this session):** Added `case .bus` to `OrchestratorEventBroadcaster.Priority` with appropriate protection rules (mirrors `.memory`/`.transcript`: only `.tokenDelta` / `.thinkingDelta` are drop-eligible). Added a `busSubscriberTask` in `AppDelegate.installAgent` that drains `.bus` subscription, pattern-matches `OrchestratorEvent.tokenDelta`, and forwards the chunk to `outboundBatcher.postToken(_:)`. Cleanup wired in the cancel section. Unit test for the new Priority case lands in `OrchestratorEventBroadcasterTests.test_protectionMatrixIsCorrect_perPriority`.
-- **What's still open:** `turnStarted` / `turnEnded` are NOT yet forwarded. Translation needed:
-  - Orchestrator emits `OrchestratorEvent.turnEnd(turnId: TurnID, stopReason: StopReason)`. Bus expects `BusOutbound.turnEnded(id: UUID, terminator: TurnTerminator)`. Need a TurnID → UUID conversion + StopReason → TurnTerminator mapping.
-  - There's no equivalent `turnStarted` on the orchestrator side; that signal lives inside `OrchestratorEvent.stateChange(TurnState)` or could be synthesized from the first `.tokenDelta` per turn (which is what Phase 4 SUMMARY's "synthesized client-side from first tokenDelta" assumption means — webview side, not Swift side).
-- **Severity downgraded** 🔴 → 🟡: with token forwarding in place, the chat panel will now stream tokens during a live turn — once BLOCKER-INT-3 (chat input UI) is closed and user can submit a turn. The "complete the message on turn end" finalization still requires the follow-up.
+- **What was fixed (commit 602a95b, 2026-05-02):** Added `case .bus` to `OrchestratorEventBroadcaster.Priority` with appropriate protection rules (mirrors `.memory`/`.transcript`: only `.tokenDelta` / `.thinkingDelta` are drop-eligible). Added a `busSubscriberTask` in `AppDelegate.installAgent` that drains `.bus` subscription, pattern-matches `OrchestratorEvent.tokenDelta`, and forwards the chunk to `outboundBatcher.postToken(_:)`.
+- **What was fixed (this session, paired with INT-3):** Extended the same subscriber to forward `turnStarted` / `turnEnded`. `turnStarted` is synthesized on the first emission for a new `TurnID` (since `OrchestratorEvent` has no explicit start case — the start is implicit from the first per-turn event); subsequent emissions reuse that turn id. `turnEnd` flushes pending tokens and emits `BusOutbound.turnEnded` via `flushAndSend` so lifecycle events never overtake their data. `StopReason → TurnTerminator` mapping lives in `AppDelegate.busTurnTerminator(for:)`: `endTurn` / `toolUse` / `maxTokens` → `.completed`; `refusal` / `streamTruncated` → `.errored`. `cancelled` and `superseded` are reachable only via cancel-and-submit / barge-in flows the orchestrator does not yet emit; the mapping will extend when they do.
+- **Severity now** 🔴 → ✅: the .bus subscriber forwards everything the JS bus dispatcher needs. Without `turnStarted` the JS side was silently dropping every `tokenDelta` (its dispatcher requires a non-null `currentTurnId`); without `turnEnded` the chat panel could never finalize a message.
 - **Verification:**
   - `scripts/check-app-builds.sh` PASS.
-  - AgentCore tests 178/178 pass (broadcaster .bus protection rule asserted).
-  - Bus tests 56/56 except F-A2-01 pre-existing.
+  - AgentCore tests 178/178 pass.
+  - Bus tests 55/56 (F-A2-01 pre-existing).
+  - All 15 boundary grep gates PASS.
 
-#### F-B2-INT-3 🔴 HUD has no chat input UI; `chatSubmit` has no producer
+#### F-B2-INT-3 ✅ HUD chat input UI + JS producer (FIXED)
 
-- **Where:** `webview/packages/hud/src/chat/ChatPanel.tsx` (read-only renderer); `webview/packages/hud/src/App.tsx` (no input form mounted).
-- **What:** The Swift inbound side IS wired (`AppDelegate.swift:1404-1407` → `handleChatSubmit` → `orchestrator.submit(.text(...))`), but the JS side has no producer of any inbound bus message. Cross-tree grep across `webview/packages/hud/src/`: zero references to `chatSubmit` / `chatCancelAndSubmit` / `frameAttachRequested` as PRODUCERS.
+- **Original where:** `webview/packages/hud/src/chat/ChatPanel.tsx` (read-only renderer); `webview/packages/hud/src/App.tsx` (no input form mounted).
+- **Original what:** The Swift inbound side IS wired (`AppDelegate.swift:1444-1449` → `handleChatSubmit` / `handleChatCancelAndSubmit` → `orchestrator.submit(.text(...))`), but the JS side had no producer of any inbound bus message. Cross-tree grep across `webview/packages/hud/src/`: zero references to `chatSubmit` / `chatCancelAndSubmit` / `frameAttachRequested` as PRODUCERS.
+- **What was fixed (this session):**
+  - `webview/packages/hud/src/chat/ChatInput.tsx` — new component. Form with input + Send button. Empty/whitespace input is a no-op; trimmed input posts `BusInbound.chatSubmit(text)` when `currentTurnId === null`, `chatCancelAndSubmit(text)` (barge-in) otherwise. Pushes a `kind: 'text', role: 'user'` event to the chat-events store on submit so the user sees their own message in chronology immediately (optimistic local echo). Clears the input after dispatch.
+  - `webview/packages/hud/src/App.tsx` — mounts `<ChatInput />` directly under `<ChatPanel />` inside `.jarvis-hud__chat`. The parent flex-column keeps the input pinned to the bottom of the floating chat frame regardless of how many events the panel renders.
+  - `webview/packages/hud/src/chat/chat-panel.css` — `.chat-input` row + field + button styles using existing tokens.
+  - `webview/packages/hud/src/bus/client.ts` — added `submitRejected` (push inline error event) and `sessionHistory` (no-op until WARN-INT-2 hydration lands) arms to the dispatcher switch. This restores the `_exhaustive: never` compile-time check (was failing tsc on `develop` because both cases were in `BusOutbound` but not in the switch).
+- **Tests added:**
+  - `webview/packages/hud/tests/ChatInput.test.tsx` — 6 cases: renders input + button (CI1); empty/whitespace input is no-op (CI2); trimmed text posts `chatSubmit` and clears input (CI3); Enter key submits the form (CI4); pushes user-text event to the store (CI5); barge-in routes to `chatCancelAndSubmit` when `currentTurnId !== null` (CI6).
+  - `webview/packages/hud/tests/bus-dispatch.test.ts` — added B5: `submitRejected` outbound pushes an inline error event with the rejection reason.
 - **Affected REQ-IDs:** TEXT-01, HUD-07, brief week-one #7 ("Text input fallback").
-- **Severity rationale:** 🔴 — without an input UI, the user cannot start a turn from the HUD. Voice input bypasses this but voice out is muted by WARN-INT-1.
+- **Verification:**
+  - `webview/packages/hud` tests 87/87 pass.
+  - `scripts/check-app-builds.sh` PASS.
+  - All 15 boundary grep gates PASS.
+  - End-to-end smoke (paired with INT-2 closure above): user types → `chatSubmit` reaches Swift → `AgentOrchestrator.submit(.text)` → first tokenDelta synthesizes turnStarted → JS chat panel shows assistant text streaming → turnEnded clears the active turn for the next submit.
 
 #### F-B2-INT-4 🔴 (= C1) CameraCapture 1×1 black JPEG
 

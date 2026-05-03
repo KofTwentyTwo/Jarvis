@@ -67,6 +67,28 @@ describe('bus dispatcher — hudState routes to store (B1)', () => {
   })
 })
 
+describe('bus dispatcher — submitRejected pushes error event (B5)', () => {
+  beforeEach(() => {
+    resetStore()
+    installWebkitMock()
+    clearBus()
+  })
+
+  it('renders a rejection reason as an inline error event', () => {
+    attachBus()
+    window.jarvisBus.receive(
+      '{"type":"submitRejected","reason":"Local model unreachable."}',
+    )
+    const events = useJarvisStore.getState().chatEvents
+    expect(events.length).toBe(1)
+    const ev = events[0]
+    expect(ev?.kind).toBe('error')
+    if (ev?.kind === 'error') {
+      expect(ev.message).toBe('Local model unreachable.')
+    }
+  })
+})
+
 describe('bus dispatcher — decode errors surface (B2)', () => {
   beforeEach(() => {
     resetStore()

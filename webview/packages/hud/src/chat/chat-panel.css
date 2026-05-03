@@ -147,3 +147,63 @@
   background: rgba(220, 80, 80, 0.12);
   color: rgba(255, 200, 200, 0.92);
 }
+
+/* Chat input — sits below the ChatPanel inside .jarvis-hud__chat. The
+ * parent is flex-column, so this row stays pinned to the bottom of the
+ * floating chat frame regardless of how many events the panel renders. */
+
+.chat-input {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(79, 195, 247, 0.12);
+  background: rgba(4, 14, 24, 0.55);
+}
+
+.chat-input__field {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: rgba(8, 18, 28, 0.6);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.chat-input__field::placeholder {
+  color: var(--text-secondary);
+}
+
+.chat-input__field:focus {
+  outline: none;
+  border-color: var(--arc-reactor-glow);
+  box-shadow: 0 0 0 1px rgba(79, 195, 247, 0.3);
+}
+
+.chat-input__send {
+  flex: 0 0 auto;
+  background: rgba(79, 195, 247, 0.18);
+  color: var(--text-primary);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.chat-input__send:hover {
+  background: rgba(79, 195, 247, 0.28);
+  border-color: var(--arc-reactor-glow);
+}
+
+.chat-input__send:active {
+  background: rgba(79, 195, 247, 0.4);
+}

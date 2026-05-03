@@ -1022,13 +1022,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 5f. Phase E (BLOCKER-INT-2 from v0.12.0-MILESTONE-AUDIT.md) —
         //     bus-forwarding subscriber. Drains the broadcaster's `.bus`
-        //     subscription and forwards `.tokenDelta` chunks into
-        //     `outboundBatcher.postToken(_:)` so the JS-side HUD chat panel
-        //     receives streaming tokens. Without this subscriber, every
-        //     orchestrator-emitted `.tokenDelta` is fanned out to the other
-        //     5 subscribers (memory, transcript, devOverlay, frameAttach,
-        //     voice) but NEVER leaves Swift — the chat panel renders an
-        //     empty `chatEvents` array forever.
+        //     subscription and forwards `.tokenDelta` / `.turnEnd` into the
+        //     OutboundBatcher so the JS-side HUD chat panel receives
+        //     streaming tokens AND turn lifecycle events. Without this
+        //     subscriber, every orchestrator-emitted `.tokenDelta` is fanned
+        //     out to the other 5 subscribers (memory, transcript,
+        //     devOverlay, frameAttach, voice) but NEVER leaves Swift — the
+        //     chat panel renders an empty `chatEvents` array forever.
+        //
+        //     **Why we synthesize `turnStarted` from the first tokenDelta of
+        //     a new turn id:** `OrchestratorEvent` does not carry an explicit
+        //     `turnStart` case (the start is implicit from the first per-turn
+        //     event). The JS-side bus dispatcher silently drops `tokenDelta`
+        //     when `currentTurnId === null`, so we MUST emit a `turnStarted`
+        //     before any tokens reach the page. Tracking `lastEmittedTurnId`
+        //     locally makes this stateful in the subscriber task without
+        //     touching the orchestrator's event surface.
+        //
+        //     **StopReason → TurnTerminator mapping:** the JS protocol
+        //     classifies turn outcomes more coarsely than the orchestrator;
+        //     `endTurn` / `toolUse` / `maxTokens` all collapse to
+        //     `.completed`, while `refusal` and `streamTruncated` collapse
+        //     to `.errored`. `cancelled` and `superseded` are reachable only
+        //     via cancellation paths the orchestrator does not yet emit; we
+        //     leave that mapping out until the cancel-and-submit flow
+        //     surfaces them.
         //
         //     `outboundBatcher` is constructed in installVoice (which runs
         //     AFTER installAgent per the locked install order). Capture
@@ -1039,13 +1057,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //     internally; combined with `.bus` priority's drop-eligible
         //     classification of `.tokenDelta`, extreme overload tail-drops
         //     individual deltas instead of back-pressuring the orchestrator.
+        //     `flushAndSend` for `turnStarted` / `turnEnded` drains pending
+        //     tokens first so lifecycle events never overtake their data.
         let busSub = await broadcaster.subscribe(priority: .bus, capacity: 256)
         self.busSubscriberTask = Task { [weak self] in
+            var lastEmittedTurnId: TurnID?
             for await event in busSub.stream {
                 if Task.isCancelled { break }
                 guard let self else { break }
-                if case let .tokenDelta(_, text) = event {
+                switch event {
+                case let .tokenDelta(turnId, text):
+                    if lastEmittedTurnId != turnId {
+                        if let uuid = UUID(uuidString: turnId.rawValue) {
+                            try? await self.outboundBatcher?.flushAndSend(
+                                .turnStarted(id: uuid)
+                            )
+                        }
+                        lastEmittedTurnId = turnId
+                    }
                     await self.outboundBatcher?.postToken(text)
+                case let .turnEnd(turnId, stopReason):
+                    // Ensure the JS side has an active turn before turnEnded
+                    // arrives: if `.turnEnd` fires without any preceding
+                    // tokenDelta (e.g. immediate refusal, tool-only turn),
+                    // synthesize the start first so the JS bus dispatcher's
+                    // `endTurn()` can't precede a `beginTurn()` it never saw.
+                    if let uuid = UUID(uuidString: turnId.rawValue) {
+                        if lastEmittedTurnId != turnId {
+                            try? await self.outboundBatcher?.flushAndSend(
+                                .turnStarted(id: uuid)
+                            )
+                        }
+                        let terminator = Self.busTurnTerminator(for: stopReason)
+                        try? await self.outboundBatcher?.flushAndSend(
+                            .turnEnded(id: uuid, terminator: terminator)
+                        )
+                    }
+                    lastEmittedTurnId = nil
+                default:
+                    break
                 }
             }
         }
@@ -1053,6 +1103,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         systemLogger?.info(
             "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach + voice + bus subscribers active)"
         )
+    }
+
+    /// StopReason → TurnTerminator mapping used by the `.bus` subscriber when
+    /// translating `OrchestratorEvent.turnEnd` into `BusOutbound.turnEnded`
+    /// (BLOCKER-INT-2 / Phase E). The JS side classifies turn outcomes more
+    /// coarsely than the orchestrator: `endTurn` / `toolUse` / `maxTokens`
+    /// all read as `.completed`; `refusal` and `streamTruncated` collapse to
+    /// `.errored`. `cancelled` and `superseded` from `TurnTerminator` are
+    /// produced by cancel-and-submit / barge-in flows that do not yet emit
+    /// distinct `StopReason` cases — when they do, extend this switch.
+    static func busTurnTerminator(for stopReason: StopReason) -> TurnTerminator {
+        switch stopReason {
+        case .endTurn, .toolUse, .maxTokens:
+            return .completed
+        case .refusal, .streamTruncated:
+            return .errored
+        }
     }
 
     // MARK: - Plan 09-02 phrase-detection helper
