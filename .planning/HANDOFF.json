@@ -1,47 +1,64 @@
 {
-  "version": "1.0",
-  "timestamp": "2026-05-02T23:46:39.436Z",
+  "version": "1.1",
+  "timestamp": "2026-05-03T01:30:00Z",
   "context": "milestone-audit",
-  "phase": null,
-  "phase_name": null,
+  "phase": "post-Phase-B",
+  "phase_name": "Audit complete; fix loop begun",
   "phase_dir": null,
-  "plan": null,
-  "task": null,
-  "total_tasks": null,
+  "plan": ".planning/AUDIT-AND-FIX-PLAN.md",
+  "task": "Phase E first-fix landed (BLOCKER-INT-2 / tokens half). Next: BLOCKER-INT-3 (HUD chat input UI) is the gating item for any text turn to be user-testable end-to-end.",
   "status": "paused",
+  "branch": "develop",
+  "commits_ahead_of_origin": 51,
+  "tree_state": "clean",
   "completed_this_session": [
-    {"id": "S1", "name": "Webview entry update to v2.3.0 bundle", "commit": "build(phase-09): update webview entry"},
-    {"id": "S2", "name": "Injection.js bumped to v2.3.0 + extended three-way parity gate", "commit": "fix(bus): bump Injection.js placeholder to v2.3.0"},
-    {"id": "S3", "name": "Injection.js single-slot _pendingHello -> FIFO queue", "commit": "fix(bus): replace single-slot _pendingHello with FIFO queue"},
-    {"id": "S4", "name": "MenuBarContextMenu — strong-ref ClosureTarget via objc_setAssociatedObject (NSMenuItem.target weak-deallocation bug)", "commit": "fix(menu): keep ClosureTarget alive for menu item lifetime"},
-    {"id": "S5", "name": "ShortcutRecorderHostView visible + clickable + draws focus state + setRecordedDisplay; KeyboardShortcut.displayString; WizardStageHotkeyView clear instructions + selected display", "commit": "fix(wizard,shell): make hotkey recorder visible + clear instructions"},
-    {"id": "S6", "name": "WizardState persists hotkey to UserDefaults; refresh queries IOHIDCheckAccess so wizard resumes correctly after grant in System Settings", "commit": "fix(wizard,shell): wizard re-resumes correctly after quit/reopen"},
-    {"id": "S7", "name": "Wizard window reuse + always-closable + Input Monitoring Re-check button + System Settings fallback hint", "commit": "fix(wizard): single-window reuse + always-closable + Re-check + System-Settings-fallback"},
-    {"id": "S8", "name": "Banner suppression during wizard, query-only TCC probe at launch, Dev Overlay menu wired to real DevOverlayWindow, camera entitlement added", "commit": "fix(app,wizard,scripts): suppress wizard-redundant banners + wire DevOverlay menu + add camera entitlement"},
-    {"id": "S9", "name": "scripts/dev-reset.sh — wipe all Jarvis local state for clean first-run testing", "commit": "feat(scripts): add dev-reset.sh"},
-    {"id": "S10", "name": "JarvisHUDPanel.summon uses NSApp.activate + makeKeyAndOrderFront; Settings menu opens wizard", "commit": "fix(hud,menu): summon brings HUD to front + Settings menu opens wizard"},
-    {"id": "S11", "name": "ROOT-CAUSE FIX — WKContentWorld unified to .page + Injection.js always-ack hello at stub level (fixes HUD-stuck-on-BOOTING)", "commit": "fix(bus): unify WKContentWorld + always-ack hello at stub level"},
-    {"id": "S12", "name": "AUDIT-AND-FIX-PLAN.md — multi-session plan", "commit": "docs(planning): add AUDIT-AND-FIX-PLAN.md"}
+    {"id": "T1", "phase": "A2", "name": "Strip BootDiag instrumentation; keep WKContentWorld + Injection.js production fixes", "commit": "2c349a9"},
+    {"id": "T2", "phase": "A3", "name": "Real Settings panel — SettingsWindowController + AppDelegate wiring + replace 'coming soon' stub + reroute menu Settings… from wizard to panel", "commit": "7043b3b"},
+    {"id": "T3", "phase": "B1+B2", "name": "Milestone audit — /gsd-audit-uat (1 outstanding UAT = F-A1-01) + /gsd-audit-milestone (3 new INT blockers + 2 warnings); status flips tech_debt → gaps_found", "commit": "082dfa8"},
+    {"id": "T4", "phase": "F1 (1/4)", "name": "Real-WKWebView handshake integration test in packages/Bus/Tests/BusTests/RealWKWebViewIntegrationTests.swift — would have caught the WKContentWorld bug class. Bus suite 54 → 56.", "commit": "326a27d"},
+    {"id": "T5", "phase": "E (1/many)", "name": ".bus subscriber forwarding tokenDelta to OutboundBatcher (closes BLOCKER-INT-2 / tokens half). Adds case .bus to broadcaster Priority + protection rules + AppDelegate.installAgent subscriber.", "commit": "602a95b"}
   ],
-  "uncommitted_files": [
-    "App/AppDelegate.swift (BootDiag instrumentation calls)",
-    "App/HUD/HudStateCoordinator.swift (BootDiag.info call inside resolveAndEmit)",
-    "App/Diagnostics/BootDiag.swift (NEW — diagnostic-only)",
-    "App/Settings/SettingsView.swift (NEW — partial, needs SettingsWindow + AppDelegate wiring + JarvisApp.swift fix)",
-    "packages/Bus/Sources/Bus/BusBootDiag.swift (NEW — diagnostic-only)",
-    "Jarvis.xcodeproj/project.pbxproj (regenerated for new files)"
+  "verification_runs_this_session": [
+    {"step": "A1 smoke test", "result": "HUD reaches STANDBY (visual + BootDiag trace); rings render statically (= F-A1-01)"},
+    {"step": "A4 smoke test", "result": "fresh dev-reset → build → launch → STANDBY confirmed visually"},
+    {"step": "Settings panel save round-trip", "result": "API key persisted to Keychain (svce=com.koftwentytwo.jarvis, acct=anthropic, fresh CREATE timestamp); hotkey persisted to UserDefaults Jarvis.hotkey ({\"keyCode\":101,\"modifiers\":8650752} = F9 + function/control)"},
+    {"step": "RealWKWebViewIntegrationTests", "result": "2/2 pass in ~1.0–1.4s real-WebKit"},
+    {"step": "AgentCore swift test", "result": "178/178 pass (broadcaster .bus protection rule asserted)"},
+    {"step": "Bus swift test", "result": "55/56 pass (F-A2-01 stale assertion still fails as expected)"}
   ],
+  "uncommitted_files": [],
   "blockers": [],
   "human_actions_pending": [],
-  "key_findings_during_session": [
-    {"finding": "GSD verification cleared v0.12.0 as 9/9 phases / 100%, but real-world use revealed multiple stubs that the verifier missed because tests were unit-level only — none exercised the assembled app end-to-end", "severity": "blocking_for_v0.12.0_release"},
-    {"finding": "WKContentWorld bug: Injection.js installed in JarvisBusWorld but the page bundle (<script type=module>) ran in default world. window.* property access is per-world. Tests bypassed this entirely via JSEvaluator test seam.", "severity": "high"},
-    {"finding": "CameraCapture.captureFrame() returns 1×1 black-pixel JPEG stub at packages/Vision/Sources/Vision/CameraCapture.swift:106. Frame-attach is non-functional. Comment says 'Replaced in 07-05' — never came back.", "severity": "high"},
-    {"finding": "NSMenuItem.target is weak; assigning ClosureTarget directly let it deallocate. ALL closure-driven menu items silently no-op'd (Setup, Show Dev Overlay, Copy State Dump). Compiler emitted 3 'weak ref always nil' warnings that were ignored.", "severity": "high"},
-    {"finding": "Show Dev Overlay was a stub banner ('lands in Phase 4') even though packages/DevOverlay was fully implemented; no one wired it.", "severity": "medium"},
-    {"finding": "Settings menu was hardcoded .isEnabled=false ('Coming soon'). Two competing settings entry points: menu-bar item (now wired to wizard as stopgap) and SwiftUI @main Settings scene in JarvisApp.swift (still 'coming soon' Text).", "severity": "medium"},
-    {"finding": "Ad-hoc Debug signing has unstable TCC identity; bundle may not appear in System Settings → Privacy & Security → Input Monitoring without manually adding via '+' button.", "severity": "medium"}
+  "open_findings_summary": {
+    "blockers": [
+      {"id": "F-A1-01", "title": "HUD rings static at STANDBY", "where": "webview/packages/hud/src/hud/RingMesh.tsx (R3F shader/state runtime)"},
+      {"id": "F-A2-01", "title": "WebviewBridgeOutboundTests asserts retired JarvisBusWorld", "where": "packages/Bus/Tests/BusTests/WebviewBridgeOutboundTests.swift:80"},
+      {"id": "F-B2-INT-1", "title": "NoopBusGateway swallows tool-call events", "where": "App/AppDelegate.swift:467 + 1606-1618; needs real BusGateway adapter"},
+      {"id": "F-B2-INT-3", "title": "HUD has no chat input UI", "where": "webview/packages/hud/src/chat/ChatPanel.tsx (read-only); needs input form + outbound chatSubmit producer"},
+      {"id": "F-B2-INT-4", "title": "CameraCapture returns 1×1 black JPEG (= C1)", "where": "packages/Vision/Sources/Vision/CameraCapture.swift:106"}
+    ],
+    "warnings": [
+      {"id": "F-B2-INT-2-rest", "title": "turnEnded forwarding still open (tokenDelta done)", "where": "App/AppDelegate.swift busSubscriberTask + needs OrchestratorEvent.turnEnd → BusOutbound.turnEnded translation"},
+      {"id": "F-B2-WARN-1", "title": "TTS engine nil; voice loop is mute", "where": "App/AppDelegate.swift:676-678; needs TTSEngineActor production wiring"},
+      {"id": "F-B2-WARN-2", "title": "sessionHistory declared but never emitted", "where": "BusOutbound.swift:25; needs hydrate-on-webviewReady"}
+    ],
+    "cosmetic": ["stale-comment-1 (AppDelegate.swift:1190-1192)", "C5 await", "C6 swift-log default impl", "C7 popUpMenu", "C8 String(cString:)"]
+  },
+  "next_action": {
+    "primary": "F-B2-INT-3 — add chat input UI to webview HUD ChatPanel.tsx + wire outbound chatSubmit producer. This is the gating item: without it, the just-landed .bus token forwarder cannot be exercised by any user action. Phase E priority #1.",
+    "alternatives": [
+      "F-A1-01 — investigate R3F ring animation. Likely small (shader/state issue in RingMesh.tsx). Could be quicker win for visual feedback.",
+      "F-B2-INT-2-rest — close turnEnded forwarding. Translation: OrchestratorEvent.turnEnd(turnId,stopReason) → BusOutbound.turnEnded(id,terminator). Pairs naturally with INT-3 landing.",
+      "F-B2-INT-1 — replace NoopBusGateway with real BusGateway impl. Needed for tool-call cards.",
+      "F-A2-01 — one-line fix to test asserting WKContentWorld.page instead of named world. Pure hygiene."
+    ]
+  },
+  "durable_artifacts": [
+    {"path": ".planning/AUDIT-AND-FIX-PLAN.md", "purpose": "multi-session plan, A→G phases", "status": "intact"},
+    {"path": ".planning/v0.12.0-MILESTONE-AUDIT.md", "purpose": "formal milestone audit (status: gaps_found)", "status": "current as of 2026-05-02 20:05"},
+    {"path": ".planning/AUDIT-FINDINGS.md", "purpose": "running cross-session triage list", "status": "current"},
+    {"path": ".planning/.continue-here.md", "purpose": "human-readable session handoff", "status": "refreshed in this commit"},
+    {"path": ".planning/HANDOFF.json", "purpose": "machine-readable session snapshot", "status": "refreshed in this commit (= this file)"}
   ],
-  "next_action": "Open .planning/AUDIT-AND-FIX-PLAN.md → Phase A2 (strip BootDiag instrumentation as a single revert commit). Then Phase A3 (finish Settings panel: SettingsWindow.swift + AppDelegate wiring + JarvisApp.swift fix). Then Phase A4 (build + smoke test). Then Phase B (run /gsd-audit-uat, /gsd-audit-milestone, /gsd-validate-phase 1..9).",
-  "context_notes": "Today's session whack-a-moled bugs all morning before the user said 'we're all over the place — do an audit + plan + full fix.' I built the multi-session plan in .planning/AUDIT-AND-FIX-PLAN.md and committed it. The HUD now reaches STANDBY (proven via BootDiag trace + screenshot). All 12 fixes that landed are real production-code fixes; the diagnostic instrumentation is uncommitted and needs stripping in Phase A2 (it's working as designed, just temporary). The unfinished Settings panel is in App/Settings/SettingsView.swift; it compiles in spirit but needs the wrapper window + wiring + JarvisApp.swift cleanup before it ships. After Phase A finishes, the audit phase (B) is the priority — it'll reveal more findings beyond the 7 listed above and feed the per-phase fix queue."
+  "context_notes": "Session 2026-05-02 (continued past midnight) ran the full Phase A → Phase B → first F1 + E commits. Five commits landed cleanly. The integration audit revealed 4 cross-phase blockers that 9/9 unit-level GSD verifications missed — exact bug class AUDIT-AND-FIX-PLAN was written for. Phase E first fix added the missing .bus subscriber wire. tokenDelta now reaches the bridge; user can't trigger a turn yet (no chat input UI). Resume with INT-3."
 }
