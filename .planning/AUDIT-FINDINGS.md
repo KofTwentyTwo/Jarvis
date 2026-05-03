@@ -133,6 +133,35 @@ Per Phase E priority: blockers first, Nyquist coverage fill is downstream of fix
 
 ---
 
+## Phase F1 (partial) — first integration test landed
+
+Pragmatic scope adjustment: rather than scaffold a brand-new top-level `IntegrationTests` Xcode target (which requires substantial pbxproj surgery — a full new PBXNativeTarget + dependency proxy + build-config list + 2 build configs + sources/frameworks phases + N package-product-dependencies — and risks breaking the project file), the first F1 deliverable lands inside the **Bus package's existing SPM test target** so it runs via `swift test` (immune to the upstream Xcode 26 RunningBoard error 5 that blocked xcodebuild test). Promotion to a dedicated Xcode target can come later if needed; F1's bug-catching utility comes from *having* the test, not from *where* it lives.
+
+Filename: `packages/Bus/Tests/BusTests/RealWKWebViewIntegrationTests.swift` — exact path Phase D-Phase-2 specified. So F1's first deliverable + D-Phase-2's required test collapse into one file.
+
+### Tests landed (2026-05-02 20:13)
+
+1. **`test_endToEndHandshake_reachesArmed`** — loads a real `WKWebView` with a blank HTML page, lets `Injection.js` install at document-start (auto-ack-hello at the stub layer per fb41c5f), calls `bridge.startHandshake()`, polls until `handshakeState == .armed` within 2.5s. Asserts `.armed` and that the alert path didn't fire.
+   - Pass/fail behavior on the FIXED branch: passes in ~1.0s.
+   - Pass/fail behavior on the BUG branch (WKContentWorld misalignment): would hang on `.sentHello`, time out at 2s, transition to `.timedOut`, fire `alertPresenter` — both assertions would fail.
+2. **`test_endToEndHandshake_passesThroughSentHello`** — same setup, but samples `handshakeState` rapidly post-`startHandshake()` to confirm we observed `.sentHello` BEFORE `.armed`. Defends against a future regression where Swift short-circuits `.armed` without the JS round-trip.
+   - Pass on FIXED branch: ~1.4s.
+
+### Bus suite count delta
+
+54 tests → 56 tests. One failure remains (F-A2-01, pre-existing). My new tests added cleanly.
+
+### Honesty note on what F1 partial does NOT yet cover
+
+The remaining 3 tests the plan listed for F1 are still TODO:
+- Wizard happy path (would catch F-A2-01-class wizard-window-spawning bugs)
+- Toggle HUD via hotkey (would catch `summon` activation race)
+- **Ask-the-agent-something flow** (would catch BLOCKER-INT-2 directly — text submit → tokenDelta → chat panel)
+
+The third one specifically is critical — it would catch the missing-`.bus`-subscriber bug. It requires more setup (mock LLM provider, real orchestrator, real bridge, page that registers a handler and records inbound `tokenDelta` messages). Tracked separately for future F1 work.
+
+---
+
 ## Total findings tally as of Phase B close
 
 - 🔴 Blockers: **6** (F-A1-01, F-A2-01 test bug, F-B2-INT-1..4)
