@@ -6,6 +6,7 @@ final class InputMonitoringDenialTests: XCTestCase {
     private struct MockProbe: HIDAccessProbe {
         let granted: Bool
         func requestListenEventAccess() -> Bool { granted }
+        func isListenEventAccessGranted() -> Bool { granted }
     }
 
     /// `@unchecked Sendable`: `enqueueCount` is `var` (required by the
