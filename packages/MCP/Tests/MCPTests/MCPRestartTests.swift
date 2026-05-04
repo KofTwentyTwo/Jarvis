@@ -11,7 +11,7 @@
 import XCTest
 import Darwin
 import MCP
-@testable import JarvisMCP
+@testable @_spi(Testing) import JarvisMCP
 
 final class MCPRestartTests: XCTestCase {
     private var helperBinary: URL!

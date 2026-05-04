@@ -1,6 +1,6 @@
 import Foundation
 import Darwin
-import JarvisMCP
+@_spi(Testing) import JarvisMCP
 import MCP
 
 /// MCPCrashRunner — Plan 08-03 Task 2.

@@ -338,7 +338,8 @@ public actor MCPServerHandle {
 
     #if DEBUG
     /// Returns the helper's PID for tests that need to SIGKILL the child directly.
-    public func _testProcessIdentifier() -> Int32 {
+    /// Gated by `@_spi(Testing)` — see `MCPClient._testHandle` for rationale.
+    @_spi(Testing) public func _testProcessIdentifier() -> Int32 {
         process?.processIdentifier ?? -1
     }
     #endif

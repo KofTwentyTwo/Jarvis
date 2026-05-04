@@ -229,12 +229,14 @@ public actor VoiceController {
     // MARK: - Test seams
 
     /// Force the controller into a specific state. Tests only.
-    public func _forceState(_ newState: VoiceState) async {
+    /// `internal` + `@testable import Voice` keeps this out of the public
+    /// ABI so production callers (App, Harness) cannot reach in.
+    internal func _forceState(_ newState: VoiceState) async {
         state = newState
     }
 
     /// Simulate a VAD speech-end + STT finalization with given text. Tests only.
-    public func _testFireSpeechEnd(text: String = "") async {
+    internal func _testFireSpeechEnd(text: String = "") async {
         await handleSTTFinalized(text: text)
     }
 
@@ -242,13 +244,13 @@ public actor VoiceController {
     /// finalize path with an explicit `sessionId` so tests can simulate a
     /// finalize callback from a prior session arriving after the next
     /// session has started.
-    public func _testFireSpeechEnd(text: String, sessionId: UInt64) async {
+    internal func _testFireSpeechEnd(text: String, sessionId: UInt64) async {
         await handleSTTFinalized(text: text, sessionId: sessionId)
     }
 
     /// P1-3 stale-text seam (tests only). Returns the current session id so
     /// tests can capture it before triggering a session boundary.
-    public func _testCurrentSttSessionId() -> UInt64 {
+    internal func _testCurrentSttSessionId() -> UInt64 {
         sttSessionId
     }
 

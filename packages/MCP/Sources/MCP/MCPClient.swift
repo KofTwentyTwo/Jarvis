@@ -189,7 +189,10 @@ public actor MCPClient {
     #if DEBUG
     /// Test-only accessor into the registry. Used by restart-mutex tests that
     /// need to SIGKILL the helper PID directly. NOT for production use.
-    public func _testHandle(named name: String) -> MCPServerHandle? {
+    /// Gated by `@_spi(Testing)` so callers must opt in via
+    /// `@_spi(Testing) import JarvisMCP` (used by tests via `@testable` and
+    /// by the eval `Harness` package). Plain `import JarvisMCP` cannot see it.
+    @_spi(Testing) public func _testHandle(named name: String) -> MCPServerHandle? {
         registry[name]
     }
     #endif
