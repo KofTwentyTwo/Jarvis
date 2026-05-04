@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { BusInbound } from '@jarvis/bus'
 import { useJarvisStore } from '../store'
+import { CameraButton } from './CameraButton'
 
 /**
  * ChatInput — the JS-side producer of `BusInbound.chatSubmit` /
@@ -67,6 +68,7 @@ export function ChatInput() {
         autoComplete="off"
         spellCheck
       />
+      <CameraButton />
       <button type="submit" className="chat-input__send" aria-label="Send">
         Send
       </button>

@@ -207,3 +207,30 @@
 .chat-input__send:active {
   background: rgba(79, 195, 247, 0.4);
 }
+
+/* Camera button — sits between the input field and the Send button. Matches
+ * the chat-input__send chrome so the toolbar reads as a single row. */
+
+.camera-button {
+  flex: 0 0 auto;
+  background: rgba(79, 195, 247, 0.12);
+  color: var(--text-primary);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.camera-button:hover {
+  background: rgba(79, 195, 247, 0.22);
+  border-color: var(--arc-reactor-glow);
+}
+
+.camera-button:active {
+  background: rgba(79, 195, 247, 0.34);
+}
