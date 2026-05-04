@@ -106,7 +106,26 @@ public final class AudioGraph: Sendable {
     // MARK: - Public surface
 
     public let variant: AudioGraphVariant
+
+    /// The audio-graph tap publishes every captured buffer to this
+    /// broadcaster (Track B-7, 2026-05-03 voice audit fix). New consumers
+    /// MUST subscribe via `AudioGraphOwner.subscribe()` to get their own
+    /// per-subscriber ring — this is the multi-consumer fan-out fix.
+    public let broadcaster: BufferBroadcaster
+
+    /// Legacy single-consumer ring buffer.
+    ///
+    /// Kept as a back-compat surface for `WakeWordDAG.start(ring:)` and the
+    /// overflow watcher. It is now backed by a dedicated broadcaster
+    /// subscription rather than fed directly from the tap, so it no longer
+    /// races with other consumers that subscribe through `broadcaster`.
+    /// New code should call `AudioGraphOwner.subscribe()` instead.
     public let ringBuffer: RingBuffer
+
+    /// Retains the primary subscription so its ring is not unsubscribed
+    /// while the graph is alive. Held privately — callers see only
+    /// `ringBuffer` for back-compat.
+    private let primarySubscription: BufferBroadcaster.Subscription
 
     // MARK: - Private AVFoundation objects
 
@@ -134,7 +153,17 @@ public final class AudioGraph: Sendable {
     ) throws {
         let eng = AVAudioEngine()
         let mix = AVAudioMixerNode()
-        let ring = RingBuffer(capacityFrames: ringCapacityFrames)
+
+        // Track B-7 (2026-05-03 voice audit fix): the tap callback fans
+        // captured buffers out via a `BufferBroadcaster`. Each consumer
+        // (WakeWordDAG, AudioLevelEmitter, chunk pump) subscribes through
+        // the owner to get its own per-subscriber RingBuffer.
+        // The `primarySubscription` below is the legacy single-consumer
+        // back-compat surface still used by WakeWordDAG.start(ring:)
+        // and the overflow watcher.
+        let broadcaster = BufferBroadcaster()
+        let primarySub = broadcaster.subscribe(capacityFrames: ringCapacityFrames)
+        let ring = primarySub.ring
 
         // ── Step 1 ─────────────────────────────────────────────────────────
         // VPIO MUST be enabled BEFORE any connect/installTap.
@@ -188,9 +217,13 @@ public final class AudioGraph: Sendable {
             bus: 0,
             bufferSize: 1024,
             format: targetFormat
-        ) { [ring] buffer, _ in
+        ) { [broadcaster] buffer, _ in
             // Core Audio tap thread — must be lock-free.
-            ring.write(buffer)
+            // The broadcaster snapshots its subscribers under
+            // `OSAllocatedUnfairLock` (uncontested in steady state) and
+            // calls `RingBuffer.write` on each — both lock-free per
+            // subscriber. Track B-7 fan-out for multi-consumer audio.
+            broadcaster.publish(buffer)
         }
 
         // ── Step 6 ─────────────────────────────────────────────────────────
@@ -205,6 +238,8 @@ public final class AudioGraph: Sendable {
 
         self.engine = eng
         self.mixer = mix
+        self.broadcaster = broadcaster
+        self.primarySubscription = primarySub
         self.ringBuffer = ring
         self.variant = aec
             ? .aecOn(targetFormat)

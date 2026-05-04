@@ -37,7 +37,25 @@ public actor AudioGraphOwner {
     public var currentVariant: AudioGraphVariant? { graph?.variant }
 
     /// The ring buffer from the current graph (nil if not yet opened or closed).
+    ///
+    /// **Legacy single-consumer surface** — kept for back-compat with
+    /// `WakeWordDAG.start(ring:)`. New consumers MUST call `subscribe()`
+    /// instead so they each receive their own per-subscriber ring (Track
+    /// B-7 multi-consumer fan-out).
     public var ringBuffer: RingBuffer? { graph?.ringBuffer }
+
+    /// Adds a new subscriber to the audio-graph tap broadcaster and returns
+    /// its handle. The returned subscription owns a per-subscriber
+    /// `RingBuffer` that receives a copy of every buffer published after
+    /// this call (Track B-7 multi-consumer fan-out).
+    ///
+    /// Returns `nil` if the graph is not currently open. Callers should
+    /// retain the subscription for the lifetime of their consumer and
+    /// call `unsubscribe()` on teardown.
+    public func subscribe(capacityFrames: Int = BufferBroadcaster.defaultSubscriberCapacityFrames) -> BufferBroadcaster.Subscription? {
+        guard let graph else { return nil }
+        return graph.broadcaster.subscribe(capacityFrames: capacityFrames)
+    }
 
     // MARK: - Init
 

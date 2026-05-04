@@ -844,24 +844,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (~64 ms @ 16 kHz) — large enough to amortize the cross-task hop
         // but small enough to keep STT partial latency under VAD's hangover.
         //
-        // Race note: the same RingBuffer is also drained by WakeWordDAG and
-        // AudioLevelEmitter. RingBuffer's docstring claims SPSC, but the
-        // existing AudioLevelEmitter already violates that — the pump
-        // inherits the same race. Track B-5+ should fan out via a per-tap
-        // broadcaster to give STT its own samples; for now the listening
-        // path runs while wake-word fires don't consume the ring (the DAG
-        // pauses inference once we transition to .listening but its read
-        // loop continues to advance the read pointer). Documented for
-        // follow-up rather than fixed under audit scope.
+        // Track B-7 (2026-05-03 voice audit fix): the chunk pump now
+        // subscribes through `AudioGraphOwner.subscribe()` so it has its
+        // own per-subscriber RingBuffer. WakeWordDAG continues reading
+        // from the legacy `ringBuffer` (which is now the broadcaster's
+        // primary subscription) — the two consumers no longer race for
+        // samples. The subscription is unsubscribed when the pump task
+        // exits (cancel during `endSTTSession` / `shutdown`).
         let chunkPump: @Sendable (AsyncStream<AudioChunk>.Continuation) async -> Void = { [weak self] cont in
-            // Resolve the ring buffer. If the graph isn't ready yet (e.g.,
-            // installVoice short-circuited), the pump finishes immediately
-            // so the STT provider drains and finalize() returns "".
+            // Resolve the owner and create a fresh subscription per pump
+            // session. If the graph isn't open yet (e.g., installVoice
+            // short-circuited), the pump finishes immediately so the STT
+            // provider drains and finalize() returns "".
             guard let owner = await MainActor.run(body: { self?.audioGraphOwner }),
-                  let ring = await owner.ringBuffer else {
+                  let subscription = await owner.subscribe() else {
                 cont.finish()
                 return
             }
+            defer { subscription.unsubscribe() }
+            let ring = subscription.ring
 
             var scratch = [Float](repeating: 0, count: 1024)
             while !Task.isCancelled {
