@@ -20,14 +20,14 @@ Live triage list. Higher up = higher priority. Move done items to a dated archiv
 - [ ] B-7-followup: AudioLevelEmitter production wiring. The emitter is constructed only in tests today — when wired in AppDelegate it MUST call `audioGraphOwner.subscribe()`, not reuse `audioGraphOwner.ringBuffer`.
 - [ ] B-8 (stretch): TTS tier-2 Orpheus — gated on ~6GB HuggingFace weight download; currently degrades to tier-1.
 
-## Track C — vision (~1 day)
+## Track C — vision (closed 2026-05-04)
 
-- [ ] `CameraCapture`: implement `AVCapturePhotoCaptureDelegate` conformance + actual `capturePhoto(...)` call. Currently allocated but never invoked; returns 1×1 black JPEG.
-- [ ] `frameStream(forPresence:)` — replace `AsyncStream { cont.finish() }` with delegate-yielded continuation
-- [ ] HUD camera button — emit `BusInbound.frameAttachRequested`. Currently doesn't exist; `frameAttachRequested` has zero JS-side emitters
-- [ ] T2 sidecar (`VllmMlxSidecar`) — currently `t2Provider: t1` is hardcoded
-- [ ] `FrameAttachController.confirmSend(...)` — orphaned, has zero non-test callers
-- [ ] Real-hardware vision integration test (XCTSkipIf no camera)
+- [x] C-1: `CameraCapture` `AVCapturePhotoCaptureDelegate` conformance + real `capturePhoto(...)` call (`7a5543a`)
+- [x] C-2: `frameStream(forPresence:)` delegate-yielded continuation via `VideoSampleDelegate` fan-out (`ea09fd4`)
+- [x] C-3: HUD camera button emits `BusInbound.frameAttachRequested` (`4159d44`)
+- [x] C-4: explicit `MissingT2Provider` replaces silent `t2Provider: t1` fallback (`df6a4d2`)
+- [x] C-5: `FrameAttachController.confirmSend(...)` wired into `handleChatSubmit` / `handleChatCancelAndSubmit` (`eac16c9`)
+- [x] C-6: real-hardware vision integration test, gated by `JARVIS_REAL_CAMERA=1` + TCC authorized (`19362f6`)
 
 ## Track D — memory (~3 days)
 
