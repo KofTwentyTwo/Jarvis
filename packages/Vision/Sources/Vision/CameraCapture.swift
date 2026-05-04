@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import CoreMedia
 import CoreGraphics
+import ImageIO
 import Logging
 
 /// Actor-owned AVCaptureSession with Camera TCC lifecycle.
@@ -33,6 +34,13 @@ public actor CameraCapture {
     /// Tests inject a closure to simulate denied/notDetermined/authorized.
     /// Mirrors AudioGraphOwner.authStatusProbe.
     internal var authStatusProbe: (@Sendable () -> AVAuthorizationStatus)?
+
+    /// Test seam — overrides the photo capture path entirely. When set,
+    /// `captureFrame()` calls this closure instead of driving the real
+    /// `AVCapturePhotoOutput.capturePhoto(...)` delegate flow. Production
+    /// leaves it `nil` and goes through the real delegate path.
+    /// Mirrors `authStatusProbe` shape.
+    internal var photoCaptureOverride: (@Sendable () async throws -> CapturedFrame)?
 
     public init(
         degradationContinuation: AsyncStream<VisionDegradationReason>.Continuation,
@@ -95,23 +103,35 @@ public actor CameraCapture {
     }
 
     /// Single-frame-on-demand capture (VISION-04). Throws if open() was
-    /// never called, was denied, or shutdown() ran. Returns a downscaled
-    /// JPEG; planner picks downscale impl. 07-04 ships the API surface and
-    /// lifecycle; the JPEG capture body is exercised by 07-05 frame-attach
-    /// tests. 07-04 tests only verify the throw-when-not-running path.
+    /// never called, was denied, or shutdown() ran. Routes through the
+    /// `AVCapturePhotoOutput` delegate flow: invokes `capturePhoto(...)`
+    /// with a fresh `PhotoCaptureProxy` whose continuation resolves on
+    /// `photoOutput(_:didFinishProcessingPhoto:error:)`.
+    ///
+    /// Test seam: when `photoCaptureOverride` is set, the override is
+    /// invoked instead of the real delegate path. Tests use this to assert
+    /// that `captureFrame()` reaches the production code path without
+    /// requiring a real camera.
     public func captureFrame() async throws -> CapturedFrame {
-        guard session != nil, session?.isRunning == true else {
+        guard let session, session.isRunning else {
             throw VisionError.sessionNotRunning
         }
-        // Stub: return a minimal valid JPEG. Replaced by AVCapturePhotoOutput
-        // delegate flow in 07-05.
-        let onePixelJPEG = Self.onePixelJPEG()
-        return CapturedFrame(
-            jpegData: onePixelJPEG,
-            width: 1,
-            height: 1,
-            capturedAt: Date()
+        if let override = photoCaptureOverride {
+            return try await override()
+        }
+        guard let photoOutput else {
+            throw VisionError.sessionNotRunning
+        }
+        let settings = AVCapturePhotoSettings(
+            format: [AVVideoCodecKey: AVVideoCodecType.jpeg]
         )
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<CapturedFrame, Error>) in
+            // PhotoCaptureProxy retains itself in init (AVCapturePhotoOutput
+            // holds the delegate weakly); the cycle is broken on the first
+            // didFinishProcessingPhoto callback.
+            let proxy = PhotoCaptureProxy(continuation: cont)
+            photoOutput.capturePhoto(with: settings, delegate: proxy)
+        }
     }
 
     /// Publishes a CMSampleBuffer-derived frame stream to ONE consumer
@@ -183,33 +203,6 @@ public actor CameraCapture {
     private static func liveAuthStatus() -> AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .video)
     }
-
-    /// Tiny synthetic JPEG (1x1 black). Replaced by AVCapturePhotoOutput
-    /// delegate output in 07-05. Keeps captureFrame()'s API surface honest
-    /// in 07-04 unit tests.
-    private static func onePixelJPEG() -> Data {
-        // 125-byte minimal valid JPEG (1x1, black). Hex-encoded inline so
-        // tests can assert non-empty Data without bundling a fixture file.
-        let hex =
-            "FFD8FFE000104A46494600010100000100010000FFDB004300080606" +
-            "070605080707070909080A0C140D0C0B0B0C1912130F141D1A1F1E1D" +
-            "1A1C1C20242E2720222C231C1C2837292C30313434341F27393D3832" +
-            "3C2E333432FFC0000B080001000101011100FFC4001F000001050101" +
-            "0101010100000000000000000102030405060708090A0BFFC400B510" +
-            "00020103030204030505040400000000000001000203040511213141" +
-            "06120751610771221432819114A1B1C109233352F0156272D10A0817" +
-            "1819A2526AAFFD9"
-        var data = Data(capacity: hex.count / 2)
-        var idx = hex.startIndex
-        while idx < hex.endIndex {
-            let next = hex.index(idx, offsetBy: 2)
-            if let byte = UInt8(hex[idx..<next], radix: 16) {
-                data.append(byte)
-            }
-            idx = next
-        }
-        return data
-    }
 }
 
 /// Sample buffer wrapper produced by frameStream(forPresence:). Vision
@@ -226,4 +219,56 @@ public enum PresenceFrameSample: @unchecked Sendable {
 
     /// For unit tests: synthetic "face was detected / not detected" sample.
     case syntheticDetection(faceDetected: Bool, timestamp: Date)
+}
+
+// MARK: - PhotoCaptureProxy (C-1)
+
+/// Concrete `AVCapturePhotoCaptureDelegate` that bridges the one-shot photo
+/// capture into a Swift continuation. AVCapturePhotoOutput holds the delegate
+/// only weakly, so the proxy retains itself for the lifetime of the capture
+/// via `selfRetain`. The retain cycle is broken on the FIRST delegate callback
+/// by setting `selfRetain = nil`.
+final class PhotoCaptureProxy: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
+    private var continuation: CheckedContinuation<CapturedFrame, Error>?
+    private var selfRetain: PhotoCaptureProxy?
+
+    init(continuation: CheckedContinuation<CapturedFrame, Error>) {
+        self.continuation = continuation
+        super.init()
+        self.selfRetain = self
+    }
+
+    func photoOutput(
+        _ output: AVCapturePhotoOutput,
+        didFinishProcessingPhoto photo: AVCapturePhoto,
+        error: Error?
+    ) {
+        defer { selfRetain = nil }
+        guard let cont = continuation else { return }
+        continuation = nil
+        if let error {
+            cont.resume(throwing: VisionError.visionRequestFailed(underlying: error))
+            return
+        }
+        guard let data = photo.fileDataRepresentation() else {
+            cont.resume(throwing: VisionError.sessionNotRunning)
+            return
+        }
+        // Read width/height from the photo's resolved settings; fall back
+        // to decoded JPEG dimensions if the resolution isn't reported.
+        var width = photo.resolvedSettings.photoDimensions.width
+        var height = photo.resolvedSettings.photoDimensions.height
+        if width == 0 || height == 0,
+           let src = CGImageSourceCreateWithData(data as CFData, nil),
+           let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] {
+            if let w = props[kCGImagePropertyPixelWidth] as? Int { width = Int32(w) }
+            if let h = props[kCGImagePropertyPixelHeight] as? Int { height = Int32(h) }
+        }
+        cont.resume(returning: CapturedFrame(
+            jpegData: data,
+            width: Int(width),
+            height: Int(height),
+            capturedAt: Date()
+        ))
+    }
 }
