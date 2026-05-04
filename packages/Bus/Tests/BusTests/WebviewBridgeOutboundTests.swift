@@ -77,7 +77,10 @@ final class WebviewBridgeOutboundTests: XCTestCase {
         let decoded = try BusCoder.makeDecoder()
             .decode(BusOutbound.self, from: Data((payload ?? "").utf8))
         XCTAssertEqual(decoded, .hudState(.idle))
-        XCTAssertEqual(call.contentWorld, WKContentWorld.world(name: "JarvisBusWorld"))
+        // F-A2-01: production WebviewBridge uses `WKContentWorld.page` (the
+        // default since `fb41c5f`); the prior `JarvisBusWorld` named-world
+        // assertion was retired in that commit but this test wasn't updated.
+        XCTAssertEqual(call.contentWorld, .page)
     }
 
     func test_sendWhenNotArmedThrows() async {
