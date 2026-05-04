@@ -126,7 +126,12 @@ final class TTSInterruptTests: XCTestCase {
         let synthTask = Task<Void, Error> {
             try await engine.synthesize("long", tier: TTSTier.tier2, voice: "tara")
         }
-        try await Task.sleep(for: .milliseconds(20))
+        // Wait for OrpheusTTS.synthesize to actually start producing (inner task
+        // running) before triggering the interrupt — otherwise OrpheusTTS.cancel()
+        // is a no-op (currentTask still nil) and the inner stream runs to
+        // completion. 200 ms gives engine.start()+actor hop+first .token yield
+        // a comfortable margin.
+        try await Task.sleep(for: .milliseconds(200))
 
         let start = Date()
         await InterruptSequence.run(engine: engine, sink: sink, eventBus: cont, stepLog: nil)

@@ -158,7 +158,7 @@ final class ScriptedSpeechModel: SpeechGenerationModelProtocol, @unchecked Senda
         queue.sync { _callCount += 1 }
 
         return AsyncThrowingStream { continuation in
-            Task {
+            let producerTask = Task {
                 for i in 0..<count {
                     try await Task.sleep(for: d)
                     try Task.checkCancellation()
@@ -167,6 +167,12 @@ final class ScriptedSpeechModel: SpeechGenerationModelProtocol, @unchecked Senda
                 // No .audio event — avoids MLX Metal requirement in SPM test runner.
                 // Production code handles .token-only streams gracefully (no enqueue).
                 continuation.finish()
+            }
+            // Propagate consumer cancellation (e.g. testI3 deterministic timeout) into
+            // the producer Task so the stream actually terminates on the test's deadline
+            // instead of running for the full token-count × delay budget.
+            continuation.onTermination = { @Sendable _ in
+                producerTask.cancel()
             }
         }
     }
