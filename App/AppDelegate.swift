@@ -872,53 +872,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             busAdapter = DormantVoiceBusEmitter()
         }
 
-        // Track B-5 (2026-05-03 voice audit fix): production chunk pump.
+        // Track B-5 + B-7 (2026-05-03 voice audit fix): production chunk pump.
         // VoiceController.startSTTSession opens an `AsyncStream<AudioChunk>`
         // and hands the consumer side to the STT provider; the pump fills
         // the producer side.
         //
-        // Threading: the read loop is `Task.detached` so it doesn't block
-        // VoiceController's actor. We poll the ring at 1024-frame windows
-        // (~64 ms @ 16 kHz) — large enough to amortize the cross-task hop
-        // but small enough to keep STT partial latency under VAD's hangover.
-        //
-        // Track B-7 (2026-05-03 voice audit fix): the chunk pump now
-        // subscribes through `AudioGraphOwner.subscribe()` so it has its
-        // own per-subscriber RingBuffer. WakeWordDAG continues reading
-        // from the legacy `ringBuffer` (which is now the broadcaster's
-        // primary subscription) — the two consumers no longer race for
-        // samples. The subscription is unsubscribed when the pump task
-        // exits (cancel during `endSTTSession` / `shutdown`).
-        let chunkPump: @Sendable (AsyncStream<AudioChunk>.Continuation) async -> Void = { [weak self] cont in
-            // Resolve the owner and create a fresh subscription per pump
-            // session. If the graph isn't open yet (e.g., installVoice
-            // short-circuited), the pump finishes immediately so the STT
-            // provider drains and finalize() returns "".
-            guard let owner = await MainActor.run(body: { self?.audioGraphOwner }),
-                  let subscription = await owner.subscribe() else {
-                cont.finish()
-                return
-            }
-            defer { subscription.unsubscribe() }
-            let ring = subscription.ring
-
-            var scratch = [Float](repeating: 0, count: 1024)
-            while !Task.isCancelled {
-                let count = scratch.withUnsafeMutableBufferPointer { ptr in
-                    ring.readMono16k(into: ptr)
-                }
-                if count > 0 {
-                    let samples = count == scratch.count
-                        ? scratch
-                        : Array(scratch.prefix(count))
-                    cont.yield(AudioChunk(pcm16k: samples))
-                } else {
-                    // Ring drained — yield 10 ms before retrying so we don't
-                    // spin against a starving producer.
-                    try? await Task.sleep(nanoseconds: 10_000_000)
-                }
-            }
-            cont.finish()
+        // P1-2 (audit 2026-05-04): the closure body lives in
+        // `ProductionChunkPump.swift` so it can be exercised by an
+        // integration test against a real AudioGraphOwner + mock
+        // GraphBuilder, closing the "tested with synthetic pumps only"
+        // gap that allowed BLOCKER-INT-1-style divergence.
+        let chunkPump = makeProductionChunkPump { [weak self] in
+            await MainActor.run { self?.audioGraphOwner }
         }
 
         let vc = VoiceController(

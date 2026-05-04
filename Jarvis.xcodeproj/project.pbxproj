@@ -36,6 +36,7 @@
 		63C72C019170ED28C4900DB9 /* WizardStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */; };
 		63C78894699F60D1DE3A6715 /* RejectReasonCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8329406FB8C3A6F017CB832 /* RejectReasonCopy.swift */; };
 		66B4B219EF4EC3EBDE5D1A4B /* AppDelegateWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */; };
+		68F00CB9ED4EFBE1E630C859 /* ProductionChunkPumpTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10F5B89E8C81DC2D6240986 /* ProductionChunkPumpTests.swift */; };
 		6A2D9DE01C3C53094A820DDF /* JarvisEntitlementProbeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36AC239C99B913A4767C0EE8 /* JarvisEntitlementProbeTests.swift */; };
 		6AD395C3C083197537B81713 /* AgentCore in Frameworks */ = {isa = PBXBuildFile; productRef = 73CDBE39012C4ECD47291B0E /* AgentCore */; };
 		70D09A556654E11B140AFBD4 /* MCPBusGatewayAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6639284829C6DB4F69ED47F7 /* MCPBusGatewayAdapterTests.swift */; };
@@ -95,6 +96,7 @@
 		E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */; };
 		EB03A8906003E55271CAF133 /* JarvisVision in Frameworks */ = {isa = PBXBuildFile; productRef = C1168750998C14962FE14DEC /* JarvisVision */; };
 		EB07CD704A3568F27DD4D901 /* Shell in Frameworks */ = {isa = PBXBuildFile; productRef = 6FAD561608B0D1C402015E0D /* Shell */; };
+		EF9A869A3403AF044999784F /* ProductionChunkPump.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74CE607C95B5D3A95AEB16BF /* ProductionChunkPump.swift */; };
 		F340ACA6D0AD06E8ACF65010 /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = D5E0D943EBC768ADB9C87F13 /* Logging */; };
 		F6423C84483BB194348837F5 /* VoiceWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB9BC03FD0377EB67CC0F7DB /* VoiceWiringTests.swift */; };
 		F8E9590D40A0B88DD4FD712D /* JarvisLogging in Frameworks */ = {isa = PBXBuildFile; productRef = ED53153FE6F73137C23AD43B /* JarvisLogging */; };
@@ -182,6 +184,7 @@
 		6639284829C6DB4F69ED47F7 /* MCPBusGatewayAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPBusGatewayAdapterTests.swift; sourceTree = "<group>"; };
 		6784683F2262D8AFA439668D /* JarvisAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		718CFD37BC47D00448B86C8D /* VoiceTTSAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTTSAdapter.swift; sourceTree = "<group>"; };
+		74CE607C95B5D3A95AEB16BF /* ProductionChunkPump.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionChunkPump.swift; sourceTree = "<group>"; };
 		74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageHotkeyView.swift; sourceTree = "<group>"; };
 		7557878944CE73793FEA61CF /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
 		756AA19AD01796D665A09094 /* MCP */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MCP; path = packages/MCP; sourceTree = SOURCE_ROOT; };
@@ -196,6 +199,7 @@
 		960E9FC636D6FF3DD68E5FE9 /* Replay */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Replay; path = packages/Replay; sourceTree = SOURCE_ROOT; };
 		96BF0892A5DFF2AD38A93834 /* BannerContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerContent.swift; sourceTree = "<group>"; };
 		98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBannerCoordinatorTests.swift; sourceTree = "<group>"; };
+		A10F5B89E8C81DC2D6240986 /* ProductionChunkPumpTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionChunkPumpTests.swift; sourceTree = "<group>"; };
 		A16929275D5323F505DF12E9 /* WebviewBundleLoadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebviewBundleLoadTests.swift; sourceTree = "<group>"; };
 		A1E748E1EAA90C94FA7F3707 /* AgentCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AgentCore; path = packages/AgentCore; sourceTree = SOURCE_ROOT; };
 		A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateEntitlementTests.swift; sourceTree = "<group>"; };
@@ -373,6 +377,7 @@
 				0B5B16BDAC02919861AA4B0B /* MCPRuntimeWiringTests.swift */,
 				4AE91F0E707C480DE5724510 /* MemoryInstallWiringTests.swift */,
 				2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */,
+				A10F5B89E8C81DC2D6240986 /* ProductionChunkPumpTests.swift */,
 				3577EF13419964F207DF4A37 /* VoiceOrchestratorAdapterTests.swift */,
 				BB9BC03FD0377EB67CC0F7DB /* VoiceWiringTests.swift */,
 				A16929275D5323F505DF12E9 /* WebviewBundleLoadTests.swift */,
@@ -489,6 +494,7 @@
 		BB5926219D1C87B282AAC541 /* Voice */ = {
 			isa = PBXGroup;
 			children = (
+				74CE607C95B5D3A95AEB16BF /* ProductionChunkPump.swift */,
 				A8329406FB8C3A6F017CB832 /* RejectReasonCopy.swift */,
 				1C47026AC23B268604965C5C /* VoiceBusEmitterAdapter.swift */,
 				590D5A359A5C3E915D274436 /* VoiceOrchestratorAdapter.swift */,
@@ -1277,6 +1283,7 @@
 				5AD556F5095852328E72BE36 /* MCPRuntimeWiringTests.swift in Sources */,
 				9F391DC98880FE923E6594CF /* MemoryInstallWiringTests.swift in Sources */,
 				5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */,
+				68F00CB9ED4EFBE1E630C859 /* ProductionChunkPumpTests.swift in Sources */,
 				B5416071D18E6C124365A8EC /* VoiceOrchestratorAdapterTests.swift in Sources */,
 				F6423C84483BB194348837F5 /* VoiceWiringTests.swift in Sources */,
 				C336B40332A148A5A1F2DDC8 /* WebviewBundleLoadTests.swift in Sources */,
@@ -1322,6 +1329,7 @@
 				A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */,
 				9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */,
 				7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */,
+				EF9A869A3403AF044999784F /* ProductionChunkPump.swift in Sources */,
 				63C78894699F60D1DE3A6715 /* RejectReasonCopy.swift in Sources */,
 				A30C09AE5D98B07A92945E1F /* ReplayingToolResultObserver.swift in Sources */,
 				DB7800734578396AA72EADAF /* SettingsView.swift in Sources */,
