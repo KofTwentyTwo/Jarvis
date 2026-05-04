@@ -48,7 +48,11 @@ public actor HybridSearch {
             refs.append(ref)
             await store.recordRetrieval(ref, triggerTurnId: triggerTurnId)
         }
-        logger.debug("searchFacts: query='\(query)' k=\(k) hits=\(refs.count) triggerTurnId=\(triggerTurnId)")
+        // P2-6 (audit 2026-05-04 security MEDIUM-1): never log the raw
+        // query at debug level — same discipline as T-06-05-03 enforces
+        // for voice transcripts. Log metadata only (length, k, hits,
+        // trigger). Voice text and search queries are user-private content.
+        logger.debug("searchFacts: queryLen=\(query.count) k=\(k) hits=\(refs.count) triggerTurnId=\(triggerTurnId)")
         return refs
     }
 }

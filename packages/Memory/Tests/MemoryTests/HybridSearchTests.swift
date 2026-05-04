@@ -105,4 +105,34 @@ final class HybridSearchTests: XCTestCase {
                           "Set JARVIS_VEC0_STUB_PATH to enable real-DB cases.")
         XCTAssertTrue(true, "Real-DB execution lives in 07-06 regression-corpus.")
     }
+
+    // MARK: - P2-6: log scrub regression guard
+    //
+    // T-06-05-03 enforces "voice transcript content is never logged" via a
+    // grep gate; memory queries are equivalently user-private content. This
+    // test grep-asserts the source file at runtime so a future regression
+    // that logs `query='\(query)'` (the pattern that just landed in P2-6)
+    // is caught at test time rather than discovered in production logs.
+    func testSearchFactsDoesNotLogRawQuery() throws {
+        let thisFile = URL(fileURLWithPath: #file)
+        let sourceFile = thisFile
+            .deletingLastPathComponent()  // MemoryTests
+            .deletingLastPathComponent()  // Tests
+            .appendingPathComponent("Sources/Memory/HybridSearch.swift")
+
+        let contents = try String(contentsOf: sourceFile, encoding: .utf8)
+        let nonCommentLines = contents.split(separator: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+
+        // Anti-pattern: emitting the raw query string in any log statement.
+        // The current correct shape is `queryLen=\(query.count)` — length only.
+        let bannedPattern = "query='\\(query)'"
+        XCTAssertFalse(nonCommentLines.contains(bannedPattern),
+            "HybridSearch.swift must not log raw query content (P2-6 / T-06-05-03 analog).")
+
+        // Positive: the metadata-only pattern must be present.
+        XCTAssertTrue(nonCommentLines.contains("queryLen="),
+            "HybridSearch.swift must log query length (queryLen=) instead of raw content.")
+    }
 }
