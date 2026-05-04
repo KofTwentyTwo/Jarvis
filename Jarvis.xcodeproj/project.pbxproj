@@ -38,6 +38,7 @@
 		66B4B219EF4EC3EBDE5D1A4B /* AppDelegateWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */; };
 		6A2D9DE01C3C53094A820DDF /* JarvisEntitlementProbeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36AC239C99B913A4767C0EE8 /* JarvisEntitlementProbeTests.swift */; };
 		6AD395C3C083197537B81713 /* AgentCore in Frameworks */ = {isa = PBXBuildFile; productRef = 73CDBE39012C4ECD47291B0E /* AgentCore */; };
+		70D09A556654E11B140AFBD4 /* MCPBusGatewayAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6639284829C6DB4F69ED47F7 /* MCPBusGatewayAdapterTests.swift */; };
 		7270A6A54B0DC1510EB9C56A /* WizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33A1960A6404CD790036C46 /* WizardView.swift */; };
 		781E23F05F4EBBD3D3CB8E3F /* AppleScriptRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F80410112AAA66BF53BBC28 /* AppleScriptRunner.swift */; };
 		78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF7206DB98EC02734975536 /* HudState.swift */; };
@@ -76,6 +77,7 @@
 		C9F3B34208084769106C4B07 /* HudStateCoordinatorBusWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46CB8B7693CEA625D7331C3E /* HudStateCoordinatorBusWiringTests.swift */; };
 		CCA51A998B128C9C03ED0662 /* AppDelegateFrameAttachAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FB47EBED48DF63272C6D77F /* AppDelegateFrameAttachAdapters.swift */; };
 		CD22CB0656265A2623BA7FD0 /* AnthropicKeyValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39DD53A4E2CCED58C85B63FC /* AnthropicKeyValidatorTests.swift */; };
+		CD2C5779101FE0384611ECCC /* MCPBusGatewayAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C42ACA7552D565D9F198399 /* MCPBusGatewayAdapter.swift */; };
 		CFBEF67D687A1227C9C2A6BD /* HUDBannerCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DF77D7944DD23250A9AA97 /* HUDBannerCoordinatorTests.swift */; };
 		CFFC4AB8D77907C477B1E947 /* JarvisMCP in Frameworks */ = {isa = PBXBuildFile; productRef = DE970D2B3CA1AB0097A120D3 /* JarvisMCP */; };
 		D0F74EFBDD6B9FDD0FC15A80 /* JarvisMCP in Frameworks */ = {isa = PBXBuildFile; productRef = 0AA20E2847670C06A4E77816 /* JarvisMCP */; };
@@ -148,6 +150,7 @@
 		2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconControllerTests.swift; sourceTree = "<group>"; };
 		2857325F1F38B436FFA8AD8B /* mcp-time.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "mcp-time.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		288436CCFD821C16F6C5995E /* Vision */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Vision; path = packages/Vision; sourceTree = SOURCE_ROOT; };
+		2C42ACA7552D565D9F198399 /* MCPBusGatewayAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPBusGatewayAdapter.swift; sourceTree = "<group>"; };
 		2E9C7A0B14B3AE5C9100CACF /* Config */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Config; path = packages/Config; sourceTree = SOURCE_ROOT; };
 		3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisHUDPanelTests.swift; sourceTree = "<group>"; };
 		3577EF13419964F207DF4A37 /* VoiceOrchestratorAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceOrchestratorAdapterTests.swift; sourceTree = "<group>"; };
@@ -171,6 +174,7 @@
 		604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAAnimationFactory.swift; sourceTree = "<group>"; };
 		639B5F162E847B0CFC679E30 /* Bus */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Bus; path = packages/Bus; sourceTree = SOURCE_ROOT; };
 		6569DC91C2ACEB0E1396E1B8 /* HudStateBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateBridge.swift; sourceTree = "<group>"; };
+		6639284829C6DB4F69ED47F7 /* MCPBusGatewayAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPBusGatewayAdapterTests.swift; sourceTree = "<group>"; };
 		6784683F2262D8AFA439668D /* JarvisAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JarvisAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		718CFD37BC47D00448B86C8D /* VoiceTTSAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceTTSAdapter.swift; sourceTree = "<group>"; };
 		74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageHotkeyView.swift; sourceTree = "<group>"; };
@@ -297,6 +301,7 @@
 				C1517F151F3BA96803143692 /* AppDelegate.swift */,
 				467AE2D19D58325D227E2F89 /* Assets.xcassets */,
 				90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */,
+				2C42ACA7552D565D9F198399 /* MCPBusGatewayAdapter.swift */,
 				F76520C565169D7547EE9608 /* HUD */,
 				EE585F62F46C659EDFC48DE7 /* MCP */,
 				35E7CF3C8F80086AD447480E /* MenuBar */,
@@ -358,6 +363,7 @@
 				8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */,
 				510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */,
 				3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */,
+				6639284829C6DB4F69ED47F7 /* MCPBusGatewayAdapterTests.swift */,
 				0B5B16BDAC02919861AA4B0B /* MCPRuntimeWiringTests.swift */,
 				2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */,
 				3577EF13419964F207DF4A37 /* VoiceOrchestratorAdapterTests.swift */,
@@ -1258,6 +1264,7 @@
 				8E4590089A7955545E2146D3 /* HudStateCoordinatorTests.swift in Sources */,
 				BBD8BBC82E0D3C57E0DB4ED0 /* HudStateEnumTests.swift in Sources */,
 				461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */,
+				70D09A556654E11B140AFBD4 /* MCPBusGatewayAdapterTests.swift in Sources */,
 				5AD556F5095852328E72BE36 /* MCPRuntimeWiringTests.swift in Sources */,
 				5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */,
 				B5416071D18E6C124365A8EC /* VoiceOrchestratorAdapterTests.swift in Sources */,
@@ -1299,6 +1306,7 @@
 				896984D88C412595C0F6F97E /* HudStateIntent.swift in Sources */,
 				526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */,
 				BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */,
+				CD2C5779101FE0384611ECCC /* MCPBusGatewayAdapter.swift in Sources */,
 				8EF7109838AD91E95506BD1B /* MCPRuntimeWiring.swift in Sources */,
 				A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */,
 				9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */,

@@ -500,7 +500,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let bundleURL = Bundle.main.bundleURL
         mcpInstallTask = Task { @MainActor [weak self] in
             guard let self = self, let channel = self.orchToReplayChannel else { return }
-            let busAdapter = NoopBusGateway()  // CR-02: orchestrator wiring (later plan) replaces with real bus adapter.
+            // BLOCKER-INT-1 fix: real BusGateway that forwards tool-call
+            // events to the HUD via OutboundBatcher. The batcher is
+            // constructed later (step 13 in installAgent) so the adapter
+            // resolves it lazily via a MainActor-isolated closure. Until
+            // the batcher exists, emissions are dropped (the
+            // ReplayingToolResultObserver still records the call so the
+            // audit trail isn't lost).
+            let busAdapter = MCPBusGatewayAdapter(resolveBatcher: { [weak self] in
+                await MainActor.run { [weak self] in self?.outboundBatcher }
+            })
             do {
                 let runtime = try await MCPRuntimeWiring.build(
                     bundleURL: bundleURL,
@@ -1887,20 +1896,6 @@ private final class BridgeNavigationDelegate: NSObject, WKNavigationDelegate {
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         MainActor.assumeIsolated { onDidFinish() }
     }
-}
-
-// MARK: - Bus gateway placeholder
-
-/// CR-02 (REVIEW 05): pre-orchestrator no-op BusGateway. Phase 6 / 7
-/// orchestrator wiring replaces this with a real adapter that translates
-/// the dispatcher's bus events into `BusOutbound.toolCallStart` /
-/// `toolCallEnd` cases on the WebviewBridge. Until then, the dispatcher
-/// chain still composes (BusGateway must be non-nil for some call sites)
-/// but emits into a sink that drops events on the floor.
-struct NoopBusGateway: BusGateway {
-    func emitToolCallStart(toolUseId: String, name: String, argsPreview: String) async {}
-    func updateArgsPreview(toolUseId: String, name: String, argsPreview: String) async {}
-    func emitToolCallEnd(toolUseId: String, name: String, ok: Bool, previewOrError: String) async {}
 }
 
 // MARK: - Voice subsystem adapters (Plan 06-05)
