@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-Pre-implementation. Planning complete via GSD (Get Shit Done) workflow; Phase 1 (Foundations) is next.
+Post-v0.12.0 audit-and-stabilize. All 9 GSD phases shipped (Foundations → Bus → HUD → Agent Core → MCP → Voice → Memory+Vision → Hardening → Orchestrator Wiring). Active workstream is closing the "wired but dead" gaps surfaced by the 2026-05-03 / 2026-05-04 audits — tracked day-to-day in `docs/SESSION-STATE.md` (handoff state) and `docs/TODO.md` (live triage). Milestone-level state lives in `.planning/STATE.md`.
 
 **Authoritative state lives in `.planning/`:**
 - `.planning/PROJECT.md` — project context, core value, active requirements, key decisions
@@ -139,14 +139,76 @@ The original `BRIEF.md` (now at `.planning/source-material/BRIEF.md`) and the pr
 - `/gsd-progress` — show current project state and route to next action
 - `/gsd-map-codebase` — re-index `.planning/codebase/` after significant implementation
 
-### Build / test (to be populated once scaffolded)
+### Build / test
 
-_Expected future entries:_
-- Build Swift app (xcodebuild / Xcode scheme)
-- Run webview dev server (Vite 8 with hot reload)
-- Run Swift tests (single test + full suite)
-- Run webview tests
-- Run the eval harness (pinned to `qwen2.5-coder:32b` for local-model eval; corpus in `.planning/evals/`)
+**SPM packages** (default loop — fast, runs offline):
+
+```bash
+swift test --package-path packages/AgentCore
+swift test --package-path packages/Bus
+swift test --package-path packages/Voice
+swift test --package-path packages/Vision
+swift test --package-path packages/Memory
+swift test --package-path packages/MCP
+swift test --package-path packages/Shell
+# … and similarly for Config, DevOverlay, Harness, Keychain, Logging, Replay
+```
+
+Single-test filter: `swift test --package-path packages/<Pkg> --filter <SuiteName>/<testName>`.
+
+**App target** (Xcode 26 xctest harness is upstream-broken on ad-hoc Debug bundles, so `swift test` does not compile the App target — use this script instead, which runs `xcodebuild build -configuration Debug`):
+
+```bash
+bash scripts/check-app-builds.sh
+```
+
+**Webview** (HUD bundle):
+
+```bash
+bash scripts/build-webview.sh
+# or, in webview/ during dev:
+cd webview && pnpm install && pnpm --filter @jarvis/hud dev
+cd webview && pnpm --filter @jarvis/hud test    # vitest
+```
+
+**Boundary gates** (grep-based architectural invariants — run individually or as a sweep before pushing):
+
+```bash
+bash scripts/check-app-builds.sh
+bash scripts/check-bus-harness-parity.sh
+bash scripts/check-bus-protocol-version.sh
+bash scripts/check-corpus-secrets.sh
+bash scripts/check-embedding-dim-literal.sh
+bash scripts/check-install-order.sh
+bash scripts/check-no-evaluate-javascript.sh
+bash scripts/check-no-leftover-stubs.sh
+bash scripts/check-no-modal-presentation.sh
+bash scripts/check-no-null-voice-adapters.sh
+bash scripts/check-orchestrator-events-single-consumer.sh
+bash scripts/check-presence-bus-no-tts-orchestrator.sh
+bash scripts/check-presence-vision-isolation.sh
+bash scripts/check-single-memory-mutated-emit.sh
+bash scripts/check-single-memory-used-emit.sh
+bash scripts/check-single-writer-hudstate.sh
+bash scripts/check-vision-isolation.sh
+```
+
+Codesign + entitlement verification: `bash scripts/verify-entitlements.sh --pre-codesign|--post-codesign` (run as Xcode build phases) and `bash scripts/verify-codesign-settings.sh`.
+
+**Real-hardware / real-network env-flag gates** (skipped in default runs, run interactively):
+
+```bash
+JARVIS_REAL_MODELS=1 swift test --package-path packages/Memory --filter MemoryRegressionCorpusTests
+# requires: local Ollama with nomic-embed-text + qwen2.5-coder:32b + loadable vec0.dylib
+
+JARVIS_REAL_CAMERA=1 swift test --package-path packages/Vision --filter CameraCaptureRealHardwareTests
+# requires: real AVCaptureDevice + .authorized TCC
+
+JARVIS_REAL_MODELS=1 swift test --package-path packages/Voice --filter OrpheusTTFATests
+# requires: ~6 GB Orpheus weights downloaded; produces empirical TTFA measurement
+```
+
+Eval harness (Anthropic + local-model eval matrix; corpus in `.planning/evals/`) — pinned to `qwen2.5-coder:32b` for the local-model lane.
 
 # CLAUDE.md
 
