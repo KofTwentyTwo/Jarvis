@@ -1,10 +1,20 @@
 # Session State
 
-**Last Updated:** 2026-05-04 (afternoon — P0-P2 audit-fix sweep close)
+**Last Updated:** 2026-05-04 (evening — documentation sweep close)
 
 ## Current Status
 
-`develop` at `2d9a25a`, ahead of origin (push pending). Tree clean. Track A + Track B-1..7 + Cleanup batch + Track C (vision) + Track D code-work (D-1..D-4 + D-5/D-6 skeletons) + audit-2026-05-04 P0/P1/P2/P3-18 fixes closed. D-5/D-6 binaries + D-7 model pulls remain on the user (environment work the executor cannot do autonomously).
+`develop` at `0234eaa`, push pending. Tree clean. Track A + Track B-1..7 + Cleanup batch + Track C (vision) + Track D code-work (D-1..D-4 + D-5/D-6 skeletons) + audit-2026-05-04 P0/P1/P2/P3-18 fixes + documentation sweep closed. D-5/D-6 binaries + D-7 model pulls remain on the user (environment work the executor cannot do autonomously).
+
+### Documentation sweep (this session, 5 commits)
+
+- **`4e1c8a0` — docs: write top-level README.md** — replaces the stale "Pre-implementation" stub with a current overview: status table, repo layout, build/test commands, pointers to ARCHITECTURE/CONTRIBUTING.
+- **`41b506d` — docs: write ARCHITECTURE.md** — marquee architecture document (~2300 words). Mermaid top-level diagram of the audio-graph fan-out + agent loop + bus, subsystem deep-dives for the 13 packages, cross-cutting concerns (concurrency, TCC, codesign, the 18 boundary gates), audit-derived anti-pattern list, where-things-live cheat sheet, honest gaps & deferred work.
+- **`508cf92` — docs(packages): per-package README files** — adds README.md to each of the 13 SPM packages. Each covers purpose, key public types, deps, consumers, invariants, test stack, notable files. Memory README explicitly marks the package functionally OFF until vec0.dylib + Ollama models land.
+- **`85b14ce` — docs(docstrings): add header docstrings to key public types** — AppDelegate (preamble + lifecycle + see-also), VoiceController (// MARK block converted to /// with Threading + Anti-patterns), MCPClient (registry + restart-mutex + relationships). Comment-only; verified via `swift build` (Voice, MCP) + `check-app-builds.sh`. Other types listed in the brief already had substantive docstrings — left alone per audit-grade-improvement-only.
+- **`0234eaa` — docs: write CONTRIBUTING.md** — dev environment setup, build/test pointers, GSD workflow, boundary-gate discipline, conventional-commit conventions matching the existing log, test-double naming taxonomy, anti-pattern checklist, step-by-step guides for adding an MCP tool / HUD button + bus event, compaction-recovery section for AI agents.
+
+All 18 boundary gates green; App target builds clean; Voice + MCP packages compile after docstring additions.
 
 ## What Was Done This Session
 
