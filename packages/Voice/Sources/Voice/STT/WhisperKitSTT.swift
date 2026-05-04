@@ -1,5 +1,8 @@
 import Foundation
+import OSLog
 import WhisperKit
+
+private let logger = Logger(subsystem: "com.koftwentytwo.jarvis", category: "WhisperKitSTT")
 
 // MARK: - WhisperKitBridge (test seam)
 
@@ -79,10 +82,18 @@ public final class WhisperKitSTT: STTProvider {
                 self.audioBuffer.append(contentsOf: chunk.pcm16k)
 
                 if windowBuffer.count >= windowSize {
-                    // Transcribe the accumulated window
-                    if let text = try? await self.bridge.transcribe(audioArray: windowBuffer),
-                       !text.isEmpty {
-                        continuation.yield(PartialTranscript(text: text, isFinal: false))
+                    // Transcribe the accumulated window.
+                    // P2-7 (audit 2026-05-04 code-style): catch + log instead
+                    // of silent try?. The fallback STT path is allowed to fail
+                    // back to assetMissing, but failures should be diagnosable.
+                    // T-06-05-03: never log transcript content — only the error.
+                    do {
+                        let text = try await self.bridge.transcribe(audioArray: windowBuffer)
+                        if !text.isEmpty {
+                            continuation.yield(PartialTranscript(text: text, isFinal: false))
+                        }
+                    } catch {
+                        logger.warning("WhisperKitSTT: window transcribe failed: \(String(describing: error))")
                     }
                     windowBuffer = []
                 }
@@ -90,17 +101,24 @@ public final class WhisperKitSTT: STTProvider {
 
             // Flush remaining audio
             if !windowBuffer.isEmpty {
-                if let text = try? await self.bridge.transcribe(audioArray: windowBuffer),
-                   !text.isEmpty {
-                    continuation.yield(PartialTranscript(text: text, isFinal: false))
+                do {
+                    let text = try await self.bridge.transcribe(audioArray: windowBuffer)
+                    if !text.isEmpty {
+                        continuation.yield(PartialTranscript(text: text, isFinal: false))
+                    }
+                } catch {
+                    logger.warning("WhisperKitSTT: tail transcribe failed: \(String(describing: error))")
                 }
             }
 
             // Final transcription of the full buffer for accuracy
             if !self.audioBuffer.isEmpty {
-                if let finalText = try? await self.bridge.transcribe(audioArray: self.audioBuffer) {
+                do {
+                    let finalText = try await self.bridge.transcribe(audioArray: self.audioBuffer)
                     self.finishedTranscript = finalText
                     continuation.yield(PartialTranscript(text: finalText, isFinal: true))
+                } catch {
+                    logger.warning("WhisperKitSTT: final transcribe failed: \(String(describing: error))")
                 }
             }
 
