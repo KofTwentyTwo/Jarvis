@@ -42,6 +42,11 @@ public actor CameraCapture {
     /// Mirrors `authStatusProbe` shape.
     internal var photoCaptureOverride: (@Sendable () async throws -> CapturedFrame)?
 
+    /// Track-C 2: video data output sample-buffer delegate. Constructed in
+    /// `buildSession()` so the AVCaptureVideoDataOutput's sample handler can
+    /// fan out to the multiple frameStream continuations.
+    internal var videoSampleDelegate: VideoSampleDelegate?
+
     public init(
         degradationContinuation: AsyncStream<VisionDegradationReason>.Continuation,
         degradationStream: AsyncStream<VisionDegradationReason>
@@ -96,6 +101,8 @@ public actor CameraCapture {
             runtimeErrorObserver = nil
         }
         session?.stopRunning()
+        videoSampleDelegate?.finishAllStreams()
+        videoSampleDelegate = nil
         videoOutput = nil
         photoOutput = nil
         session = nil
@@ -134,23 +141,50 @@ public actor CameraCapture {
         }
     }
 
-    /// Publishes a CMSampleBuffer-derived frame stream to ONE consumer
-    /// (PresenceMonitor). Throttled to 720p/15fps per RESEARCH section 9.
-    /// Returns a fresh AsyncStream every call; only PresenceMonitor calls
-    /// this in 07-04 (and only one monitor instance exists).
+    /// Publishes a CMSampleBuffer-derived frame stream. Each call returns
+    /// a fresh AsyncStream backed by the live AVCaptureVideoDataOutput
+    /// delegate (`VideoSampleDelegate`); cancellation removes the
+    /// continuation from the fan-out set; `shutdown()` finishes all
+    /// outstanding streams.
     ///
-    /// 07-04 ships the API surface; the actual sample-buffer delivery from
-    /// AVCaptureVideoDataOutput is wired through a delegate-bridge actor —
-    /// for the 07-04 tests, PresenceMonitor consumes a test-injected
-    /// stream. Production sample-buffer plumbing finishes in 07-05/07-06.
+    /// PresenceMonitor is the only in-tree consumer today. If the session
+    /// has not yet been built (open() not called), the stream is finished
+    /// immediately so consumers' `for await` exits rather than hanging.
     public nonisolated func frameStream(forPresence: Bool) -> AsyncStream<PresenceFrameSample> {
-        // 07-04: production path is intentionally a no-op stream. 07-06
-        // wires the AVCaptureVideoDataOutput delegate to a continuation
-        // captured here. Until then, return an empty stream that finishes
-        // immediately — the unit tests inject their own AsyncStreams.
-        AsyncStream<PresenceFrameSample> { cont in
+        let token = UUID()
+        return AsyncStream<PresenceFrameSample> { cont in
+            cont.onTermination = { [weak self] _ in
+                Task { [weak self] in
+                    await self?.detachFrameContinuation(token: token)
+                }
+            }
+            // Hop into the actor to register against the live delegate.
+            Task { [weak self] in
+                guard let self else {
+                    cont.finish()
+                    return
+                }
+                await self.attachFrameContinuation(cont, token: token)
+            }
+        }
+    }
+
+    /// Attach an in-flight continuation to the live video sample delegate.
+    /// If the delegate isn't built yet (open() not called), finish the
+    /// continuation immediately so consumers don't hang.
+    private func attachFrameContinuation(
+        _ cont: AsyncStream<PresenceFrameSample>.Continuation,
+        token: UUID
+    ) async {
+        if let delegate = videoSampleDelegate {
+            delegate.add(token: token, continuation: cont)
+        } else {
             cont.finish()
         }
+    }
+
+    private func detachFrameContinuation(token: UUID) async {
+        videoSampleDelegate?.remove(token: token)
     }
 
     // MARK: - Internals
@@ -167,8 +201,13 @@ public actor CameraCapture {
         s.addInput(input)
 
         let videoOut = AVCaptureVideoDataOutput()
+        let delegate = VideoSampleDelegate(label: Self.logChannel)
+        let queue = DispatchQueue(label: "jarvis.vision.video-sample-queue", qos: .userInitiated)
+        videoOut.setSampleBufferDelegate(delegate, queue: queue)
+        videoOut.alwaysDiscardsLateVideoFrames = true
         if s.canAddOutput(videoOut) { s.addOutput(videoOut) }
         self.videoOutput = videoOut
+        self.videoSampleDelegate = delegate
 
         let photoOut = AVCapturePhotoOutput()
         if s.canAddOutput(photoOut) { s.addOutput(photoOut) }
@@ -270,5 +309,87 @@ final class PhotoCaptureProxy: NSObject, AVCapturePhotoCaptureDelegate, @uncheck
             height: Int(height),
             capturedAt: Date()
         ))
+    }
+}
+
+// MARK: - VideoSampleDelegate (C-2)
+
+/// Concrete `AVCaptureVideoDataOutputSampleBufferDelegate` that fans incoming
+/// CMSampleBuffers to a set of registered AsyncStream continuations. The
+/// AVFoundation sample-buffer queue is a serial DispatchQueue, so the lock
+/// guards subscriber-set mutations from concurrent
+/// `attach`/`detach`/`finishAllStreams` calls dispatched from the actor.
+/// Each subscription is keyed by a UUID generated at frameStream() call time
+/// and stored both on the consumer's onTermination closure and inside this
+/// delegate.
+final class VideoSampleDelegate: NSObject,
+                                  AVCaptureVideoDataOutputSampleBufferDelegate,
+                                  @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuations: [UUID: AsyncStream<PresenceFrameSample>.Continuation] = [:]
+    private let logger: Logger
+
+    init(label: String) {
+        self.logger = Logger(label: label)
+        super.init()
+    }
+
+    func add(token: UUID, continuation: AsyncStream<PresenceFrameSample>.Continuation) {
+        lock.lock()
+        defer { lock.unlock() }
+        continuations[token] = continuation
+    }
+
+    func remove(token: UUID) {
+        lock.lock()
+        defer { lock.unlock() }
+        continuations.removeValue(forKey: token)
+    }
+
+    func finishAllStreams() {
+        lock.lock()
+        let snapshot = Array(continuations.values)
+        continuations.removeAll()
+        lock.unlock()
+        for cont in snapshot {
+            cont.finish()
+        }
+    }
+
+    /// AVFoundation entry point. Runs on the serial sample-buffer DispatchQueue.
+    /// Routes each frame to every registered continuation via a snapshot copy
+    /// taken under the lock.
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        lock.lock()
+        let snapshot = Array(continuations.values)
+        lock.unlock()
+        if snapshot.isEmpty { return }
+        let sample = PresenceFrameSample.sampleBuffer(sampleBuffer)
+        for cont in snapshot {
+            cont.yield(sample)
+        }
+    }
+
+    /// Test seam: synthesise a sample on the same fan-out path used by the
+    /// real AVCapture callback. Used by the C-2 unit tests to assert
+    /// continuation routing without a real `AVCaptureSession`.
+    func injectForTesting(_ sample: PresenceFrameSample) {
+        lock.lock()
+        let snapshot = Array(continuations.values)
+        lock.unlock()
+        for cont in snapshot {
+            cont.yield(sample)
+        }
+    }
+
+    /// Test seam: subscriber count for assertions.
+    func subscriberCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return continuations.count
     }
 }
