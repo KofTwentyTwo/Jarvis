@@ -32,19 +32,43 @@ public actor MemoryExtractionOrchestrator {
     /// producer.
     public typealias ApplyOp = @Sendable (MemoryOp, Int64) async throws -> Void
 
+    /// Track-D D-3: priorFacts feed for the mem0 extractor.
+    ///
+    /// Pre-D-3, `process(_:)` hardcoded `priorFacts: []` — every fact got
+    /// ADDed, none ever got UPDATEd, defeating mem0's whole supersede
+    /// design. The closure now resolves prior active facts for each job;
+    /// production passes a closure that returns `store.recentActiveFacts(
+    /// limit: 50)` (capped server-side in SQL). Tests pass static `[Fact]`
+    /// arrays.
+    ///
+    /// The job is passed in case future implementations want subject- or
+    /// session-scoped shortlisting (Plan 07-03 deferred work). Today the
+    /// simplest impl ignores the job and returns the recent slice.
+    public typealias PriorFactsLookup = @Sendable (ExtractionJob) async throws -> [Fact]
+
+    /// Default priorFactsLookup — empty list. Preserves pre-D-3 behavior
+    /// for callers that don't need supersede semantics (most tests).
+    public static let emptyPriorFactsLookup: PriorFactsLookup = { _ in [] }
+
     private let channel: BoundedAsyncChannel<ExtractionJob>
     private let extractor: MemoryExtractor
     private let applyOp: ApplyOp
+    private let priorFactsLookup: PriorFactsLookup
     private let logger: Logger
     private var drainTask: Task<Void, Never>?
 
-    public init(extractor: MemoryExtractor, applyOp: @escaping ApplyOp) {
+    public init(
+        extractor: MemoryExtractor,
+        applyOp: @escaping ApplyOp,
+        priorFactsLookup: @escaping PriorFactsLookup = MemoryExtractionOrchestrator.emptyPriorFactsLookup
+    ) {
         self.channel = BoundedAsyncChannel<ExtractionJob>(
             capacity: Self.channelCapacity,
             policy: .dropOldest
         )
         self.extractor = extractor
         self.applyOp = applyOp
+        self.priorFactsLookup = priorFactsLookup
         self.logger = Logger(label: "memory.orchestrator")
     }
 
@@ -79,8 +103,17 @@ public actor MemoryExtractionOrchestrator {
         // Best-effort. Errors are logged and never propagate — extraction
         // must never affect the producer's turnEnd path.
         do {
-            // Plan 07-03 will replace [] with FTS5-shortlisted prior facts.
-            let priorFacts: [Fact] = []
+            // Track-D D-3: real prior facts so the extractor can emit UPDATE
+            // ops (mem0 supersede pattern) instead of always ADDing. Lookup
+            // failure degrades to empty list — extraction continues with
+            // no prior context (pre-D-3 behavior) rather than dying.
+            let priorFacts: [Fact]
+            do {
+                priorFacts = try await priorFactsLookup(job)
+            } catch {
+                logger.warning("priorFactsLookup failed for turnId=\(job.turnId.rawValue): \(error) — proceeding with empty priorFacts")
+                priorFacts = []
+            }
             let ops = try await extractor.extract(
                 userText: job.userText,
                 assistantText: job.assistantText,

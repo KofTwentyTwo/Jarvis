@@ -298,6 +298,31 @@ public actor MemoryStore {
         }
     }
 
+    /// Track-D D-3: recent active facts (most-recently-created first), capped
+    /// at `limit`. Source for the mem0 extractor's priorFacts context so the
+    /// model can decide UPDATE-vs-ADD against an existing fact rather than
+    /// silently duplicating it on every turn. D-02 forgotten facts excluded.
+    /// Cap is enforced server-side in SQL — never returns more than `limit`
+    /// rows even with a misbehaving caller.
+    public func recentActiveFacts(limit: Int) throws -> [Fact] {
+        try conn.query(MemoryQueries.recentActiveFactsSQL, bindings: [
+            .int(Int64(max(0, limit))),
+        ]) { stmt in
+            Fact(
+                id: stmt.columnInt(at: 0),
+                subject: stmt.columnText(at: 1) ?? "",
+                predicate: stmt.columnText(at: 2) ?? "",
+                object: stmt.columnText(at: 3) ?? "",
+                sourceTurnId: stmt.columnIsNull(at: 4) ? nil : stmt.columnInt(at: 4),
+                validFrom: stmt.columnInt(at: 5),
+                validTo: stmt.columnIsNull(at: 6) ? nil : stmt.columnInt(at: 6),
+                supersededBy: stmt.columnIsNull(at: 7) ? nil : stmt.columnInt(at: 7),
+                forgottenAt: stmt.columnIsNull(at: 8) ? nil : stmt.columnInt(at: 8),
+                createdAt: stmt.columnInt(at: 9)
+            )
+        }
+    }
+
     /// Active facts (valid_to IS NULL AND forgotten_at IS NULL) for a given
     /// subject. D-02 forgotten facts excluded.
     public func queryActiveFacts(matching subject: String) throws -> [Fact] {

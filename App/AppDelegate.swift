@@ -1026,6 +1026,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //    drops the op instead of throwing — the drain loop survives
         //    so a future store reconstruction (e.g., installMemory retry)
         //    can replace this orchestrator if needed.
+        //    Track-D D-3: priorFactsLookup returns up to 50 recent active
+        //    facts so the extractor can emit UPDATE ops (mem0 supersede
+        //    pattern) instead of always ADDing. When `store` is nil the
+        //    closure returns []; pre-D-3 behavior preserved on the no-store
+        //    path. 50 is a deliberate cap — RESEARCH §5 caps the rendered
+        //    priorFacts block at ~4 KB (~50 facts at typical S/P/O length).
         let logger = self.systemLogger
         let memoryOrch = MemoryExtractionOrchestrator(
             extractor: extractor,
@@ -1037,6 +1043,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // and the turnId hash, never the subject/object content.
                     logger?.debug("memory applyOp dropped (no store): turnId=\(turnId)")
                 }
+            },
+            priorFactsLookup: { [weak self] _ in
+                guard let store = await self?.memoryStore else { return [] }
+                return try await store.recentActiveFacts(limit: 50)
             }
         )
         await memoryOrch.start()

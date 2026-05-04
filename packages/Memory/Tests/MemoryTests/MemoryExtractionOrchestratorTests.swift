@@ -179,6 +179,128 @@ final class MemoryExtractionOrchestratorTests: XCTestCase {
         await orchestrator.shutdown()
     }
 
+    // MARK: - Track-D D-3 (priorFacts wiring)
+
+    /// D-3: when `priorFactsLookup` returns a non-empty list, the extractor
+    /// receives those priors and the model is free to emit UPDATE (instead
+    /// of always ADDing). This test drives the path with a stub provider
+    /// that, when it sees prior facts in the system prompt, returns an
+    /// UPDATE op referencing the prior fact's id. Pre-D-3 this was
+    /// impossible — the orchestrator hardcoded `priorFacts: []` so the
+    /// model never knew prior facts existed and therefore never UPDATEd.
+    func testD3_priorFactsLookupDrivesUpdateOp() async throws {
+        // Stub provider that emits an UPDATE op with supersedes_fact_id=99
+        // when it sees "[99]" in the system prompt (the priorFacts renderer
+        // formats each prior fact as "[id] subject predicate object").
+        // Otherwise it ADDs.
+        final class PriorAwareProvider: LLMProvider, @unchecked Sendable {
+            func stream(
+                messages: [LLMMessage],
+                tools: [ToolSchema],
+                toolChoice: ToolChoice,
+                model: ModelID,
+                maxOutputTokens: Int,
+                cacheHints: CacheHints?
+            ) -> AsyncThrowingStream<LLMEvent, Error> {
+                let systemText = messages
+                    .filter { $0.role == .system }
+                    .flatMap { $0.content }
+                    .compactMap { block -> String? in
+                        if case let .text(s) = block { return s }
+                        return nil
+                    }
+                    .joined(separator: "\n")
+                let sawPriors = systemText.contains("[99]")
+                return AsyncThrowingStream { cont in
+                    Task {
+                        let ops: [[String: Any]]
+                        if sawPriors {
+                            ops = [[
+                                "op": "UPDATE",
+                                "supersedes_fact_id": 99,
+                                "subject": "Sarah",
+                                "predicate": "works_at",
+                                "object": "Initech",
+                            ]]
+                        } else {
+                            ops = [[
+                                "op": "ADD",
+                                "subject": "Sarah",
+                                "predicate": "works_at",
+                                "object": "Initech",
+                            ]]
+                        }
+                        let json = try! JSONSerialization.data(withJSONObject: ["ops": ops])
+                        cont.yield(.toolUseRequested(
+                            ToolUseRequest(id: "t-d3", name: "apply_memory_ops", argsJSON: json)
+                        ))
+                        cont.yield(.messageStop)
+                        cont.finish()
+                    }
+                }
+            }
+        }
+
+        let prior = Fact(
+            id: 99, subject: "Sarah", predicate: "works_at", object: "Acme",
+            sourceTurnId: 1, validFrom: 1, createdAt: 1
+        )
+        let extractor = MemoryExtractor(provider: PriorAwareProvider())
+        let spy = SpyApplyOp()
+        let orchestrator = MemoryExtractionOrchestrator(
+            extractor: extractor,
+            applyOp: { op, turnId in spy.record(op, sourceTurnId: turnId) },
+            priorFactsLookup: { _ in [prior] }
+        )
+        await orchestrator.start()
+        await orchestrator.enqueue(ExtractionJob(
+            turnId: TurnID(rawValue: "turn-d3"),
+            userText: "Sarah now works at Initech.",
+            assistantText: "Got it."
+        ))
+        try await Task.sleep(nanoseconds: 250_000_000)
+
+        XCTAssertEqual(spy.calls.count, 1, "applyOp must be invoked exactly once")
+        guard case let .update(supersedes, s, p, o, _) = spy.calls.first?.op else {
+            return XCTFail("D-3: priorFacts presence must enable UPDATE op; got \(String(describing: spy.calls.first?.op))")
+        }
+        XCTAssertEqual(supersedes, 99, "UPDATE must reference the prior fact's id")
+        XCTAssertEqual(s, "Sarah")
+        XCTAssertEqual(p, "works_at")
+        XCTAssertEqual(o, "Initech")
+
+        await orchestrator.shutdown()
+    }
+
+    /// D-3: when `priorFactsLookup` throws, the orchestrator degrades to
+    /// empty priors and still processes the job — the lookup failure must
+    /// never be a death sentence for the drain task.
+    func testD3_priorFactsLookupErrorDegradesToEmpty() async throws {
+        struct LookupError: Error {}
+        let provider = TimedMockProvider()
+        provider.argsJSON = try JSONSerialization.data(withJSONObject: ["ops": [
+            ["op": "ADD", "subject": "X", "predicate": "Y", "object": "Z"]
+        ]])
+        let extractor = MemoryExtractor(provider: provider)
+        let spy = SpyApplyOp()
+        let orchestrator = MemoryExtractionOrchestrator(
+            extractor: extractor,
+            applyOp: { op, turnId in spy.record(op, sourceTurnId: turnId) },
+            priorFactsLookup: { _ in throw LookupError() }
+        )
+        await orchestrator.start()
+        await orchestrator.enqueue(ExtractionJob(
+            turnId: TurnID(rawValue: "turn-d3-err"),
+            userText: "u", assistantText: "a"
+        ))
+        try await Task.sleep(nanoseconds: 250_000_000)
+
+        XCTAssertEqual(spy.calls.count, 1,
+                       "D-3: lookup errors must degrade to empty priors, never abort the job")
+
+        await orchestrator.shutdown()
+    }
+
     /// Process applies returned ops to the store via the callback.
     func testProcessAppliesOpsToStore() async throws {
         let provider = TimedMockProvider()

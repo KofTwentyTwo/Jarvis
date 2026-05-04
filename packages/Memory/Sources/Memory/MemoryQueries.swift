@@ -92,4 +92,18 @@ public enum MemoryQueries {
       AND forgotten_at IS NULL
     ORDER BY created_at DESC;
     """
+
+    /// Track-D D-3: recent active facts feed for the mem0 extractor's
+    /// priorFacts context. Used by `MemoryExtractionOrchestrator.process`
+    /// to give the model UPDATE-vs-ADD information without doing per-job
+    /// FTS5 shortlisting (Plan 07-03 deferred work). Bindings: limit.
+    public static let recentActiveFactsSQL: String = """
+    SELECT id, subject, predicate, object, source_turn_id, valid_from, valid_to,
+           superseded_by, forgotten_at, created_at
+    FROM facts
+    WHERE valid_to IS NULL
+      AND forgotten_at IS NULL
+    ORDER BY created_at DESC
+    LIMIT ?;
+    """
 }
