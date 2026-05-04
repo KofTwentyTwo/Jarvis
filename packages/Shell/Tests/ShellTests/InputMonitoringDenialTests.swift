@@ -36,11 +36,9 @@ final class InputMonitoringDenialTests: XCTestCase {
         XCTAssertEqual(sink.enqueueCount, 0, "grant must not enqueue any banner")
     }
 
-    func test_localMonitorOnlyFallback() {
-        // Exercised via HotkeyBinder.bind(_, inputMonitoringGranted: false)
-        // in HotkeyBindingTests. This test is a pointer to the design: per
-        // SHELL-06, denial ≠ silent no-op; the banner (via InputMonitoringProbe)
-        // and the local-monitor fallback (via HotkeyBinder) together prevent it.
-        XCTAssertTrue(true)
-    }
+    // SHELL-06 local-monitor fallback is exercised via
+    // `HotkeyBinder.bind(_, inputMonitoringGranted: false)` in
+    // `HotkeyBindingTests`. The previous `test_localMonitorOnlyFallback`
+    // was a pointer-to-design `XCTAssertTrue(true)` test removed in the
+    // 2026-05-04 cleanup batch (`.planning/audit-2026-05-03/tests-audit.md`).
 }

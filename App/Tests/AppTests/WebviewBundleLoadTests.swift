@@ -52,15 +52,11 @@ final class WebviewBundleLoadTests: XCTestCase {
         )
     }
 
-    /// B-extra: the `assets/` subdirectory is intentionally gitignored — the
-    /// presence check lives in `scripts/smoke-test-hud.sh`, which inspects
-    /// the BUILT `.app` after `xcodebuild build` has run the pre-build
-    /// `scripts/build-webview.sh`. Documenting the split here so future
-    /// readers don't add a test that fails on clean checkouts.
-    func test_assetsDirectoryGitignored_documentedInSmokeScript() {
-        // This test intentionally has no assertion — it exists to document
-        // the split of responsibility. `App/Resources/webview/.gitignore`
-        // ignores `assets/`; the smoke script covers the built-app side.
-        XCTAssertTrue(true)
-    }
+    // The `assets/` subdirectory is intentionally gitignored — the presence
+    // check lives in `scripts/smoke-test-hud.sh`, which inspects the BUILT
+    // `.app` after `xcodebuild build` has run the pre-build
+    // `scripts/build-webview.sh`. The previous
+    // `test_assetsDirectoryGitignored_documentedInSmokeScript` was an
+    // `XCTAssertTrue(true)` documentation-as-test removed in the 2026-05-04
+    // cleanup batch (`.planning/audit-2026-05-03/tests-audit.md`).
 }

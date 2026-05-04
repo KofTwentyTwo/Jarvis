@@ -257,10 +257,15 @@ final class MCPRuntimeWiringTests: XCTestCase {
         _ = await drainTask.value
 
         // The two writes are now in the DB. We don't have a public reader;
-        // assertion is the absence of throws + the drain task exiting.
-        // The CR-02 acceptance is the wiring; the DB fixity is asserted by
-        // ReplayLogTests in the Replay package.
-        XCTAssertTrue(true, "observer→channel→drain→ReplayLog completed without error")
+        // the implicit assertions are: (a) `try await Task.sleep` does not
+        // throw, (b) `await drainTask.value` returns (drain saw both
+        // envelopes through the channel and exited cleanly on `finish()`).
+        // The CR-02 acceptance is the wiring; DB fixity is asserted by
+        // ReplayLogTests in the Replay package. The 2026-05-04 cleanup
+        // batch removed a trailing `XCTAssertTrue(true)` rubber-stamp —
+        // the drainTask `await` is the actual end-of-flow gate.
+        XCTAssertTrue(drainTask.isCancelled == false,
+                      "drain task must have completed via channel.finish(), not cancellation")
     }
 
     /// CR-02 invariant 3: under burst saturation, the channel drops the

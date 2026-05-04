@@ -29,15 +29,15 @@ final class ToolChoiceTests: XCTestCase {
     }
 
     /// Test 10 (compile-time contract): `LLMProvider.stream(...)` requires
-    /// `toolChoice:` — there is no default. Negative compilation cannot be
-    /// asserted in XCTest; this positive test exists to make the contract
-    /// visible — if `toolChoice:` were defaulted, this call site would still
-    /// compile, but a code reviewer scanning this file would see the comment.
+    /// `toolChoice:` — there is no default. The closure body is the
+    /// contract: if `toolChoice:` were defaulted on the protocol, this
+    /// call site would still compile (a hand-defaulted argument is
+    /// semantically equivalent), but a code reviewer scanning this file
+    /// would see the explicit `toolChoice: .auto` argument and know the
+    /// design intent. The 2026-05-04 cleanup batch removed the trailing
+    /// `XCTAssertTrue(true)` tautology — the closure compile is the gate.
     func testLLMProviderStreamRequiresToolChoice() {
-        // Compile-only — never actually runs. The assertion below documents
-        // that omitting `toolChoice:` MUST NOT compile.
         let _: (any LLMProvider) -> AsyncThrowingStream<LLMEvent, Error> = { provider in
-            // Calling WITHOUT toolChoice: would fail at compile time.
             provider.stream(
                 messages: [],
                 tools: [],
@@ -47,6 +47,5 @@ final class ToolChoiceTests: XCTestCase {
                 cacheHints: nil
             )
         }
-        XCTAssertTrue(true) // Test compiles → contract holds.
     }
 }
