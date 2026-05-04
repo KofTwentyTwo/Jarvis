@@ -19,6 +19,7 @@ import XCTest
 @testable import Keychain
 @testable import Config
 @testable import Memory
+@testable import JarvisMCP
 
 @MainActor
 final class MemoryInstallWiringTests: XCTestCase {
@@ -69,5 +70,71 @@ final class MemoryInstallWiringTests: XCTestCase {
                         "D-1 fix: coordinator must construct even when vec fails")
 
         cleanUp(delegate)
+    }
+
+    /// D-2: when MemoryStore.init fails (today's reality), neither
+    /// SearchMemoryTool nor ForgetFactTool registers — they have no DB
+    /// to dispatch against. The registry itself IS constructed (empty).
+    func test_D2_noToolsRegisteredWhenStoreUnavailable() async {
+        let delegate = AppDelegate()
+        delegate.entitlementProbe = EntitlementYes()
+        delegate.keychainStore = FakeKeychain()
+
+        await delegate.installMemory()
+
+        XCTAssertNil(delegate.memoryStore, "Production reality: store nil on every host")
+        XCTAssertNotNil(delegate.inProcessToolRegistry,
+                        "D-2: registry constructs unconditionally")
+        let tools = await delegate.inProcessToolRegistry?.registered() ?? []
+        let names = Set(tools.map { $0.name })
+        XCTAssertFalse(names.contains("forget_fact"),
+                       "D-2: forget_fact must not register when store is nil (writes need DB)")
+        XCTAssertFalse(names.contains("search_memory"),
+                       "D-2: search_memory must not register when search unavailable (reads need DB + vec)")
+
+        cleanUp(delegate)
+    }
+
+    // MARK: - D-2 positive paths via test seam
+
+    private struct StubForget: ForgetFactDispatching {
+        func forgetFact(id: Int64, triggerTurnId: Int64) async throws -> Bool { false }
+    }
+    private struct StubHybrid: HybridSearchDispatching {
+        func searchFacts(query: String, k: Int, triggerTurnId: Int64) async throws -> [SearchMemoryHit] { [] }
+    }
+
+    /// D-2: both dispatchers present → both tools register.
+    func test_D2_bothToolsRegisterWhenBothDispatchersPresent() async {
+        let registry = await AppDelegate.buildInProcessToolRegistry(
+            forgetDispatcher: StubForget(),
+            searchDispatcher: StubHybrid()
+        )
+        let names = Set(await registry.registered().map { $0.name })
+        XCTAssertTrue(names.contains("forget_fact"))
+        XCTAssertTrue(names.contains("search_memory"))
+    }
+
+    /// D-2: store ok but search unavailable → forget registers, search does not.
+    func test_D2_onlyForgetRegistersWhenSearchUnavailable() async {
+        let registry = await AppDelegate.buildInProcessToolRegistry(
+            forgetDispatcher: StubForget(),
+            searchDispatcher: nil
+        )
+        let names = Set(await registry.registered().map { $0.name })
+        XCTAssertTrue(names.contains("forget_fact"),
+                      "D-2: forget_fact registers when store exists")
+        XCTAssertFalse(names.contains("search_memory"),
+                       "D-2: search_memory gated on searchAvailable")
+    }
+
+    /// D-2: nothing wired (store nil) → empty registry.
+    func test_D2_emptyRegistryWhenBothDispatchersNil() async {
+        let registry = await AppDelegate.buildInProcessToolRegistry(
+            forgetDispatcher: nil,
+            searchDispatcher: nil
+        )
+        let names = Set(await registry.registered().map { $0.name })
+        XCTAssertEqual(names, [], "D-2: empty registry when no dispatchers — neither tool registers")
     }
 }

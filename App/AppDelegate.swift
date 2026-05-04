@@ -224,6 +224,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `memoryExtractionOrchestrator` doc above.
     var memoryExtractionCoordinator: MemoryExtractionCoordinator?
 
+    /// Track-D D-2: registry of in-process MCP tools (`search_memory`,
+    /// `forget_fact`). nil until installMemory runs.
+    /// Registration is gated:
+    ///   - `forget_fact` registers when `memoryStore != nil` (writes need DB)
+    ///   - `search_memory` registers when `memorySearchAvailable == true`
+    ///     (reads need both DB and vec0)
+    /// Future work: wrap `mcpRuntime.dispatcher` so the agent can dispatch
+    /// these tools by name. Until then, the registry is the destination of
+    /// the registration but the dispatch path is not yet hooked. The audit
+    /// gap "tools exist but unregistered" is closed by this ivar; the
+    /// "tools exposed to LLM" gap is independent and tracked separately.
+    var inProcessToolRegistry: InProcessToolRegistry?
+
     /// Task spawned in `applicationWillFinishLaunching` that constructs and
     /// starts the memory subsystem.
     var memoryInstallTask: Task<Void, Never>?
@@ -1036,9 +1049,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let coord = MemoryExtractionCoordinator(memoryOrchestrator: memoryOrch)
         memoryExtractionCoordinator = coord
 
-        systemLogger?.info(
-            "installMemory: extractor up; store=\(store != nil) search=\(searchAvailable)"
+        // 7. Track-D D-2: in-process MCP tool registry.
+        //    Build adapters that bridge MCP's HybridSearchDispatching /
+        //    ForgetFactDispatching protocols to the Memory.HybridSearch and
+        //    MemoryStore.forgetFact actor methods.
+        var forgetDispatcher: (any ForgetFactDispatching)? = nil
+        var searchDispatcher: (any HybridSearchDispatching)? = nil
+        if let store = store {
+            forgetDispatcher = ForgetFactStoreAdapter(store: store)
+            if searchAvailable {
+                do {
+                    let embedder = try OllamaEmbeddingClient(
+                        baseURL: URL(string: "http://127.0.0.1:11434")!
+                    )
+                    let hybrid = HybridSearch(store: store, embedder: embedder)
+                    searchDispatcher = HybridSearchAdapter(hybrid: hybrid)
+                } catch {
+                    systemLogger?.warning(
+                        "installMemory: embedder init failed — search_memory not registered: \(String(describing: error))"
+                    )
+                }
+            }
+        }
+
+        let registry = await Self.buildInProcessToolRegistry(
+            forgetDispatcher: forgetDispatcher,
+            searchDispatcher: searchDispatcher
         )
+        self.inProcessToolRegistry = registry
+
+        let toolNames = await registry.registered().map { $0.name }
+        systemLogger?.info(
+            "installMemory: extractor up; store=\(store != nil) search=\(searchAvailable) inProcessTools=\(toolNames)"
+        )
+    }
+
+    /// Track-D D-2 test seam: pure registry-construction helper. Takes
+    /// optional already-built dispatchers and registers tools per the
+    /// gating rules:
+    ///   - `forget_fact` registers if `forgetDispatcher` is non-nil.
+    ///   - `search_memory` registers if `searchDispatcher` is non-nil.
+    /// The production path passes nil dispatchers when their preconditions
+    /// (store exists / searchAvailable) aren't met — which is exactly the
+    /// gating semantics. Tests can pass stub dispatchers to assert positive
+    /// registration without needing a real MemoryStore (which requires
+    /// vec0.dylib, env-gated in CI).
+    static func buildInProcessToolRegistry(
+        forgetDispatcher: (any ForgetFactDispatching)?,
+        searchDispatcher: (any HybridSearchDispatching)?
+    ) async -> InProcessToolRegistry {
+        let registry = InProcessToolRegistry()
+        if let forget = forgetDispatcher {
+            await registry.register(ForgetFactTool(dispatcher: forget))
+        }
+        if let search = searchDispatcher {
+            await registry.register(SearchMemoryTool(dispatcher: search))
+        }
+        return registry
     }
 
     // MARK: - Agent install (Plan 09-01)
