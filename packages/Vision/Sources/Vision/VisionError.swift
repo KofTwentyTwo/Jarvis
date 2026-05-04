@@ -25,4 +25,10 @@ public enum VisionError: Error, Sendable {
     /// within the bounded warmup window. Caller falls back to T1 for the
     /// remainder of the process lifetime.
     case sidecarStartupTimeout
+    /// Track-C 4: T2 (vllm-mlx local-quality) provider is not yet wired in
+    /// AppDelegate. `MissingT2Provider.stream(...)` surfaces this error
+    /// instead of silently re-running on T1. Production code paths must
+    /// gate T2 escalation on `VisionRouter.evaluatePostResponse(...,
+    /// t2Available: false)` so this error never reaches the orchestrator.
+    case t2ProviderUnavailable
 }

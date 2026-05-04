@@ -1474,14 +1474,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // 6. VisionRouter (D-16/D-17/D-18 T1/T2/T3 ladder).
-        //    T2 falls back to T1 when vllm-mlx isn't available — the router's
-        //    `evaluatePostResponse` already enforces "stay on T1 if T2 not
-        //    available" (07-05's no-auto-cloud invariant); supplying the
-        //    same provider for both keeps the API contract satisfied.
-        //
-        //    Wiring into the live AgentOrchestrator.runTurn is deferred — the
-        //    orchestrator itself isn't yet wired in AppDelegate. See SUMMARY
-        //    Deferred wiring.
+        //    T2 (`VllmMlxSidecar` + `VllmMlxProvider`) is not yet wired in
+        //    AppDelegate (codesigning + feature-flag + binary-bundling work
+        //    is downstream). Track-C 4 replaces the previous silent
+        //    `t2Provider: t1` fallback with an explicit `MissingT2Provider`
+        //    whose `stream(...)` throws `VisionError.t2ProviderUnavailable`.
+        //    Callers MUST gate T2 escalation on `evaluatePostResponse(...,
+        //    t2Available: false)`, which routes to `.useT1Result` and never
+        //    invokes T2 — so this provider is never actually streamed in
+        //    production today. Surfacing the missing wiring as an explicit
+        //    error makes a regression debuggable instead of silent.
         let t1 = OllamaProvider(baseURL: URL(string: "http://127.0.0.1:11434")!)
         let t3: any LLMProvider
         let keychainStoreLocal = self.keychainStore
@@ -1493,7 +1495,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let router = VisionRouter(
             t1Provider: t1,
-            t2Provider: t1,                  // sidecar plan pending — T2 reuses T1 provider
+            t2Provider: MissingT2Provider(),   // Track-C 4 — explicit, not silent
             t3Provider: t3
         )
         visionRouter = router
