@@ -108,6 +108,48 @@ final class VoiceControllerTests: XCTestCase {
             "Should emit ~30 Hz × 0.25s = ~7 emissions, minimum 4")
     }
 
+    // MARK: - V5 (P1-3): stale STT finalize from a prior session is dropped
+
+    /// Regression guard for audit 2026-05-04 concurrency HIGH-1: if session A's
+    /// `provider.finalize()` returns AFTER session B has started, session A's
+    /// text must NOT be submitted to the orchestrator. The fix uses a
+    /// per-session generation id captured by the finalize Task and checked
+    /// in `handleSTTFinalized`.
+    func testV5_staleSttFinalize_isDropped_acrossSessionBoundary() async throws {
+        let (controller, deps) = makeController()
+        await controller.startForTests()
+
+        // Start session A via PTT and capture its session id BEFORE finalize.
+        await controller.pttDown()
+        let sessionAId = await controller._testCurrentSttSessionId()
+        XCTAssertGreaterThan(sessionAId, 0, "Session A must have a non-zero id")
+
+        // End session A cleanly: empty finalize → .idle.
+        await controller._testFireSpeechEnd(text: "")
+        try await Task.sleep(for: .milliseconds(50))
+
+        // Start session B — bumps the session id.
+        await controller.pttDown()
+        let sessionBId = await controller._testCurrentSttSessionId()
+        XCTAssertGreaterThan(sessionBId, sessionAId, "Session B id must be greater than A's")
+
+        // Simulate session A's late finalize callback arriving NOW, after B started.
+        // The captured sessionAId is stale — handler must drop the text.
+        await controller._testFireSpeechEnd(text: "STALE FROM SESSION A", sessionId: sessionAId)
+
+        // Verify the orchestrator never received the stale text.
+        let calls = await deps.orchestrator.submitCallTexts
+        XCTAssertFalse(calls.contains("STALE FROM SESSION A"),
+            "Stale STT finalize from session A must be dropped (P1-3 / HIGH-1)")
+
+        // Sanity: a fresh finalize for session B does land.
+        await controller._testFireSpeechEnd(text: "fresh from B", sessionId: sessionBId)
+        try await Task.sleep(for: .milliseconds(150))
+        let callsAfter = await deps.orchestrator.submitCallTexts
+        XCTAssertTrue(callsAfter.contains("fresh from B"),
+            "Current-session finalize must still land")
+    }
+
     // MARK: - V4b (P1-1): emitter pulls from BufferBroadcaster.Subscription, not raw ring
 
     /// Regression guard: the emitter MUST drain its dedicated subscription

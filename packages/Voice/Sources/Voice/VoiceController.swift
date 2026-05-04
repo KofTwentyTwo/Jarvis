@@ -62,6 +62,19 @@ public actor VoiceController {
     /// silence after `.speechEnd` exceeds the hangover threshold.
     private var vadInterceptorTask: Task<Void, Never>?
 
+    /// P1-3 (audit 2026-05-04, concurrency HIGH-1): per-session STT finalize
+    /// drain Task. Drains partials, calls `provider.finalize()`, then
+    /// dispatches `handleSTTFinalized`. Stored so `shutdown` can cancel
+    /// it and avoid leaking the actor past process teardown.
+    private var sttFinalizeTask: Task<Void, Never>?
+
+    /// P1-3 (audit 2026-05-04, concurrency HIGH-1): monotonic STT session
+    /// id. Incremented in `startSTTSession`; captured into the finalize
+    /// Task; checked in `handleSTTFinalized` to drop stale finalize
+    /// callbacks from a prior session whose Whisper / SpeechAnalyzer
+    /// `finalize()` returned after a new session already started.
+    private var sttSessionId: UInt64 = 0
+
     /// Track B-6: hangover threshold (number of consecutive 32ms silence
     /// windows after `.speechEnd` before auto-finalize). 5 chunks = 160 ms
     /// — comfortable margin over Silero's frame jitter while still letting
@@ -136,10 +149,16 @@ public actor VoiceController {
         orchestratorTask?.cancel()
         chunkPumpTask?.cancel()
         vadInterceptorTask?.cancel()
+        // P1-3: cancel the stored finalize Task so it doesn't outlive
+        // shutdown. The Task captures `[weak self]` and the controller is
+        // about to drop, but explicit cancellation is hygienic and prevents
+        // the underlying STT provider's finalize() from running past teardown.
+        sttFinalizeTask?.cancel()
         wakeWordTask = nil
         orchestratorTask = nil
         chunkPumpTask = nil
         vadInterceptorTask = nil
+        sttFinalizeTask = nil
         await audioLevelEmitter?.stop()
         audioLevelEmitter = nil
         sttChunkCont?.finish()
@@ -217,6 +236,20 @@ public actor VoiceController {
     /// Simulate a VAD speech-end + STT finalization with given text. Tests only.
     public func _testFireSpeechEnd(text: String = "") async {
         await handleSTTFinalized(text: text)
+    }
+
+    /// P1-3 stale-text seam (tests only). Invokes the generation-guarded
+    /// finalize path with an explicit `sessionId` so tests can simulate a
+    /// finalize callback from a prior session arriving after the next
+    /// session has started.
+    public func _testFireSpeechEnd(text: String, sessionId: UInt64) async {
+        await handleSTTFinalized(text: text, sessionId: sessionId)
+    }
+
+    /// P1-3 stale-text seam (tests only). Returns the current session id so
+    /// tests can capture it before triggering a session boundary.
+    public func _testCurrentSttSessionId() -> UInt64 {
+        sttSessionId
     }
 
     // MARK: - Private: background consumers
@@ -334,6 +367,16 @@ public actor VoiceController {
         chunkPumpTask = nil
         vadInterceptorTask?.cancel()
         vadInterceptorTask = nil
+        // P1-3: cancel any prior session's finalize drain so a slow
+        // SpeechAnalyzer/WhisperKit finalize from session A doesn't race
+        // session B. Generation-id below is the second guard.
+        sttFinalizeTask?.cancel()
+        sttFinalizeTask = nil
+
+        // P1-3: bump the session id so any in-flight finalize Task whose
+        // captured id no longer matches will early-return in handleSTTFinalized.
+        sttSessionId &+= 1
+        let sessionId = sttSessionId
 
         let provider = sttFactory()
         let (chunkStream, cont) = AsyncStream<AudioChunk>.makeStream()
@@ -376,9 +419,15 @@ public actor VoiceController {
 
         let partials = provider.transcribe(stream: chunkStream)
 
-        // Drain partial results in a detached task.
+        // Drain partial results in a stored task (P1-3, audit 2026-05-04).
+        // The Task is now retained on `sttFinalizeTask` so `shutdown` can
+        // cancel it explicitly. Capture is `[weak self]` instead of `[self]`
+        // to avoid retaining the actor past process teardown. The captured
+        // `sessionId` plus the check in `handleSTTFinalized` drops finalize
+        // callbacks whose session was superseded before `provider.finalize()`
+        // returned.
         // T-06-05-03: transcript text is NEVER passed to logger or os.log.
-        Task { [self] in
+        sttFinalizeTask = Task { [weak self, provider] in
             for await _ in partials { /* partials received but not logged */ }
 
             let finalText: String
@@ -389,7 +438,7 @@ public actor VoiceController {
                 finalText = ""
             }
 
-            await self.handleSTTFinalized(text: finalText)
+            await self?.handleSTTFinalized(text: finalText, sessionId: sessionId)
         }
     }
 
@@ -502,6 +551,21 @@ public actor VoiceController {
     }
 
     private func handleSTTFinalized(text: String) async {
+        // Back-compat seam for tests that fire speech-end without a session id.
+        await handleSTTFinalized(text: text, sessionId: sttSessionId)
+    }
+
+    /// P1-3 (audit 2026-05-04, concurrency HIGH-1): generation-guarded
+    /// finalize handler. The captured `sessionId` is compared against the
+    /// current `sttSessionId`; mismatches indicate a stale finalize from a
+    /// prior session whose `provider.finalize()` returned late, after a
+    /// new session has already started. Drop stale text rather than
+    /// submit it as if it belonged to the current turn.
+    private func handleSTTFinalized(text: String, sessionId: UInt64) async {
+        guard sessionId == sttSessionId else {
+            logger.debug("VoiceController: stale STT finalize dropped (session=\(sessionId) current=\(self.sttSessionId))")
+            return
+        }
         guard case .listening = state else { return }
 
         if text.isEmpty {
