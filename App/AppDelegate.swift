@@ -33,8 +33,31 @@ public struct InfoPlistEntitlementGateProbe: EntitlementGateProbe {
     }
 }
 
+/// Composition root of the Jarvis host. Owns the menu bar item, HUD window,
+/// banner panel, hotkey monitor, agent orchestrator, MCP runtime, voice/vision/
+/// memory subsystems, and the Bus bridge. This is where every package gets
+/// wired together; almost everything else is leaf code reachable from here.
+///
 /// `@MainActor` because every AppKit surface this touches (NSStatusItem,
 /// NSPanel, NSAlert) is main-thread-only per S-2.
+///
+/// ## Lifecycle
+/// `applicationDidFinishLaunching` runs the bootstrap chain below in order;
+/// each step is fail-soft (degrades + banner) except entitlement verification
+/// which is fail-hard (presents `TCCAlertService` modal and terminates).
+/// Subsystems install via dedicated methods (`installVoice`, `installMemory`,
+/// `installVision`) called near the end of bootstrap. Teardown on
+/// `applicationWillTerminate` cancels in-flight tasks and closes file handles.
+///
+/// ## Note on size
+/// 2089 LOC at the time of this docstring. Flagged for an
+/// `AppDelegate+Voice.swift` / `+Vision.swift` / `+Memory.swift` / `+Agent.swift`
+/// split (audit-2026-05-04 P3-16). Until then, navigate by `// MARK:` headers.
+///
+/// ## See also
+/// - `App/MCP/MCPRuntimeWiring.swift` — MCP composition
+/// - `App/Voice/Voice*Adapter.swift` — voice adapters that this delegate constructs
+/// - `App/MCPBusGatewayAdapter.swift` — tool-call card forwarding to the HUD
 ///
 /// Bootstrap chain (Plan 04 — full wiring):
 ///

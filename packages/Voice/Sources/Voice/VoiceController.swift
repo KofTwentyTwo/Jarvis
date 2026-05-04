@@ -3,25 +3,40 @@ import OSLog
 
 private let logger = Logger(subsystem: "com.koftwentytwo.jarvis", category: "VoiceController")
 
-// MARK: - VoiceController
-//
-// The top-level actor stitching the five Phase 6 subsystems into one state machine.
-//
-// Subsystems consumed:
-//   - WakeWordDAG.wakeWordStream (Plan 06-02)
-//   - SileroVAD + STTProvider (Plan 06-03) via factory closures
-//   - VoiceTTSInterface → TTSEngineActor (Plan 06-04)
-//   - VoiceOrchestratorInterface → AgentOrchestrator adapter (Plan 04-04)
-//   - VoiceBannerInterface → HUDBannerCoordinator (Phase 1)
-//   - BusOutboundEmitter → OutboundBatcher (Phase 2) for audio-level RMS
-//
-// Anti-patterns enforced (CLAUDE.md voice-stack rules):
-//   VOICE-14: single cancelAndSubmit call site (in bargeIn()) — grep gate
-//   T-06-05-03: transcriptAccumulator NEVER logged
-//   T-06-05-02: AEC banner uses VoiceBannerInterface (AppKit) — no webview modal
-//   T-06-05-04: 200ms barge-in debounce (BargeInTests B4)
-//   VOICE-12: pttDown() / pttUp() work even when wake-word is muted
-
+/// Top-level voice state machine: the actor stitching the five Phase 6
+/// subsystems into one `idle / listening / thinking / speaking` lifecycle.
+///
+/// Wake word fires → `listening` (STT session opens, chunk pump spawns) → VAD
+/// `.speechEnd` + 5-chunk hangover → `thinking` (orchestrator submits) → token
+/// stream + tool calls → `speaking` (TTS) → `idle`. Push-to-talk and barge-in
+/// take alternate paths through the same actor; the state field is the truth.
+///
+/// ## Subsystems consumed
+/// - `WakeWordDAG.wakeWordStream` (Plan 06-02)
+/// - `SileroVAD` + `STTProvider` (Plan 06-03) via factory closures
+/// - `VoiceTTSInterface` → `TTSEngineActor` (Plan 06-04)
+/// - `VoiceOrchestratorInterface` → `AgentOrchestrator` adapter (Plan 04-04)
+/// - `VoiceBannerInterface` → `HUDBannerCoordinator` (Phase 1)
+/// - `BusOutboundEmitter` → `OutboundBatcher` (Phase 2) for audio-level RMS
+///
+/// ## Threading
+/// Actor isolation. State mutation only through actor methods. The chunk
+/// pump runs as a detached `Task` per session, cancelled on `endSTTSession`
+/// and on `shutdown`. The VAD interceptor task forwards chunks to STT and
+/// runs Silero per 512-sample window in parallel, never blocking the chunk
+/// path.
+///
+/// ## Anti-patterns enforced (CLAUDE.md voice-stack rules)
+/// - **VOICE-14:** single `cancelAndSubmit` call site (in `bargeIn()`) — grep gate.
+/// - **T-06-05-03:** `transcriptAccumulator` is NEVER logged.
+/// - **T-06-05-02:** AEC banner routes through `VoiceBannerInterface` (AppKit) — no webview modal.
+/// - **T-06-05-04:** 200 ms barge-in debounce (`BargeInTests` B4).
+/// - **VOICE-12:** `pttDown()` / `pttUp()` work even when wake-word is muted.
+///
+/// ## See also
+/// - `AudioGraphOwner` — owns the engine + ring buffers + broadcaster
+/// - `BufferBroadcaster` — multi-consumer fan-out used by the chunk pump
+/// - `App/Voice/VoiceOrchestratorAdapter.swift` — bridge to `AgentOrchestrator`
 public actor VoiceController {
 
     // MARK: - Public API

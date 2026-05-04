@@ -32,6 +32,25 @@ public struct ToolMetadata: Sendable, Equatable {
     }
 }
 
+/// Top-level facade over the JarvisMCP layer: a registry of `MCPServerHandle`
+/// actors keyed by server name and a tool→server lookup table built from each
+/// helper's `tools/list` response.
+///
+/// `register(name:binaryURL:requiresConfirmation:)` spawns a helper as a
+/// child process via `ChildSpawnGate`, awaits its initialize handshake, calls
+/// `tools/list`, and inserts the returned tools into the lookup table.
+/// `callTool(name:arguments:)` resolves the server, takes the per-server
+/// restart mutex (so concurrent callers awaiting a crashed helper share one
+/// in-flight restart instead of stampeding), and dispatches.
+///
+/// ## Threading
+/// Actor isolation. Per-server `restartTask: Task<Void, Error>?` slot lives
+/// on `MCPServerHandle`; the mutex is layered on top in `callTool`.
+///
+/// ## See also
+/// - `MCPRuntimeWiring.build` (in `App/MCP/`) — the production composition
+/// - `ConfirmingToolDispatcher` — wraps this client to gate confirmations
+/// - `JarvisChildSpawn.ChildSpawnGate` — the FD/env-hardened spawn primitive
 public actor MCPClient {
     private var registry: [String: MCPServerHandle] = [:]
     private var toolToServer: [String: String] = [:]
