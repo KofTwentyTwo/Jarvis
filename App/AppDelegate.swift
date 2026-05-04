@@ -1333,6 +1333,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// attach slot. BLOCKER-1: appends user text to TurnTranscriptStore
     /// AFTER the orchestrator returns a turnId so MemoryExtractionCoordinator
     /// finds non-nil pair text on the matching `.turnEnd`.
+    ///
+    /// Track-C 5: if the FrameAttachController has a pending frame
+    /// (camera button pressed within the D-14 confirm window, or phrase
+    /// trigger armed it on a prior submit), confirm-send it and route
+    /// through `submit(.withImages(...))` so the agent's vision dispatch
+    /// path picks the frame up.
     @MainActor
     func handleChatSubmit(_ text: String) async {
         guard let orch = self.agentOrchestrator else {
@@ -1340,7 +1346,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         await self.tryPhraseAttachIfMatch(text)
-        let outcome = await orch.submit(.text(text))
+        let outcome: SubmitOutcome
+        if let imageBlock = await self.consumePendingFrameIfAny(userText: text) {
+            outcome = await orch.submit(.withImages(.text, text: text, images: [imageBlock]))
+        } else {
+            outcome = await orch.submit(.text(text))
+        }
         await self.appendUserTextIfRunning(outcome, text: text)
         await self.handleTextOutcome(outcome)
     }
@@ -1351,6 +1362,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the same user-text shape; both must respect "what am I looking at"
     /// detection (without this, barge-in after a phrase-matched send
     /// silently drops the frame).
+    ///
+    /// Track-C 5: same image-attach handling as `handleChatSubmit`.
     @MainActor
     func handleChatCancelAndSubmit(_ text: String) async {
         guard let orch = self.agentOrchestrator else {
@@ -1358,9 +1371,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         await self.tryPhraseAttachIfMatch(text)
-        let outcome = await orch.cancelAndSubmit(.text(text))
+        let outcome: SubmitOutcome
+        if let imageBlock = await self.consumePendingFrameIfAny(userText: text) {
+            outcome = await orch.cancelAndSubmit(.withImages(.text, text: text, images: [imageBlock]))
+        } else {
+            outcome = await orch.cancelAndSubmit(.text(text))
+        }
         await self.appendUserTextIfRunning(outcome, text: text)
         await self.handleTextOutcome(outcome)
+    }
+
+    /// Track-C 5: pulls a pending frame out of `FrameAttachController` if
+    /// one is armed. Returns the resulting `ImageBlock` for inclusion in
+    /// the submit, or nil if nothing was armed (or the controller is not
+    /// installed yet — graceful no-op for headless test hosts).
+    @MainActor
+    private func consumePendingFrameIfAny(userText: String) async -> ImageBlock? {
+        guard let fac = self.frameAttachController else { return nil }
+        if await fac.hasPendingFrame == false { return nil }
+        return await fac.confirmSend(userText: userText)
     }
 
     /// BLOCKER-1 user-side append helper. Called from BOTH chat handlers
