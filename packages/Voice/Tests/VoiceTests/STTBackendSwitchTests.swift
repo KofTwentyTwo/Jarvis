@@ -68,6 +68,40 @@ final class SpeechAnalyzerSTTTests: XCTestCase {
         }
     }
 
+    // MARK: - S3 (P2-5): bridge.finish() error propagates to finalize()
+
+    /// P2-5 (audit 2026-05-04 concurrency HIGH-2): the prior implementation
+    /// wrapped `bridge.finish()` in a fire-and-forget Task that swallowed
+    /// the error into storeError indirectly. After P2-5 the call is
+    /// directly awaited inside feedTask, so a finish() failure surfaces
+    /// to storeError and is thrown from finalize().
+    func testS3_bridgeFinishError_propagatesToFinalize() async throws {
+        let finishErr = NSError(
+            domain: "com.apple.speech.recognition.service",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "speech recognition assets unavailable"]
+        )
+        let mock = MockSpeechAnalyzerBridge(finalText: "ignored", finishError: finishErr)
+        let stt = SpeechAnalyzerSTT(analyzerBridge: mock)
+
+        let (stream, continuation) = AsyncStream<AudioChunk>.makeStream()
+        continuation.yield(AudioChunk(pcm16k: [Float](repeating: 0, count: 512)))
+        continuation.finish()
+
+        for await _ in stt.transcribe(stream: stream) { }
+
+        do {
+            _ = try await stt.finalize()
+            XCTFail("Expected finalize() to throw bridge.finish() error")
+        } catch STTError.assetMissing {
+            // Expected — finishError is the same SFSpeech assetUnavailable shape
+        } catch STTError.finalizationFailed {
+            // Also acceptable: the wrapped form is a finalization error.
+        } catch {
+            XCTFail("Expected STTError, got \(error)")
+        }
+    }
+
     // MARK: - Helpers
 
     private func makeSpeechAssetUnavailableError() -> Error {
@@ -206,11 +240,13 @@ final class MockSpeechAnalyzerBridge: SpeechAnalyzerBridge, @unchecked Sendable 
     private let partials: [String]
     private let finalText: String
     private let feedError: Error?
+    private let finishError: Error?
 
-    init(partials: [String] = [], finalText: String = "", feedError: Error? = nil) {
+    init(partials: [String] = [], finalText: String = "", feedError: Error? = nil, finishError: Error? = nil) {
         self.partials = partials
         self.finalText = finalText
         self.feedError = feedError
+        self.finishError = finishError
     }
 
     func start() async throws { }
@@ -219,7 +255,9 @@ final class MockSpeechAnalyzerBridge: SpeechAnalyzerBridge, @unchecked Sendable 
         if let err = feedError { throw err }
     }
 
-    func finish() async throws { }
+    func finish() async throws {
+        if let err = finishError { throw err }
+    }
 
     func partialResults() -> AsyncStream<String> {
         let ps = partials

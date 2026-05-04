@@ -30,9 +30,14 @@ public protocol SpeechAnalyzerBridge: Sendable {
 /// are required. Missing them causes `SFSpeechErrorCode.assetUnavailable` which this class
 /// maps to `STTError.assetMissing` for the orchestrator to surface as a user-visible banner.
 ///
-/// DO NOT block on `await finish()` synchronously from the VAD `.speechEnd` handler —
-/// wrap in a Task so VAD events don't deadlock on the analyzer completion path (PLAN 06-03
-/// anti-pattern callout).
+/// VAD-deadlock anti-pattern note (PLAN 06-03): the `.speechEnd` handler in
+/// VoiceController must NOT synchronously block on `analyzer.finish()` —
+/// VoiceController wraps that path in its own Task. Inside `feedTask` here
+/// the synchronous form is correct, because the Task IS the serial owner of
+/// feed→finish ordering. Earlier revisions wrapped `bridge.finish()` in a
+/// nested fire-and-forget Task here as well — that was the wrong site for
+/// the anti-pattern; per audit 2026-05-04 P2-5 we now `await` it directly so
+/// finalize errors surface to `storeError` and `finalize()` can observe them.
 public final class SpeechAnalyzerSTT: STTProvider {
 
     // MARK: - State
@@ -84,11 +89,16 @@ public final class SpeechAnalyzerSTT: STTProvider {
                         break
                     }
                 }
-                // DO NOT block here — wrap finish in a non-blocking Task
-                // (PLAN 06-03 anti-pattern: DO NOT block on await analyzer.finish() synchronously)
-                Task {
-                    do { try await self.bridge.finish() }
-                    catch { self.storeError = self.mapError(error) }
+                // P2-5 (audit 2026-05-04 concurrency HIGH-2): direct await
+                // here. The VAD-deadlock anti-pattern protects the `.speechEnd`
+                // VOICE handler, NOT this feedTask. feedTask IS the serial
+                // owner of feed → finish ordering; awaiting bridge.finish()
+                // directly lets finalize errors surface to storeError so
+                // finalize() can throw them properly.
+                do {
+                    try await self.bridge.finish()
+                } catch {
+                    self.storeError = self.mapError(error)
                 }
             } catch {
                 self.storeError = self.mapError(error)
