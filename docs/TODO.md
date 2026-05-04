@@ -29,15 +29,15 @@ Live triage list. Higher up = higher priority. Move done items to a dated archiv
 - [x] C-5: `FrameAttachController.confirmSend(...)` wired into `handleChatSubmit` / `handleChatCancelAndSubmit` (`eac16c9`)
 - [x] C-6: real-hardware vision integration test, gated by `JARVIS_REAL_CAMERA=1` + TCC authorized (`19362f6`)
 
-## Track D — memory (~3 days)
+## Track D — memory (code-work closed 2026-05-04)
 
-- [ ] Build custom `libsqlite3.dylib` with `SQLITE_ENABLE_LOAD_EXTENSION=1`. Codesign nested. Bundle.
-- [ ] Bundle `vec0.dylib` (currently `Resources/PLACEHOLDER.txt`)
-- [ ] Remove `installMemory` early-return cascade so coordinator + extractor construct even on vec init failure
-- [ ] Register `SearchMemoryTool` + `ForgetFactTool` with `mcpRuntime` (currently the agent has no way to query memory)
-- [ ] Fix `MemoryExtractionOrchestrator.swift:84` — `priorFacts: []` hardcode means UPDATE/supersede never fires
-- [ ] Pull local Ollama models (nomic-embed-text + qwen2.5-coder:32b)
-- [ ] End-to-end "remember Brutus" regression scenario
+- [ ] D-5 (deferred — needs user environment work): build custom `libsqlite3.dylib` with `SQLITE_ENABLE_LOAD_EXTENSION=1`. Skeleton at `scripts/build-sqlite-with-extensions.sh`; pin SQLite version + SHA256 + codesign identity, then run.
+- [ ] D-6 (deferred — needs user environment work): bundle `vec0.dylib`. Skeleton at `scripts/fetch-sqlite-vec.sh`; pin sqlite-vec tag + SHA256, then run.
+- [x] D-1: Remove `installMemory` early-return cascade so coordinator + extractor construct even on vec init failure (`75a10be`)
+- [x] D-2: Register `SearchMemoryTool` + `ForgetFactTool` with `mcpRuntime` (`707c45b`)
+- [x] D-3: Fix `MemoryExtractionOrchestrator` `priorFacts: []` hardcode — UPDATE/supersede now fires (`51750c1`)
+- [ ] D-7 (deferred — needs user environment work): pull local Ollama models — `ollama pull nomic-embed-text` + `ollama pull qwen2.5-coder:32b`.
+- [x] D-4: End-to-end "remember Brutus" regression scenario with fakes (`c3bd0a5`)
 
 ## Cross-cutting
 
