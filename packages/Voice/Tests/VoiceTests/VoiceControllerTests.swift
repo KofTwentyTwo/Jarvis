@@ -74,19 +74,24 @@ final class VoiceControllerTests: XCTestCase {
     // MARK: - V4: AudioLevelEmitter emits at ~30 Hz with positive RMS
 
     func testV4_audioLevelEmitter_emits_correct_rms_at_30hz() async throws {
-        let ring = RingBuffer(capacityFrames: 16384)
+        // P1-1 (audit 2026-05-04): emitter now consumes a
+        // BufferBroadcaster.Subscription, not a raw RingBuffer. Build a
+        // broadcaster, subscribe, publish synthesized buffers, and wire
+        // the emitter against the subscription.
+        let broadcaster = BufferBroadcaster()
+        let subscription = broadcaster.subscribe(capacityFrames: 16384)
         let recorder = MockBusEmitter()
 
-        // Write 1600 samples of constant amplitude 0.5 (100 ms at 16 kHz)
+        // Publish 1600 samples of constant amplitude 0.5 (100 ms at 16 kHz)
         // RMS = sqrt(sum(0.25) / N) = 0.5 — just verify it's positive and > 0
         let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
         let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 1600)!
         buf.frameLength = 1600
         let data = buf.floatChannelData![0]
         for i in 0..<1600 { data[i] = 0.5 }
-        ring.write(buf)
+        broadcaster.publish(buf)
 
-        let emitter = AudioLevelEmitter(ring: ring, bus: recorder, hzRate: 30)
+        let emitter = AudioLevelEmitter(subscription: subscription, bus: recorder, hzRate: 30)
         await emitter.start()
         try await Task.sleep(for: .milliseconds(250))
         await emitter.stop()
@@ -101,6 +106,48 @@ final class VoiceControllerTests: XCTestCase {
         // At 30 Hz over 250ms we expect ~7 samples; minimum 4 (slack for timing jitter)
         XCTAssertGreaterThanOrEqual(levels.count, 4,
             "Should emit ~30 Hz × 0.25s = ~7 emissions, minimum 4")
+    }
+
+    // MARK: - V4b (P1-1): emitter pulls from BufferBroadcaster.Subscription, not raw ring
+
+    /// Regression guard: the emitter MUST drain its dedicated subscription
+    /// ring rather than a shared SPSC ring. Concretely, two subscriptions
+    /// from the same broadcaster receive distinct copies of every published
+    /// buffer; reading one does NOT advance the other (Track B-7 contract).
+    /// This test publishes one buffer, lets the emitter consume from
+    /// subscription A, and verifies subscription B (the "WakeWordDAG side")
+    /// still sees the full buffer — proving samples were not stolen.
+    func testV4b_audioLevelEmitter_subscribesViaBroadcaster() async throws {
+        let broadcaster = BufferBroadcaster()
+        let emitterSub = broadcaster.subscribe(capacityFrames: 16384)
+        let wakeWordSub = broadcaster.subscribe(capacityFrames: 16384) // simulates DAG
+        let recorder = MockBusEmitter()
+
+        let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+        let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 1600)!
+        buf.frameLength = 1600
+        let data = buf.floatChannelData![0]
+        for i in 0..<1600 { data[i] = 0.5 }
+        broadcaster.publish(buf)
+
+        // Run the emitter long enough to drain its own ring.
+        let emitter = AudioLevelEmitter(subscription: emitterSub, bus: recorder, hzRate: 30)
+        await emitter.start()
+        try await Task.sleep(for: .milliseconds(150))
+        await emitter.stop()
+
+        // Emitter side: at least one RMS sample reached the bus.
+        let levels = await recorder.audioLevels
+        XCTAssertFalse(levels.isEmpty, "Emitter should have emitted via subscription ring")
+
+        // WakeWord side: its ring still has all 1600 samples — emitter did
+        // NOT steal them. This is the P1-1 invariant.
+        var scratch = [Float](repeating: 0, count: 1600)
+        let count = scratch.withUnsafeMutableBufferPointer { ptr in
+            wakeWordSub.ring.readMono16k(into: ptr)
+        }
+        XCTAssertEqual(count, 1600,
+            "WakeWord subscription must still have the full 1600 frames; emitter must not steal samples (P1-1 / Track B-7 invariant)")
     }
 }
 

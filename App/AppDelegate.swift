@@ -934,6 +934,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         voiceController = vc
 
+        // P1-1 (audit 2026-05-04): wire AudioLevelEmitter so the listening-state
+        // HUD ring pulses on real mic RMS. The emitter consumes a dedicated
+        // BufferBroadcaster subscription so it does NOT steal samples from
+        // WakeWordDAG / chunkPump (Track B-7 invariant). VoiceController.start()
+        // / stop() are driven from doTransition's listening-boundary edges.
+        if let levelSubscription = await graphOwner.subscribe() {
+            let emitter = AudioLevelEmitter(subscription: levelSubscription, bus: busAdapter)
+            await vc.setAudioLevelEmitter(emitter)
+        } else {
+            systemLogger?.warning("installVoice: AudioGraphOwner.subscribe() returned nil — HUD ring pulse degraded")
+        }
+
         // Transfer ownership of the continuation to VoiceController.
         // The coordinator's subscriber task continues to drain; VoiceController
         // is now the producer.

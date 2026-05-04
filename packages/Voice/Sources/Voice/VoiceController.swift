@@ -71,6 +71,13 @@ public actor VoiceController {
     /// Exposed for AppDelegate to wire the audio-level emitter.
     public var audioLevelEmitter: AudioLevelEmitter?
 
+    /// Cross-actor setter for `audioLevelEmitter`. AppDelegate's
+    /// `@MainActor` install code can't reach the actor-isolated `var`
+    /// directly under Swift 6 mode; this method provides the seam.
+    public func setAudioLevelEmitter(_ emitter: AudioLevelEmitter?) {
+        self.audioLevelEmitter = emitter
+    }
+
     // MARK: - STT session continuations
 
     private var sttChunkCont: AsyncStream<AudioChunk>.Continuation?
@@ -512,7 +519,21 @@ public actor VoiceController {
 
     private func doTransition(to newState: VoiceState) async {
         guard newState != state else { return }
+        let priorState = state
         state = newState
+
+        // P1-1 (audit 2026-05-04): drive the audio-level emitter from the
+        // listening lifecycle so the HUD ring pulses on real mic RMS.
+        // Only actually starts/stops when crossing the listening boundary
+        // (idle/thinking/speaking → listening to start; listening → other to stop).
+        let wasListening: Bool = { if case .listening = priorState { return true } else { return false } }()
+        let isListening: Bool = { if case .listening = newState { return true } else { return false } }()
+        if !wasListening && isListening {
+            await audioLevelEmitter?.start()
+        } else if wasListening && !isListening {
+            await audioLevelEmitter?.stop()
+        }
+
         await emitHUDIntent(hudIntentFor(newState))
         logger.debug("VoiceController: → \(String(describing: newState))")
     }

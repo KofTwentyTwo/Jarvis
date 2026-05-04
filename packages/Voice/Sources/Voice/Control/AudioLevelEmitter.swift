@@ -2,13 +2,23 @@ import Foundation
 
 // MARK: - AudioLevelEmitter
 //
-// Reads the audio RingBuffer in parallel with the VAD feed loop, computes RMS
-// over a window of samples at ~30 Hz, and emits `BusOutbound.audioLevel(rms:)`
-// via the bus emitter.
+// Reads its dedicated `BufferBroadcaster.Subscription` ring in parallel with the
+// VAD feed loop, computes RMS over a window of samples at ~30 Hz, and emits
+// `BusOutbound.audioLevel(rms:)` via the bus emitter.
 //
 // This is the producer that replaces Plan 03-03's fake sine wave listening pulse
 // with real audio-reactive RMS — the RingMesh `uPulseSpeed` uniform is driven
 // by this value.
+//
+// ## Why subscription, not raw RingBuffer (P1-1, audit 2026-05-04)
+//
+// The legacy init signature took a raw `RingBuffer`. That re-introduced the
+// sample-stealing race Track B-7 just fixed: any consumer reading directly
+// from `audioGraphOwner.ringBuffer` advances the same SPSC read pointer used
+// by `WakeWordDAG`, starving wake-word inference. The new contract requires
+// callers to pass a `BufferBroadcaster.Subscription` obtained via
+// `AudioGraphOwner.subscribe()`, so the emitter has its own ring and never
+// races with WakeWordDAG / chunkPump.
 //
 // Window strategy:
 //   At 30 Hz, one window = 33 ms. At 16 kHz, 33 ms × 16000 samples/s ≈ 528 samples.
@@ -28,7 +38,7 @@ public final class AudioLevelEmitter: @unchecked Sendable {
 
     // MARK: - Private state
 
-    private let ring: RingBuffer
+    private let subscription: BufferBroadcaster.Subscription
     private let bus: any BusOutboundEmitter
     private let intervalNs: UInt64
     private var emitterTask: Task<Void, Never>?
@@ -36,11 +46,18 @@ public final class AudioLevelEmitter: @unchecked Sendable {
     // MARK: - Init
 
     /// - Parameters:
-    ///   - ring: The `RingBuffer` from `AudioGraphOwner` (16 kHz Float32 mono).
+    ///   - subscription: A dedicated `BufferBroadcaster.Subscription` from
+    ///     `AudioGraphOwner.subscribe()`. The emitter reads only from this
+    ///     subscription's per-subscriber ring so it never steals samples
+    ///     from WakeWordDAG / chunkPump (P1-1, audit 2026-05-04).
     ///   - bus: The bus emitter — receives `postAudio(_:)` at ~`hzRate` Hz.
     ///   - hzRate: Emission rate in Hz (default 30 Hz).
-    public init(ring: RingBuffer, bus: any BusOutboundEmitter, hzRate: Double = 30) {
-        self.ring = ring
+    public init(
+        subscription: BufferBroadcaster.Subscription,
+        bus: any BusOutboundEmitter,
+        hzRate: Double = 30
+    ) {
+        self.subscription = subscription
         self.bus = bus
         self.intervalNs = UInt64(1_000_000_000.0 / hzRate)
     }
@@ -55,7 +72,7 @@ public final class AudioLevelEmitter: @unchecked Sendable {
         // Cancel any prior task
         emitterTask?.cancel()
 
-        let ring = self.ring
+        let ring = self.subscription.ring
         let bus = self.bus
         let interval = self.intervalNs
 
