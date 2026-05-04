@@ -1,4 +1,6 @@
+import AVFoundation
 import Foundation
+import Speech
 
 // MARK: - SpeechAnalyzerBridge (test seam)
 
@@ -145,49 +147,167 @@ public final class SpeechAnalyzerSTT: STTProvider {
 ///
 /// The `SpeechAnalyzer` / `SpeechTranscriber` APIs are new in macOS 26 Tahoe.
 /// On earlier systems, `SpeechAnalyzerSTT` falls back to `UnavailableSpeechAnalyzerBridge`.
+///
+/// ## Track B-4 (2026-05-03 voice audit fix)
+/// `feed()` was a `_ = chunk` no-op, leaving STT deaf in production. Real wiring
+/// now lives here:
+///
+/// 1. `start()` builds the transcriber + analyzer, queries
+///    `SpeechAnalyzer.bestAvailableAudioFormat`, opens the
+///    `AsyncStream<AnalyzerInput>` input pipe, and spawns a background task
+///    draining `transcriber.results` into the partials continuation.
+/// 2. `feed()` packs `AudioChunk.pcm16k` into an `AVAudioPCMBuffer`
+///    (`PCMBufferBuilder.makePCMBuffer`) and converts to the analyzer's
+///    preferred format if needed, then yields an `AnalyzerInput(buffer:)`
+///    on the input builder.
+/// 3. `finish()` finishes the input stream, calls
+///    `analyzer.finalizeAndFinishThroughEndOfInput()`, and awaits the result task.
+/// 4. `partialResults()` returns the pre-built partial-text stream so
+///    `SpeechAnalyzerSTT.transcribe` can subscribe before audio arrives.
+/// 5. `finalText()` waits for the result drain to complete and returns the
+///    concatenation of every `isFinal` segment.
+///
+/// `nonisolated(unsafe)` storage is deliberate: the surrounding
+/// `SpeechAnalyzerSTT` serialises `start → feed* → finish → finalText` through
+/// its single `feedTask` chain (see line 73), so cross-task races on these
+/// fields cannot occur in production. Tests that exercise the bridge directly
+/// must follow the same sequence.
 @available(macOS 26.0, *)
 private final class LiveSpeechAnalyzerBridge: SpeechAnalyzerBridge {
 
-    // NOTE: The `Speech` framework `SpeechAnalyzer` + `SpeechTranscriber` APIs are
-    // new in macOS 26 Tahoe. Since the SDK may not expose them yet under macOS 14
-    // (the deployment target set in Package.swift), we use runtime checks.
-    //
-    // The actual API surface is documented in PLAN 06-03 <interfaces>:
-    //   SpeechAnalyzer.init(...)
-    //   SpeechAnalyzer.add(modules:) async throws
-    //   SpeechAnalyzer.feed(_ buffer: AVAudioPCMBuffer) async throws
-    //   SpeechAnalyzer.finish() async throws
-    //   SpeechTranscriber.results: AsyncStream<SpeechTranscriptionResult>
-    //
-    // Plan 06-05 (VoiceController) wires the live bridge with AVAudioPCMBuffer conversion.
-    // For Plan 06-03, this is a structural shell; the real wiring happens in 06-05.
+    // MARK: - Storage (single-writer-per-phase; SpeechAnalyzerSTT serialises)
 
-    nonisolated(unsafe) private var partialsContinuation: AsyncStream<String>.Continuation?
-    nonisolated(unsafe) private var collectedText = ""
-    nonisolated(unsafe) private var finalizationError: (any Error)?
+    nonisolated(unsafe) private var transcriber: SpeechTranscriber?
+    nonisolated(unsafe) private var analyzer: SpeechAnalyzer?
+    nonisolated(unsafe) private var inputBuilder: AsyncStream<AnalyzerInput>.Continuation?
+    nonisolated(unsafe) private var analyzerFormat: AVAudioFormat?
+    nonisolated(unsafe) private var converter: AVAudioConverter?
+
+    private let partialsStream: AsyncStream<String>
+    private let partialsContinuation: AsyncStream<String>.Continuation
+    nonisolated(unsafe) private var resultsTask: Task<Void, Never>?
+    nonisolated(unsafe) private var collectedText: String = ""
+    nonisolated(unsafe) private var resultsError: (any Error)?
+    nonisolated(unsafe) private var didFinish: Bool = false
+
+    init() {
+        let (stream, cont) = AsyncStream<String>.makeStream()
+        self.partialsStream = stream
+        self.partialsContinuation = cont
+    }
+
+    // MARK: - SpeechAnalyzerBridge
 
     func start() async throws {
-        // Setup happens on first feed(); placeholder for 06-05 to wire live APIs.
+        // Idempotent: if already started, do nothing. SpeechAnalyzerSTT calls
+        // start exactly once per session, but the guard keeps us safe.
+        guard analyzer == nil else { return }
+
+        let transcriber = SpeechTranscriber(
+            locale: Locale.current,
+            transcriptionOptions: [],
+            reportingOptions: [.volatileResults],
+            attributeOptions: []
+        )
+        let analyzer = SpeechAnalyzer(modules: [transcriber])
+
+        // bestAvailableAudioFormat returns nil if no module has a format
+        // preference (rare). Fall back to the AudioChunk format so we still
+        // attempt feeding rather than dropping silently.
+        let format = await SpeechAnalyzer.bestAvailableAudioFormat(
+            compatibleWith: [transcriber]
+        ) ?? PCMBufferBuilder.audioChunkFormat
+
+        // Build the converter only when formats differ. AVAudioConverter
+        // construction is cheap but has small per-frame overhead, so skip
+        // when possible.
+        let conv: AVAudioConverter?
+        if !format.isEqual(PCMBufferBuilder.audioChunkFormat) {
+            conv = AVAudioConverter(from: PCMBufferBuilder.audioChunkFormat, to: format)
+        } else {
+            conv = nil
+        }
+
+        let (inputSequence, builder) = AsyncStream<AnalyzerInput>.makeStream()
+
+        self.transcriber = transcriber
+        self.analyzer = analyzer
+        self.analyzerFormat = format
+        self.converter = conv
+        self.inputBuilder = builder
+
+        // Spawn the result drain BEFORE start() so we don't miss early
+        // partials. AttributedString is bridged via `result.text.characters`.
+        let cont = self.partialsContinuation
+        resultsTask = Task { [weak self] in
+            do {
+                for try await result in transcriber.results {
+                    let text = String(result.text.characters)
+                    if result.isFinal {
+                        self?.collectedText.append(text)
+                    }
+                    cont.yield(text)
+                }
+            } catch {
+                self?.resultsError = error
+            }
+            cont.finish()
+        }
+
+        try await analyzer.start(inputSequence: inputSequence)
     }
 
     func feed(_ chunk: AudioChunk) async throws {
-        // Convert AudioChunk → AVAudioPCMBuffer and call analyzer.feed()
-        // Wired fully in Plan 06-05. Placeholder here.
-        _ = chunk
+        guard let inputBuilder, !chunk.pcm16k.isEmpty else { return }
+
+        guard let raw = PCMBufferBuilder.makePCMBuffer(from: chunk.pcm16k) else {
+            // Allocation failed — drop this chunk; SpeechAnalyzer can't recover from
+            // missing samples but the next chunk may succeed.
+            return
+        }
+
+        let toFeed: AVAudioPCMBuffer
+        if let converter, let analyzerFormat {
+            guard let converted = PCMBufferBuilder.convert(
+                buffer: raw,
+                using: converter,
+                to: analyzerFormat
+            ) else {
+                return
+            }
+            toFeed = converted
+        } else {
+            toFeed = raw
+        }
+
+        inputBuilder.yield(AnalyzerInput(buffer: toFeed))
     }
 
     func finish() async throws {
-        partialsContinuation?.finish()
+        guard !didFinish else { return }
+        didFinish = true
+
+        inputBuilder?.finish()
+        inputBuilder = nil
+
+        if let analyzer {
+            try? await analyzer.finalizeAndFinishThroughEndOfInput()
+        }
+
+        // Wait for the results-drain Task to flush any remaining segments.
+        await resultsTask?.value
+        resultsTask = nil
     }
 
     func partialResults() -> AsyncStream<String> {
-        let (stream, cont) = AsyncStream<String>.makeStream()
-        self.partialsContinuation = cont
-        return stream
+        partialsStream
     }
 
     func finalText() async throws -> String {
-        if let err = finalizationError { throw err }
+        await resultsTask?.value
+        if let resultsError {
+            throw resultsError
+        }
         return collectedText
     }
 }

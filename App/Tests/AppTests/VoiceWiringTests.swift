@@ -72,6 +72,14 @@ final class VoiceWiringTests: XCTestCase {
             "W1: muteWakeWord should be nil before install")
         XCTAssertNil(delegate.voiceInstallTask,
             "W1: voiceInstallTask should be nil before launch")
+        // Track B-4: AudioGraphOwner + degradation/rebuild consumer tasks
+        // must exist as strong properties so they outlive installVoice().
+        XCTAssertNil(delegate.audioGraphOwner,
+            "W1/B-4: audioGraphOwner should be nil before install")
+        XCTAssertNil(delegate.audioGraphDegradationTask,
+            "W1/B-4: audioGraphDegradationTask should be nil before install")
+        XCTAssertNil(delegate.audioGraphRebuildTask,
+            "W1/B-4: audioGraphRebuildTask should be nil before install")
     }
 
     // MARK: - W2: dormantVoiceContinuation is alive after installBus (before voice install)

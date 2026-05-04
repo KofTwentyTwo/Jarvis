@@ -170,6 +170,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Menu-bar wake-word mute toggle (Plan 06-05 / VOICE-12).
     var muteWakeWord: MuteWakeWord?
 
+    /// Owns the live `AVAudioEngine` audio graph (Plan 06-01) — opened in
+    /// `installVoice()` so mic samples flow into the wake-word DAG. Held
+    /// strongly because the actor's tap closures retain the ring buffer.
+    /// Track B-4 (2026-05-03 voice audit fix): production was never
+    /// constructing this, so wake-word inference ran against an empty ring.
+    var audioGraphOwner: AudioGraphOwner?
+
+    /// Drains `AudioGraphOwner.degradationStream` into
+    /// `voiceController.handleAECUnavailable()` so VOICE-09 fallback banners
+    /// surface natively. Cancelled on shutdown.
+    var audioGraphDegradationTask: Task<Void, Never>?
+
+    /// Drains `AudioGraphOwner.rebuildStream` to dismiss the AEC banner
+    /// once an aec=on rebuild succeeds.
+    var audioGraphRebuildTask: Task<Void, Never>?
+
     /// Task spawned in `applicationWillFinishLaunching` that constructs and
     /// starts the voice subsystem. Held strongly so the async setup isn't
     /// cancelled prematurely.
@@ -585,6 +601,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         orchToReplayDrainTask?.cancel()
         // Plan 06-05: shut down voice subsystem.
         voiceInstallTask?.cancel()
+        // Track B-4: degradation/rebuild stream consumers + audio graph owner.
+        audioGraphDegradationTask?.cancel()
+        audioGraphRebuildTask?.cancel()
+        if let owner = audioGraphOwner {
+            Task { await owner.shutdown() }
+        }
         if let vc = voiceController {
             Task { await vc.shutdown() }
         }
@@ -676,6 +698,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Construct WakeWordDAG.
         let wakeWordDAG = WakeWordDAG(session: wakeWordSession)
+
+        // Track B-4 (2026-05-03 voice audit fix): construct AudioGraphOwner,
+        // open it, and feed its RingBuffer into the wake-word DAG. Without
+        // this, wake-word inference loops on a ring that production never
+        // wrote to (mic taps were never installed). Audit:
+        // `.planning/audit-2026-05-03/voice.md`.
+        //
+        // Order matters: the degradation/rebuild consumer Tasks must be
+        // spawned BEFORE `open()` because `open()` may immediately yield
+        // `.aecUnavailable` on its retry-with-aec=false path (VOICE-09).
+        let (degradationStream, degradationCont) = AsyncStream<DegradationReason>.makeStream()
+        let (rebuildStream, rebuildCont) = AsyncStream<RebuildEvent>.makeStream()
+
+        let graphOwner = AudioGraphOwner(
+            degradationContinuation: degradationCont,
+            rebuildContinuation: rebuildCont
+        )
+        self.audioGraphOwner = graphOwner
+
+        // Spawn degradation consumer — fires `.aecUnavailable` into the
+        // VoiceController's banner path. VoiceController may not exist yet
+        // when the first event arrives (open() runs below), so the consumer
+        // resolves the controller lazily on each event.
+        audioGraphDegradationTask = Task { @MainActor [weak self] in
+            for await reason in degradationStream {
+                guard case .aecUnavailable = reason else { continue }
+                if let vc = self?.voiceController {
+                    await vc.handleAECUnavailable()
+                }
+            }
+        }
+
+        // Spawn rebuild consumer — once an aec=on rebuild succeeds we ask the
+        // controller to dismiss the banner. The owner only emits
+        // `.reconfiguring(reason:)` on each rebuild start; the variant flip
+        // is observable via `await graphOwner.currentVariant`. We poll the
+        // variant after each rebuild event.
+        audioGraphRebuildTask = Task { @MainActor [weak self] in
+            for await _ in rebuildStream {
+                guard let self else { return }
+                let variant = await self.audioGraphOwner?.currentVariant
+                if case .aecOn = variant {
+                    await self.voiceController?.handleAECRestored()
+                }
+            }
+        }
+
+        // Open the graph. Failure here is non-fatal: voice degrades to
+        // dormant + banner, the rest of the app keeps running. The owner
+        // itself emits `.aecUnavailable` on its retry path, so we only need
+        // to log on the catastrophic `bothVariantsFailed` case.
+        do {
+            try await graphOwner.open()
+        } catch {
+            systemLogger?.warning("installVoice: AudioGraphOwner.open() failed (\(String(describing: error))) — voice subsystem dormant")
+            audioGraphDegradationTask?.cancel()
+            audioGraphRebuildTask?.cancel()
+            self.audioGraphOwner = nil
+            return
+        }
+
+        // Hand the ring buffer to the wake-word DAG so mic samples flow
+        // through the openWakeWord pipeline. The detached feed Task inside
+        // the DAG drives wakeWordStream, which VoiceController consumes.
+        if let ring = await graphOwner.ringBuffer {
+            await wakeWordDAG.start(ring: ring)
+        } else {
+            systemLogger?.warning("installVoice: graph opened but ringBuffer is nil — wake-word DAG not started")
+        }
+
+        // Wire teardown step 1 (VOICE-10): cancel wake-word inference before
+        // the engine stops. Without this, the detached feed Task races the
+        // ring deallocation during graph rebuilds.
+        await graphOwner.setCancelInFlight { [wakeWordDAG] in
+            await wakeWordDAG.cancel()
+        }
 
         // Construct VoiceController. Plan 09-04 (D-09 + D-11) replaces the
         // three Null placeholder adapters with the production adapter triad:

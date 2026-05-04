@@ -125,6 +125,19 @@ public actor AudioGraphOwner {
     /// `(@Sendable () async -> Void)?` — must be `nil`-safe.
     public var releaseORTSessions: (@Sendable () async -> Void)?
 
+    /// Cross-actor setter for `cancelInFlight`. Plan 06-05 wires this from
+    /// `@MainActor` install code so it can't reach the actor-isolated `var`
+    /// directly under Swift 6 mode.
+    public func setCancelInFlight(_ closure: @escaping @Sendable () async -> Void) {
+        self.cancelInFlight = closure
+    }
+
+    /// Cross-actor setter for `releaseORTSessions`. Same rationale as
+    /// `setCancelInFlight`.
+    public func setReleaseORTSessions(_ closure: @escaping @Sendable () async -> Void) {
+        self.releaseORTSessions = closure
+    }
+
     // MARK: - Internal test seams
 
     /// Test seam for mic-re-grant watcher.  In tests, inject a closure that
