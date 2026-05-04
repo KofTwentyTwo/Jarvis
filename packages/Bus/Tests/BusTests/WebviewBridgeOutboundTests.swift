@@ -11,7 +11,7 @@ final class WebviewBridgeOutboundTests: XCTestCase {
 
     /// Records each call for assertion. `arguments` is `[String: Any]` so the
     /// keys + string payload survive without bridging weirdness.
-    final class FakeJSEvaluator: WebviewBridge.JSEvaluator {
+    final class MockJSEvaluator: WebviewBridge.JSEvaluator {
         struct Call {
             let functionBody: String
             let arguments: [String: Any]
@@ -37,7 +37,7 @@ final class WebviewBridgeOutboundTests: XCTestCase {
     // MARK: - Construction helpers
 
     private func makeBridge(
-        evaluator: FakeJSEvaluator,
+        evaluator: MockJSEvaluator,
         controller: WKUserContentController = WKUserContentController()
     ) -> WebviewBridge {
         WebviewBridge(
@@ -50,7 +50,7 @@ final class WebviewBridgeOutboundTests: XCTestCase {
     // MARK: - send(_:) gating
 
     func test_sendWhenArmedCallsEvaluator() async throws {
-        let evaluator = FakeJSEvaluator()
+        let evaluator = MockJSEvaluator()
         let bridge = makeBridge(evaluator: evaluator)
         bridge.startHandshake()
         bridge.handleHelloAck(BUS_PROTOCOL_VERSION)
@@ -84,7 +84,7 @@ final class WebviewBridgeOutboundTests: XCTestCase {
     }
 
     func test_sendWhenNotArmedThrows() async {
-        let evaluator = FakeJSEvaluator()
+        let evaluator = MockJSEvaluator()
         let bridge = makeBridge(evaluator: evaluator)
 
         do {
@@ -103,7 +103,7 @@ final class WebviewBridgeOutboundTests: XCTestCase {
     // MARK: - startHandshake sends hello via sendRaw (bypasses armed gate)
 
     func test_startHandshakeSendsHelloViaSendRaw() async throws {
-        let evaluator = FakeJSEvaluator()
+        let evaluator = MockJSEvaluator()
         let bridge = makeBridge(evaluator: evaluator)
 
         bridge.startHandshake()
@@ -127,7 +127,7 @@ final class WebviewBridgeOutboundTests: XCTestCase {
     // MARK: - WKUserScript injection
 
     func test_injectionScriptIsInstalled() {
-        let evaluator = FakeJSEvaluator()
+        let evaluator = MockJSEvaluator()
         let controller = WKUserContentController()
         _ = makeBridge(evaluator: evaluator, controller: controller)
 
@@ -140,7 +140,7 @@ final class WebviewBridgeOutboundTests: XCTestCase {
     }
 
     func test_injectionScriptInstalledAtDocumentStart() {
-        let evaluator = FakeJSEvaluator()
+        let evaluator = MockJSEvaluator()
         let controller = WKUserContentController()
         _ = makeBridge(evaluator: evaluator, controller: controller)
 

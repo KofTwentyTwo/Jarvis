@@ -17,7 +17,7 @@ final class SpeechAnalyzerSTTTests: XCTestCase {
     // MARK: - S1: Stubbed analyzer returns two partial transcripts
 
     func testS1_stubbedAnalyzerYieldsTwoPartialsAndFinalizes() async throws {
-        let mock = MockSpeechAnalyzerBridge(
+        let mock = StubSpeechAnalyzerBridge(
             partials: ["hello", "hello world"],
             finalText: "hello world"
         )
@@ -45,7 +45,7 @@ final class SpeechAnalyzerSTTTests: XCTestCase {
     // MARK: - S2: assetUnavailable error maps to STTError.assetMissing
 
     func testS2_assetUnavailableErrorMapsToSTTAssetMissing() async throws {
-        let mock = MockSpeechAnalyzerBridge(feedError: makeSpeechAssetUnavailableError())
+        let mock = StubSpeechAnalyzerBridge(feedError: makeSpeechAssetUnavailableError())
         let stt = SpeechAnalyzerSTT(analyzerBridge: mock)
 
         let (stream, continuation) = AsyncStream<AudioChunk>.makeStream()
@@ -81,7 +81,7 @@ final class SpeechAnalyzerSTTTests: XCTestCase {
             code: 1,
             userInfo: [NSLocalizedDescriptionKey: "speech recognition assets unavailable"]
         )
-        let mock = MockSpeechAnalyzerBridge(finalText: "ignored", finishError: finishErr)
+        let mock = StubSpeechAnalyzerBridge(finalText: "ignored", finishError: finishErr)
         let stt = SpeechAnalyzerSTT(analyzerBridge: mock)
 
         let (stream, continuation) = AsyncStream<AudioChunk>.makeStream()
@@ -121,7 +121,7 @@ final class WhisperKitSTTTests: XCTestCase {
     // MARK: - W1: Stubbed WhisperKit returns fixed transcript
 
     func testW1_stubbedWhisperKitYieldsFinalTranscript() async throws {
-        let mock = MockWhisperKitBridge(transcript: "hello from whisper")
+        let mock = StubWhisperKitBridge(transcript: "hello from whisper")
         let stt = WhisperKitSTT(kitBridge: mock)
 
         let (stream, continuation) = AsyncStream<AudioChunk>.makeStream()
@@ -235,8 +235,8 @@ final class TestWarningLogger: STTWarningLogger, @unchecked Sendable {
     func warn(_ message: String) { lastWarning = message }
 }
 
-/// Mock for the SpeechAnalyzer bridge.
-final class MockSpeechAnalyzerBridge: SpeechAnalyzerBridge, @unchecked Sendable {
+/// Stub for the SpeechAnalyzer bridge — canned partials/final text, no recording.
+final class StubSpeechAnalyzerBridge: SpeechAnalyzerBridge, @unchecked Sendable {
     private let partials: [String]
     private let finalText: String
     private let feedError: Error?
@@ -273,8 +273,8 @@ final class MockSpeechAnalyzerBridge: SpeechAnalyzerBridge, @unchecked Sendable 
     }
 }
 
-/// Mock for the WhisperKit bridge.
-final class MockWhisperKitBridge: WhisperKitBridge, @unchecked Sendable {
+/// Stub for the WhisperKit bridge — canned transcript, no recording.
+final class StubWhisperKitBridge: WhisperKitBridge, @unchecked Sendable {
     private let transcript: String
 
     init(transcript: String) {

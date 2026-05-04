@@ -118,12 +118,12 @@ final class VoiceWiringTests: XCTestCase {
 
         let vc = VoiceController(
             wakeWordStream: wakeWordStream,
-            vadFactory: { SileroVAD(engine: MockVADEngineForW4()) },
-            sttFactory: { MockSTTProviderForW4() },
-            tts: MockTTSForW4(),
-            orchestrator: MockOrchestratorForW4(),
-            bannerCoordinator: MockBannerForW4(),
-            bus: MockBusForW4(),
+            vadFactory: { SileroVAD(engine: StubVADEngineForW4()) },
+            sttFactory: { StubSTTProviderForW4() },
+            tts: StubTTSForW4(),
+            orchestrator: StubOrchestratorForW4(),
+            bannerCoordinator: StubBannerForW4(),
+            bus: StubBusForW4(),
             voiceHudCont: hudCont
         )
 
@@ -137,15 +137,15 @@ final class VoiceWiringTests: XCTestCase {
     }
 }
 
-// MARK: - Minimal mocks for W4
+// MARK: - Minimal stubs for W4
 
 @testable import Voice
 
-private final class MockVADEngineForW4: VADInferenceEngine, @unchecked Sendable {
+private final class StubVADEngineForW4: VADInferenceEngine, @unchecked Sendable {
     func runInference(pcm: UnsafeBufferPointer<Float>) throws -> Float { return 0.0 }
 }
 
-private final class MockSTTProviderForW4: STTProvider, @unchecked Sendable {
+private final class StubSTTProviderForW4: STTProvider, @unchecked Sendable {
     func transcribe(stream: AsyncStream<AudioChunk>) -> AsyncStream<PartialTranscript> {
         let (s, c) = AsyncStream<PartialTranscript>.makeStream()
         Task { c.finish() }
@@ -154,24 +154,24 @@ private final class MockSTTProviderForW4: STTProvider, @unchecked Sendable {
     func finalize() async throws -> String { return "" }
 }
 
-private actor MockTTSForW4: VoiceTTSInterface {
+private actor StubTTSForW4: VoiceTTSInterface {
     var hasSynthInFlight: Bool { false }
     func synthesize(_ text: String) async {}
     func cancelTTS() async {}
 }
 
-private actor MockOrchestratorForW4: VoiceOrchestratorInterface {
+private actor StubOrchestratorForW4: VoiceOrchestratorInterface {
     nonisolated let voiceEvents: AsyncStream<VoiceOrchestratorEvent>
     init() { (voiceEvents, _) = AsyncStream<VoiceOrchestratorEvent>.makeStream() }
     func submit(text: String) async {}
     func cancelAndSubmit(text: String) async {}
 }
 
-private final class MockBannerForW4: VoiceBannerInterface, @unchecked Sendable {
+private final class StubBannerForW4: VoiceBannerInterface, @unchecked Sendable {
     func showBanner(message: String) {}
     func dismissBanner() {}
 }
 
-private actor MockBusForW4: BusOutboundEmitter {
+private actor StubBusForW4: BusOutboundEmitter {
     func postAudio(_ rms: Float) async {}
 }

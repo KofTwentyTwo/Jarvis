@@ -1,10 +1,10 @@
 import XCTest
 @testable import Memory
 
-/// Plan 07-03 Task 2 — SessionHistory unit tests with stub store.
+/// Plan 07-03 Task 2 — SessionHistory unit tests with mock store.
 final class SessionHistoryTests: XCTestCase {
 
-    actor StubStore: SessionHistoryReading {
+    actor MockStore: SessionHistoryReading {
         var capturedSessionId: String?
         var capturedLimit: Int?
         var rowsToReturn: [TurnRow] = []
@@ -24,7 +24,7 @@ final class SessionHistoryTests: XCTestCase {
     }
 
     func testRecentTurnsPassesSessionAndLimit() async throws {
-        let store = StubStore()
+        let store = MockStore()
         await store.setRows([])
         let hist = SessionHistory(store: store)
         _ = try await hist.recentTurns(sessionId: "A", limit: 7)
@@ -35,7 +35,7 @@ final class SessionHistoryTests: XCTestCase {
     }
 
     func testRecentTurnsCapsLimit() async throws {
-        let store = StubStore()
+        let store = MockStore()
         await store.setRows([])
         let hist = SessionHistory(store: store)
         _ = try await hist.recentTurns(sessionId: "A", limit: 100_000)
@@ -44,7 +44,7 @@ final class SessionHistoryTests: XCTestCase {
     }
 
     func testRecentTurnsReturnsRowsAsIs() async throws {
-        let store = StubStore()
+        let store = MockStore()
         let row = makeRow(id: 1, sessionId: "A", createdAt: 5)
         await store.setRows([row])
         let hist = SessionHistory(store: store)

@@ -1,10 +1,10 @@
 import XCTest
 @testable import Memory
 
-/// Plan 07-03 Task 2 — HybridSearch unit tests with stub embedder + stub store.
+/// Plan 07-03 Task 2 — HybridSearch unit tests with mock embedder + mock store.
 final class HybridSearchTests: XCTestCase {
 
-    actor StubEmbedder: EmbeddingProviding {
+    actor MockEmbedder: EmbeddingProviding {
         var calls: [String] = []
         func embed(_ input: String) async throws -> [Float] {
             calls.append(input)
@@ -12,7 +12,7 @@ final class HybridSearchTests: XCTestCase {
         }
     }
 
-    actor StubStore: MemoryReadStore {
+    actor MockStore: MemoryReadStore {
         var capturedQuery: String?
         var capturedK: Int?
         var capturedEmbeddingDim: Int?
@@ -43,8 +43,8 @@ final class HybridSearchTests: XCTestCase {
     }
 
     func testSearchFactsCallsEmbedderOnce() async throws {
-        let embedder = StubEmbedder()
-        let store = StubStore()
+        let embedder = MockEmbedder()
+        let store = MockStore()
         await store.setRows([
             (makeFact(id: 1, subject: "Sarah", predicate: "works_at", object: "Acme"), 0.05),
             (makeFact(id: 2, subject: "Sarah", predicate: "lives_in", object: "Boston"), 0.04),
@@ -65,8 +65,8 @@ final class HybridSearchTests: XCTestCase {
     }
 
     func testSearchFactsRespectsKArgument() async throws {
-        let embedder = StubEmbedder()
-        let store = StubStore()
+        let embedder = MockEmbedder()
+        let store = MockStore()
         await store.setRows([])
         let search = HybridSearch(store: store, embedder: embedder)
         _ = try await search.searchFacts(query: "x", k: 2, triggerTurnId: 1)
@@ -75,8 +75,8 @@ final class HybridSearchTests: XCTestCase {
     }
 
     func testSearchFactsReturnsFactRefs() async throws {
-        let embedder = StubEmbedder()
-        let store = StubStore()
+        let embedder = MockEmbedder()
+        let store = MockStore()
         await store.setRows([
             (makeFact(id: 1, subject: "S", predicate: "P", object: "O"), 0.5),
         ])
@@ -89,8 +89,8 @@ final class HybridSearchTests: XCTestCase {
     }
 
     func testSearchFactsEmptyQueryShortCircuits() async throws {
-        let embedder = StubEmbedder()
-        let store = StubStore()
+        let embedder = MockEmbedder()
+        let store = MockStore()
         let search = HybridSearch(store: store, embedder: embedder)
         let refs = try await search.searchFacts(query: "", k: 5, triggerTurnId: 1)
         XCTAssertTrue(refs.isEmpty)

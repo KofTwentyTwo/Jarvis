@@ -178,14 +178,14 @@ final class HudStateCoordinatorBusWiringTests: XCTestCase {
     // MARK: - W2: emit closure bridges to bus send (via evaluator observation)
 
     /// Drives the emit closure in isolation using a standalone coordinator +
-    /// a FakeJSEvaluator-backed WebviewBridge. Mirrors the 02-03
+    /// a MockJSEvaluator-backed WebviewBridge. Mirrors the 02-03
     /// WebviewBridgeOutboundTests pattern. Proves that the closure shape
     /// AppDelegate installs genuinely produces a `.hudState(busHudState(...))`
     /// payload on the outbound channel.
     func test_emitClosureBridgesToBusSend() async throws {
         // Construct a WebviewBridge with a recording evaluator so we can
         // observe the outbound `.hudState(...)` without a real WKWebView.
-        let evaluator = FakeJSEvaluator()
+        let evaluator = MockJSEvaluator()
         let controller = WKUserContentController()
         let bridge = WebviewBridge(
             evaluator: evaluator,
@@ -240,9 +240,9 @@ final class HudStateCoordinatorBusWiringTests: XCTestCase {
         _ = agentCont
     }
 
-    // MARK: - Fake evaluator (mirrors packages/Bus/Tests/…/FakeJSEvaluator)
+    // MARK: - Fake evaluator (mirrors packages/Bus/Tests/…/MockJSEvaluator)
 
-    final class FakeJSEvaluator: WebviewBridge.JSEvaluator {
+    final class MockJSEvaluator: WebviewBridge.JSEvaluator {
         struct Call {
             let functionBody: String
             let arguments: [String: Any]

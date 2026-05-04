@@ -2,11 +2,11 @@ import XCTest
 @testable import JarvisMCP
 
 /// Plan 07-03 Task 3 — end-to-end tests for the three in-process MCP tools
-/// dispatched through InProcessToolRegistry. Stub HybridSearch /
+/// dispatched through InProcessToolRegistry. Mock HybridSearch /
 /// SessionHistory / forget surfaces avoid a real DB.
 final class InProcessMemoryToolsTests: XCTestCase {
 
-    actor StubHybrid: HybridSearchDispatching {
+    actor MockHybrid: HybridSearchDispatching {
         var calls: [(String, Int, Int64)] = []
         var rowsToReturn: [SearchMemoryHit] = []
         func searchFacts(query: String, k: Int, triggerTurnId: Int64) async throws -> [SearchMemoryHit] {
@@ -16,7 +16,7 @@ final class InProcessMemoryToolsTests: XCTestCase {
         func setRows(_ rows: [SearchMemoryHit]) { rowsToReturn = rows }
     }
 
-    actor StubHistory: SessionHistoryDispatching {
+    actor MockHistory: SessionHistoryDispatching {
         var calls: [(String, Int)] = []
         var rowsToReturn: [SearchConversationTurn] = []
         func recentTurns(sessionId: String, limit: Int) async throws -> [SearchConversationTurn] {
@@ -26,7 +26,7 @@ final class InProcessMemoryToolsTests: XCTestCase {
         func setRows(_ rows: [SearchConversationTurn]) { rowsToReturn = rows }
     }
 
-    actor StubForget: ForgetFactDispatching {
+    actor MockForget: ForgetFactDispatching {
         var calls: [(Int64, Int64)] = []
         var nextResult: Bool = true
         func forgetFact(id: Int64, triggerTurnId: Int64) async throws -> Bool {
@@ -37,7 +37,7 @@ final class InProcessMemoryToolsTests: XCTestCase {
     }
 
     func testSearchMemoryToolDispatch() async throws {
-        let stub = StubHybrid()
+        let stub = MockHybrid()
         await stub.setRows([
             SearchMemoryHit(factId: 1, summary: "S P O", score: 0.5, triggerTurnId: 42),
         ])
@@ -60,7 +60,7 @@ final class InProcessMemoryToolsTests: XCTestCase {
     }
 
     func testSearchConversationToolDispatch() async throws {
-        let stub = StubHistory()
+        let stub = MockHistory()
         await stub.setRows([
             SearchConversationTurn(id: 1, sessionId: "A", role: "user",
                                    content: "hi", source: "userText", createdAt: 1),
@@ -83,7 +83,7 @@ final class InProcessMemoryToolsTests: XCTestCase {
     }
 
     func testForgetFactToolDispatchSuccess() async throws {
-        let stub = StubForget()
+        let stub = MockForget()
         await stub.set(true)
         let registry = InProcessToolRegistry()
         await registry.register(ForgetFactTool(dispatcher: stub))
@@ -105,7 +105,7 @@ final class InProcessMemoryToolsTests: XCTestCase {
     }
 
     func testForgetFactToolDispatchUnknownId() async throws {
-        let stub = StubForget()
+        let stub = MockForget()
         await stub.set(false)
         let registry = InProcessToolRegistry()
         await registry.register(ForgetFactTool(dispatcher: stub))
@@ -120,9 +120,9 @@ final class InProcessMemoryToolsTests: XCTestCase {
     }
 
     func testRequiresConfirmationFlags() {
-        let hybrid = StubHybrid()
-        let history = StubHistory()
-        let forget = StubForget()
+        let hybrid = MockHybrid()
+        let history = MockHistory()
+        let forget = MockForget()
         XCTAssertEqual(SearchMemoryTool(dispatcher: hybrid).requiresConfirmation, false)
         XCTAssertEqual(SearchConversationTool(dispatcher: history).requiresConfirmation, false)
         XCTAssertEqual(ForgetFactTool(dispatcher: forget).requiresConfirmation, true,
