@@ -4,7 +4,7 @@
 
 ## Current Status
 
-`develop` at `61aed20`, pushed. Tree clean. Track A + Track B-1..5 closed. Tracks C (vision) and D (memory) are the next session's pickup points.
+`develop` at `c7f9ece`, pushed. Tree clean. Track A + Track B-1..6 closed. Track B-7 (RingBuffer fan-out) and Tracks C (vision) and D (memory) are the next session's pickup points.
 
 ## What Was Done This Session
 
@@ -30,16 +30,22 @@
   - `startSTTSession` spawns a detached `chunkPumpTask`; `endSTTSession` cancels it before closing the chunk continuation; `shutdown` cancels it. No leaked Task on session end.
   - AppDelegate's production pump reads `audioGraphOwner.ringBuffer` in 1024-sample windows (~64 ms @ 16 kHz), 10 ms sleep on starve, exits on Task cancel.
   - VoiceLoopE2ETests (+3): preset-chunks → orchestrator.submit text match (E1); empty pump → no submit + back to idle (E2); pump task exits within 100 ms of pttUp (E3).
+- **Commit `c7f9ece` — Track B-6** (VAD-gated session end):
+  - `VoiceController.startSTTSession` now spawns a per-session VAD interceptor task. Pump output flows through it, forwarding every chunk to STT *and* running Silero VAD per 512-sample window.
+  - New private `runVADInterceptor`: tracks armed state on `.speechStart`, counts consecutive silence chunks after `.speechEnd`, and triggers `endSTTSession()` once the hangover threshold (5 chunks ≈ 160 ms) is reached. Mid-utterance speech resumption cancels the pending finalize.
+  - `endSTTSession()` is now `async`; `pttUp()` awaits it. Single non-VAD caller path preserved.
+  - 512-sample VAD window builder carries over the partial tail between chunks so it works against both the test pump (512-sample chunks) and the production pump (up to 1024-sample chunks).
+  - Anti-patterns enforced: VAD handler does NOT block on `await analyzer.finish()` — finalize fires inside `Task { … }` to avoid deadlock on the analyzer completion path. T-06-05-03 preserved (no PCM in logs). VOICE-14 single `cancelAndSubmit` site preserved.
+  - VADGatedSessionTests (+4): VAD-1 `.speechEnd` + 5×silence → submit; VAD-2 PTT regression with VAD wired; VAD-4 sustained speech → no submit; VAD-5 speech resumption within hangover cancels pending finalize.
 
 ## Active Branches
 
 | Branch | Status |
 |--------|--------|
-| `develop` | At `61aed20`, pushed to origin. Tree clean. |
+| `develop` | At `c7f9ece`, pushed to origin. Tree clean. |
 
 ## Pending Work
 
-- [ ] **Track B-6** (carry-forward) — VAD-gated session end. Currently only `pttUp` closes the chunk continuation; Silero `.speechEnd` isn't wired to `endSTTSession`. Needed for "Hey Jarvis" → speak-then-pause → auto-finalize flow. ~half day.
 - [ ] **Track B-7** (carry-forward) — RingBuffer multi-consumer fan-out. WakeWordDAG, AudioLevelEmitter, and the Track B-5 chunk pump all read the same SPSC ring concurrently — each advances the read pointer, so they steal samples from each other. A `BufferBroadcaster` at the AudioGraph tap is the right fix. ~1 day.
 - [ ] **Track C** — vision: `AVCapturePhotoOutput` delegate flow (currently allocated but never called); HUD camera button (doesn't exist); `frameStream` returns immediately-finished `AsyncStream`. ~1 day.
 - [ ] **Track D** — memory: bundle custom libsqlite3 with `SQLITE_ENABLE_LOAD_EXTENSION=1`, ship `vec0.dylib`, register `SearchMemoryTool` + `ForgetFactTool` with MCP runtime, fix `priorFacts: []` hardcode. ~3 days.
@@ -52,5 +58,5 @@
 
 - Audit reports: `.planning/audit-2026-05-03/{SYNTHESIS,voice,voice-audit,hud-audit,vision-audit,memory-audit,llm-audit,tests-audit}.md`
 - Plan: `.planning/AUDIT-AND-FIX-PLAN.md`, findings tracker: `.planning/AUDIT-FINDINGS.md`
-- Test stack at session end: Voice 80 (+7 PCMBufferBuilder + 3 VoiceLoopE2E this session, 3 skipped, 1 pre-existing TTSInterruptTests.testI3 failure), AgentCore 215/215, Replay 33/33, Bus 57/58 (1 pre-existing F-A2-01), webview/hud 94/94, all boundary gates PASS, app builds clean.
-- Next-session orientation: read `.planning/audit-2026-05-03/SYNTHESIS.md` first, then this file, then `git log --oneline 61aed20 e9c0a34`'s commit bodies for the B-4 + B-5 audit-and-fix story.
+- Test stack at session end: Voice 84 (+4 VADGatedSessionTests this session, 3 skipped, 1 pre-existing TTSInterruptTests.testI3 failure), AgentCore 215/215, Replay 33/33, Bus 57/58 (1 pre-existing F-A2-01), webview/hud 94/94, all boundary gates PASS, app builds clean.
+- Next-session orientation: read `.planning/audit-2026-05-03/SYNTHESIS.md` first, then this file, then `git log --oneline c7f9ece 61aed20 e9c0a34`'s commit bodies for the B-4..6 audit-and-fix story.

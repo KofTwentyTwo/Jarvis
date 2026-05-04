@@ -7,7 +7,7 @@ Live triage list. Higher up = higher priority. Move done items to a dated archiv
 - [x] Track A: text turn + animated rings (`1f8e03e`)
 - [ ] Re-launch app, verify CacheHints fix actually unblocks streaming. Read `system.log` for the new `AnthropicProvider stream outcome:` line — it now classifies 200+0bytes / 200+frames+EOF / complete.
 
-## Track B — voice (B-1..5 done; carry-forward B-6/B-7)
+## Track B — voice (B-1..6 done; carry-forward B-7)
 
 - [x] B-1: bundle ONNX models at `Contents/Resources/Models/{openWakeWord,silero}/`
 - [x] B-2: WakeWordDAG.swift:93 typo (production was calling test seam)
@@ -15,7 +15,7 @@ Live triage list. Higher up = higher priority. Move done items to a dated archiv
 - [x] B-4: `AudioGraphOwner` construction in `installVoice`; `AVAudioEngine.start()`; mic taps → wake-word DAG (`e9c0a34`)
 - [x] B-4: replace `LiveSpeechAnalyzerBridge.feed()` body (`_ = chunk`) with macOS 26 SpeechAnalyzer wiring (`e9c0a34`)
 - [x] B-5: VoiceController chunkPump + voice-loop e2e proof (`61aed20`). 3 new tests prove the chain: preset chunks → STT → orchestrator.submit. AppDelegate wires the production pump reading from `audioGraphOwner.ringBuffer`.
-- [ ] B-6: VAD-gated session end. Silero `.speechEnd` decision not wired to `endSTTSession`; only `pttUp` currently closes the chunk continuation. Required for the "Hey Jarvis" hands-free flow.
+- [x] B-6: VAD-gated session end (`c7f9ece`). Per-session VAD interceptor in `VoiceController.startSTTSession` — slices pump output into 512-sample windows, runs Silero VAD, triggers `endSTTSession()` on `.speechEnd` + 5-chunk hangover. 4 new tests (VAD-1/2/4/5).
 - [ ] B-7: RingBuffer multi-consumer fan-out. WakeWordDAG + AudioLevelEmitter + chunk pump all drain the same SPSC ring; each advances the read pointer, so they steal samples. A `BufferBroadcaster` at the AudioGraph tap is the right fix. ~1 day.
 - [ ] B-8 (stretch): TTS tier-2 Orpheus — gated on ~6GB HuggingFace weight download; currently degrades to tier-1.
 
