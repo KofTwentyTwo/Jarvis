@@ -34,6 +34,15 @@ let package = Package(
             url: "https://github.com/Blaizzy/mlx-audio-swift.git",
             from: "0.1.2"
         ),
+        // P1-4 (audit 2026-05-04 concurrency HIGH-3): explicit
+        // acquire/release semantics for RingBuffer's writeIdx/readIdx.
+        // The producer/consumer cross thread without a fence; without
+        // explicit atomics the optimizer is free to reorder the index
+        // bump relative to the slot store.
+        .package(
+            url: "https://github.com/apple/swift-atomics.git",
+            from: "1.3.0"
+        ),
     ],
     targets: [
         .target(
@@ -48,6 +57,11 @@ let package = Package(
                 .product(name: "MLXAudioTTS", package: "mlx-audio-swift"),
                 // Added by Plan 06-04 (TTSKit fallback, feature-flag gated).
                 .product(name: "TTSKit", package: "argmax-oss-swift"),
+                // P1-4 (audit 2026-05-04 concurrency HIGH-3): RingBuffer
+                // index atomics — explicit acquire/release semantics so
+                // Swift's optimizer can't reorder the index bump relative
+                // to the storage write.
+                .product(name: "Atomics", package: "swift-atomics"),
             ],
             path: "Sources/Voice",
             swiftSettings: [.swiftLanguageMode(.v6)],

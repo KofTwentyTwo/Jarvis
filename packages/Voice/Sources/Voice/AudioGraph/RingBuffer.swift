@@ -1,3 +1,4 @@
+import Atomics
 import AVFoundation
 import OSLog
 
@@ -21,10 +22,19 @@ import OSLog
 /// `sampleRate` (16 000 Hz) — this anchor is locked by the VOICE-01/02
 /// downstream contracts.
 ///
-/// Thread safety: `writeIdx` and `readIdx` are stored as `UInt64` with
-/// atomic load/store via `nonisolated(unsafe)` + explicit memory-ordering
-/// conventions.  The ring is declared `@unchecked Sendable` because the
-/// producer and consumer access disjoint storage regions (SPSC guarantee).
+/// ## Thread safety (P1-4, audit 2026-05-04 concurrency HIGH-3)
+///
+/// `writeIdx` and `readIdx` are `ManagedAtomic<UInt64>` from `swift-atomics`.
+/// The producer publishes samples by storing the slot first, then doing a
+/// `releasing` store of the bumped writeIdx — this guarantees the consumer's
+/// `acquiring` load of writeIdx happens-before its read of `storage[slot]`.
+/// Without these explicit orderings the Swift optimizer is free to reorder,
+/// hoist, or coalesce the index bump relative to the slot store, even on
+/// ARM64 (which has a relatively strong memory model but does not constrain
+/// Swift's compiler-side optimization).
+///
+/// The ring is declared `@unchecked Sendable` because the producer and
+/// consumer access disjoint storage regions (SPSC guarantee).
 public final class RingBuffer: @unchecked Sendable {
 
     // MARK: - Public API
@@ -70,6 +80,11 @@ public final class RingBuffer: @unchecked Sendable {
         guard frameCount > 0 else { return }
         let channelCount = Int(buffer.format.channelCount)
 
+        // P1-4: load writeIdx with .relaxed (only this thread writes it)
+        // and mutate locally; publish each slot with a `.releasing` store
+        // of the bumped index so the consumer's `.acquiring` load of
+        // writeIdx happens-before its read of `storage[slot]`.
+        var localWrite = writeIdx.load(ordering: .relaxed)
         for i in 0..<frameCount {
             var sample: Float = 0
             for ch in 0..<channelCount {
@@ -77,9 +92,13 @@ public final class RingBuffer: @unchecked Sendable {
             }
             sample /= Float(channelCount)
 
-            let slot = Int(writeIdx) & mask
+            let slot = Int(localWrite) & mask
             storage[slot] = sample
-            writeIdx &+= 1
+            localWrite &+= 1
+            // Releasing store: the consumer's acquiring load of writeIdx
+            // synchronises with this store, so reads of storage[slot] on
+            // the consumer side see the value we just wrote above.
+            writeIdx.store(localWrite, ordering: .releasing)
         }
 
         // Update lag tracking for overflow detection
@@ -99,15 +118,22 @@ public final class RingBuffer: @unchecked Sendable {
     ///
     /// Called on the consumer thread — MUST be lock-free.
     public func readMono16k(into: UnsafeMutableBufferPointer<Float>) -> Int {
-        let available = Int(writeIdx &- readIdx)
+        // P1-4: acquiring load of writeIdx synchronises with the producer's
+        // releasing store; storage[slot] reads below are guaranteed to see
+        // the values published by the producer.
+        let writeSnapshot = writeIdx.load(ordering: .acquiring)
+        var localRead = readIdx.load(ordering: .relaxed) // only this thread writes readIdx
+        let available = Int(writeSnapshot &- localRead)
         let count = min(into.count, available)
         guard count > 0 else { return 0 }
 
         for i in 0..<count {
-            let slot = Int(readIdx) & mask
+            let slot = Int(localRead) & mask
             into[i] = storage[slot]
-            readIdx &+= 1
+            localRead &+= 1
         }
+        // Publish the new readIdx so the producer's lag computation sees it.
+        readIdx.store(localRead, ordering: .releasing)
         return count
     }
 
@@ -145,15 +171,29 @@ public final class RingBuffer: @unchecked Sendable {
 
     private let capacity: Int
     private let mask: Int
+    // `storage` remains a plain mutable array. SPSC contract guarantees
+    // the producer writes a slot before publishing its index and the
+    // consumer reads a slot after observing the published index — index
+    // atomics provide the cross-thread memory ordering for the storage
+    // accesses (P1-4).
     private nonisolated(unsafe) var storage: [Float]
-    private nonisolated(unsafe) var writeIdx: UInt64 = 0
-    private nonisolated(unsafe) var readIdx: UInt64 = 0
+    // P1-4: explicit acquire/release atomics for cross-thread index
+    // ordering. Producer stores writeIdx with `.releasing`; consumer
+    // loads with `.acquiring`. Same shape but reversed for readIdx
+    // (consumer publishes, producer reads for lag tracking).
+    private let writeIdx: ManagedAtomic<UInt64> = .init(0)
+    private let readIdx: ManagedAtomic<UInt64> = .init(0)
     private let sustainedOverflowMs: Double
 
     private static let sampleRate: Double = 16_000
 
     private func computeLagMs() -> Double {
-        let lagFrames = writeIdx &- readIdx
+        // Cross-thread reads of both indices: use `.acquiring` so the
+        // producer's lag-check observes a consistent (writeIdx, readIdx)
+        // snapshot relative to the consumer's release store.
+        let w = writeIdx.load(ordering: .acquiring)
+        let r = readIdx.load(ordering: .acquiring)
+        let lagFrames = w &- r
         guard lagFrames > 0 else { return 0.0 }
         return Double(lagFrames) / Self.sampleRate * 1_000
     }

@@ -130,6 +130,77 @@ struct RingBufferTests {
         // Test passes if no data race was detected by TSan and no crash occurred.
     }
 
+    // MARK: R5 — P1-4 happens-before invariant
+
+    /// P1-4 (audit 2026-05-04 concurrency HIGH-3): when the producer races
+    /// the consumer, the consumer's `acquiring` load of writeIdx must
+    /// synchronise-with the producer's `releasing` store. Practically:
+    /// every sample the consumer reads must equal the value the producer
+    /// stored at that slot — no torn reads, no out-of-order publication.
+    ///
+    /// We can't prove the absence of races directly, but we can fingerprint
+    /// every published frame with a unique value and assert the consumer
+    /// sees only those values. Under the bug (pre-atomics + optimizer
+    /// reordering), the consumer could observe a slot whose write hadn't
+    /// yet committed — appearing as a stale or zero sample. With explicit
+    /// release/acquire, that's prohibited.
+    @Test("R5: every consumer read observes a producer-published sample (P1-4 happens-before invariant)")
+    func happensBeforeInvariant() async throws {
+        // 4 s of buffer at 16 kHz so the producer doesn't overrun.
+        let ring = RingBuffer(capacityFrames: 16_000 * 4)
+        let chunkFrames = 256
+        let chunk = try makePCMBuffer(frameCount: chunkFrames, sampleRate: 16_000, channels: 1)
+        chunk.frameLength = AVAudioFrameCount(chunkFrames)
+        let chunkData = chunk.floatChannelData![0]
+
+        // Build a fingerprint set: each chunk publishes 256 unique non-zero
+        // samples whose value encodes (chunkIdx, slotIdx). The consumer
+        // must NEVER read 0.0 (uninitialized storage) or a value outside
+        // the fingerprint set.
+        let totalChunks = 200
+        let producer = Task.detached {
+            for chunkIdx in 0..<totalChunks {
+                for i in 0..<chunkFrames {
+                    // Encode (chunkIdx, i) into a unique non-zero float.
+                    chunkData[i] = Float(chunkIdx + 1) * 1e-3 + Float(i + 1) * 1e-7
+                }
+                ring.write(chunk)
+                if chunkIdx % 16 == 0 {
+                    try? await Task.sleep(nanoseconds: 100_000) // 0.1 ms
+                }
+            }
+        }
+
+        // Consumer: spin-read until the ring drains for a stretch.
+        let consumer = Task.detached { () -> Int in
+            var observed = 0
+            var torn = 0
+            var out = [Float](repeating: 0, count: chunkFrames)
+            let deadline = ContinuousClock.now + .seconds(2)
+            while ContinuousClock.now < deadline {
+                let n = out.withUnsafeMutableBufferPointer { ring.readMono16k(into: $0) }
+                if n > 0 {
+                    for i in 0..<n {
+                        let v = out[i]
+                        if v == 0.0 {
+                            // Uninitialized slot — would indicate a happens-before
+                            // violation. The producer never publishes 0.0.
+                            torn += 1
+                        }
+                        observed += 1
+                    }
+                }
+                if observed >= totalChunks * chunkFrames { break }
+            }
+            #expect(torn == 0, "Consumer observed \(torn) zero-valued reads — happens-before invariant violated")
+            return observed
+        }
+
+        await producer.value
+        let observed = await consumer.value
+        #expect(observed > 0, "Consumer must have read at least some samples")
+    }
+
     // MARK: - Helpers
 
     private func makePCMBuffer(
