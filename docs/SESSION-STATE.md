@@ -4,7 +4,7 @@
 
 ## Current Status
 
-`develop` at `bce725b`, pushed. Tree clean. Track A + Track B-1..7 closed. Tracks C (vision) and D (memory) are the next session's pickup points.
+`develop` at `5cd46c9`, ahead of origin by 4 commits (push pending). Tree clean. Track A + Track B-1..7 + Cleanup batch (BLOCKER-INT-1, F-A2-01, tests-audit cleanup, F2 linter) closed. Tracks C (vision) and D (memory) are the next session's pickup points.
 
 ## What Was Done This Session
 
@@ -38,6 +38,10 @@
   - 5 new BufferBroadcasterTests (BB-1..5: single sub, multi-sub no theft, unsubscribe stops, late-join skips prior, concurrent stress). All pass.
   - Voice swift-testing 17 → 22 (+5 BB). XCTest 84 unchanged. Pre-existing `TTSInterruptTests.testI3` baseline 10s flake unchanged.
   - Anti-patterns enforced: no actor hops on tap thread, NSLock forbidden, T-06-05-03 (no PCM logging) preserved, VOICE-14 single-call-site preserved.
+- **Commit `ad93dac` — BLOCKER-INT-1** (real bus gateway): replaced `NoopBusGateway` in `AppDelegate.swift` with `MCPBusGatewayAdapter` that forwards `emitToolCallStart` / `emitToolCallEnd` through `OutboundBatcher`. Tool-call cards now reach the webview bus. New `MCPBusGatewayAdapterTests` proves the start→end forward path.
+- **Commit `6f6617e` — F-A2-01** (stale bus world): `WebviewBridgeOutboundTests:80` asserted retired `JarvisBusWorld` name; production switched to `.page` in `fb41c5f`. Test now asserts `WKContentWorld.page` — load-bearing again.
+- **Commit `08125a4` — tests-audit cleanup** (5 tautologies): removed/replaced `XCTAssertTrue(true)` placeholders per `.planning/audit-2026-05-03/tests-audit.md` section 5. MCPRuntimeWiringTests:260 in-place assertion fix; WebviewBundleLoadTests, InputMonitoringDenialTests, PackageBoundaryTests deleted documentation-as-test funcs; ToolChoiceTests trailing tautology removed (closure compile is the gate). HudStateEnumTests rubber-stamps left as-is (a11y labels are user-facing, load-bearing).
+- **Commit `5cd46c9` — F2 linter** (`scripts/check-no-leftover-stubs.sh`): grep-based gate against `Replaced in 0…`, `TODO: Plan|0X-…`, 2-line stub function bodies, and production `Noop*(` / `*Stub(` instantiations. Self-tested against synthetic fixture; clean on current `develop`. Allowlists `Dormant*` (real producer-stream pattern).
 - **Commit `c7f9ece` — Track B-6** (VAD-gated session end):
   - `VoiceController.startSTTSession` now spawns a per-session VAD interceptor task. Pump output flows through it, forwarding every chunk to STT *and* running Silero VAD per 512-sample window.
   - New private `runVADInterceptor`: tracks armed state on `.speechStart`, counts consecutive silence chunks after `.speechEnd`, and triggers `endSTTSession()` once the hangover threshold (5 chunks ≈ 160 ms) is reached. Mid-utterance speech resumption cancels the pending finalize.
@@ -50,15 +54,13 @@
 
 | Branch | Status |
 |--------|--------|
-| `develop` | At `bce725b`, pushed to origin. Tree clean. |
+| `develop` | At `5cd46c9`, 4 commits ahead of origin (push pending). Tree clean. |
 
 ## Pending Work
 
 - [ ] **AudioLevelEmitter production wiring** — emitter is constructed only in tests today; AppDelegate doesn't yet build/start it. When wired, it MUST call `audioGraphOwner.subscribe()` (the broadcaster fan-out is in place from Track B-7). Small follow-up.
 - [ ] **Track C** — vision: `AVCapturePhotoOutput` delegate flow (currently allocated but never called); HUD camera button (doesn't exist); `frameStream` returns immediately-finished `AsyncStream`. ~1 day.
 - [ ] **Track D** — memory: bundle custom libsqlite3 with `SQLITE_ENABLE_LOAD_EXTENSION=1`, ship `vec0.dylib`, register `SearchMemoryTool` + `ForgetFactTool` with MCP runtime, fix `priorFacts: []` hardcode. ~3 days.
-- [ ] BLOCKER-INT-1 — replace `NoopBusGateway` so tool-call cards reach HUD.
-- [ ] F-A2-01 — `WebviewBridgeOutboundTests:80` stale `JarvisBusWorld` assertion.
 - [ ] **Pre-existing TTSInterruptTests.testI3 flake** — `XCTAssertLessThan failed: ("10.4...") is not less than ("0.08")`. Deterministic 10s timeout in `InterruptSequence.run`; pre-dates Track B-4. Not blocking but should be triaged.
 - [ ] streamTruncated empirical confirmation — re-launch app and verify cache_control fix actually completes a turn.
 
@@ -66,5 +68,5 @@
 
 - Audit reports: `.planning/audit-2026-05-03/{SYNTHESIS,voice,voice-audit,hud-audit,vision-audit,memory-audit,llm-audit,tests-audit}.md`
 - Plan: `.planning/AUDIT-AND-FIX-PLAN.md`, findings tracker: `.planning/AUDIT-FINDINGS.md`
-- Test stack at session end: Voice 84 XCTest + 22 swift-testing (+5 BufferBroadcasterTests this session; 3 skipped; 1 pre-existing TTSInterruptTests.testI3 failure), AgentCore 215/215, Replay 33/33, Bus 57/58 (1 pre-existing F-A2-01), webview/hud 94/94, all boundary gates PASS, app builds clean.
-- Next-session orientation: read `.planning/audit-2026-05-03/SYNTHESIS.md` first, then this file, then `git log --oneline bce725b c7f9ece 61aed20 e9c0a34`'s commit bodies for the B-4..7 audit-and-fix story.
+- Test stack at session end: Voice 84 XCTest + 22 swift-testing (3 skipped; 1 pre-existing TTSInterruptTests.testI3 failure), AgentCore 215/215, Replay 33/33, Bus 58/58 (F-A2-01 fixed), webview/hud 94/94, all 5 boundary gates + new check-no-leftover-stubs PASS, app builds clean. Net test delta from cleanup batch: -3 tests (3 deleted XCTAssertTrue(true) placeholders; MCPRuntimeWiringTests in-place fix and ToolChoiceTests trailing tautology removed without affecting test count). Pre-existing baseline issue unrelated to this batch: `packages/Shell/Tests/ShellTests/InputMonitoringDenialTests.swift` fails to *compile* on a clean tree (MockProbe missing `isListenEventAccessGranted()`); reproduced via `git stash`. Flag for follow-up; out of scope here.
+- Next-session orientation: read `.planning/audit-2026-05-03/SYNTHESIS.md` first, then this file, then `git log --oneline 5cd46c9 08125a4 6f6617e ad93dac bce725b`'s commit bodies for the cleanup batch + B-7 story.

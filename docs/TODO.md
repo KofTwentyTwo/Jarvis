@@ -41,11 +41,11 @@ Live triage list. Higher up = higher priority. Move done items to a dated archiv
 
 ## Cross-cutting
 
-- [ ] **BLOCKER-INT-1** — replace `NoopBusGateway` at `AppDelegate.swift:467` so tool-call cards reach HUD
-- [ ] **F-A2-01** — `WebviewBridgeOutboundTests:80` stale `JarvisBusWorld` assertion (asserts retired world name)
-- [ ] **Test pyramid health** — 5 explicit `XCTAssertTrue(true)` tautologies; multiple rubber-stamp tests asserting source literal == test literal. Audit report has the list at `.planning/audit-2026-05-03/tests-audit.md`.
+- [x] **BLOCKER-INT-1** — replace `NoopBusGateway` at `AppDelegate.swift:467` so tool-call cards reach HUD (`ad93dac`)
+- [x] **F-A2-01** — `WebviewBridgeOutboundTests:80` stale `JarvisBusWorld` assertion fixed; now asserts `WKContentWorld.page` (`6f6617e`)
+- [x] **Test pyramid health** — 5 `XCTAssertTrue(true)` tautologies removed/fixed per `.planning/audit-2026-05-03/tests-audit.md` (`08125a4`). HudStateEnumTests rubber-stamps left as-is (a11y labels are load-bearing).
 - [ ] Phase F1 — top-level IntegrationTests target (the structural fix; one cold-launch e2e test would catch INT-1/2/3 + F-E-RACE-1/FK-1/WIRE-1)
-- [ ] Phase F2 — `scripts/check-no-leftover-stubs.sh` linter (catches "Replaced in 0X-0Y" rot)
+- [x] Phase F2 — `scripts/check-no-leftover-stubs.sh` linter (catches "Replaced in 0X-0Y" rot) (`5cd46c9`)
 
 ## Knowledge graph / docs hygiene
 
