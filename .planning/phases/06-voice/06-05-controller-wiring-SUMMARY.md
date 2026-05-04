@@ -177,3 +177,23 @@ All 14 expected files verified present. All 5 commits verified in git log.
 | commit fe4f203 (Task 2) | FOUND |
 | commit da42c07 (Task 3) | FOUND |
 | commit 1e2dbbb (Task 4) | FOUND |
+
+---
+
+## Postscript — 2026-05-04 audit-fix update
+
+The body above describes Phase 6's design intent at the time of close. Several
+claims are no longer true and should be read as historical:
+
+- Null adapters were replaced in Phase 9-04 (`75a4ed6`). Production now uses
+  `VoiceOrchestratorAdapter`, `VoiceTTSAdapter`, `VoiceBusEmitterAdapter`.
+- The voice loop wiring claimed here was structurally complete but functionally
+  dead until the 2026-05-03 audit and the Track B-1..B-7 fixes that followed:
+  - B-4 (commit `e9c0a34`): `AudioGraphOwner` wired into `installVoice`;
+    `LiveSpeechAnalyzerBridge.feed` no longer no-op.
+  - B-5 (commit `61aed20`): production `chunkPump` reads ring → yields AudioChunks.
+  - B-6 (commit `c7f9ece`): VAD-gated `endSTTSession` for hands-free finalize.
+  - B-7 (commit `bce725b`): `BufferBroadcaster` fan-out for multi-consumer ring.
+
+For the up-to-date picture, see `docs/SESSION-STATE.md` and the audit reports
+under `.planning/audit-2026-05-04/`.
