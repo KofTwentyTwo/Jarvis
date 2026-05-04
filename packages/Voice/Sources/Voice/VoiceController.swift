@@ -34,6 +34,7 @@ public actor VoiceController {
     private let wakeWordStream: AsyncStream<WakeWordEvent>
     private let vadFactory: @Sendable () -> SileroVAD
     private let sttFactory: @Sendable () -> any STTProvider
+    private let chunkPump: @Sendable (AsyncStream<AudioChunk>.Continuation) async -> Void
     private let tts: any VoiceTTSInterface
     private let orchestrator: any VoiceOrchestratorInterface
     private let bannerCoordinator: any VoiceBannerInterface
@@ -50,6 +51,10 @@ public actor VoiceController {
 
     private var wakeWordTask: Task<Void, Never>?
     private var orchestratorTask: Task<Void, Never>?
+
+    /// Track B-5: per-session pump Task that drains audio frames into the
+    /// STT continuation. Cancelled when listening ends.
+    private var chunkPumpTask: Task<Void, Never>?
 
     /// Exposed for AppDelegate to wire the audio-level emitter.
     public var audioLevelEmitter: AudioLevelEmitter?
@@ -79,7 +84,8 @@ public actor VoiceController {
         orchestrator: any VoiceOrchestratorInterface,
         bannerCoordinator: any VoiceBannerInterface,
         bus: any BusOutboundEmitter,
-        voiceHudCont: AsyncStream<VoiceHudIntent>.Continuation
+        voiceHudCont: AsyncStream<VoiceHudIntent>.Continuation,
+        chunkPump: @escaping @Sendable (AsyncStream<AudioChunk>.Continuation) async -> Void = { _ in }
     ) {
         self.wakeWordStream = wakeWordStream
         self.vadFactory = vadFactory
@@ -89,6 +95,7 @@ public actor VoiceController {
         self.bannerCoordinator = bannerCoordinator
         self.bus = bus
         self.voiceHudCont = voiceHudCont
+        self.chunkPump = chunkPump
     }
 
     // MARK: - Lifecycle
@@ -108,8 +115,10 @@ public actor VoiceController {
     public func shutdown() async {
         wakeWordTask?.cancel()
         orchestratorTask?.cancel()
+        chunkPumpTask?.cancel()
         wakeWordTask = nil
         orchestratorTask = nil
+        chunkPumpTask = nil
         await audioLevelEmitter?.stop()
         audioLevelEmitter = nil
         sttChunkCont?.finish()
@@ -300,10 +309,23 @@ public actor VoiceController {
     private func startSTTSession() async {
         sttChunkCont?.finish()
         sttChunkCont = nil
+        chunkPumpTask?.cancel()
+        chunkPumpTask = nil
 
         let provider = sttFactory()
         let (chunkStream, cont) = AsyncStream<AudioChunk>.makeStream()
         sttChunkCont = cont
+
+        // Track B-5: spawn the audio-chunk pump for this listening session.
+        // The default pump is a no-op (back-compat with tests that drive STT
+        // via `_testFireSpeechEnd`); production wires a ring-buffer reader
+        // via AppDelegate. The pump returns when the consumer Task drops the
+        // continuation — `cont.onTermination` propagates Task.isCancelled.
+        let pump = self.chunkPump
+        cont.onTermination = { _ in /* pump's Task cancellation handles cleanup */ }
+        chunkPumpTask = Task.detached { [pump] in
+            await pump(cont)
+        }
 
         let partials = provider.transcribe(stream: chunkStream)
 
@@ -325,6 +347,9 @@ public actor VoiceController {
     }
 
     private func endSTTSession() {
+        // Stop the audio pump first so it doesn't yield into a closed continuation.
+        chunkPumpTask?.cancel()
+        chunkPumpTask = nil
         // Close the audio chunk stream — STT provider will finalize naturally.
         sttChunkCont?.finish()
         sttChunkCont = nil

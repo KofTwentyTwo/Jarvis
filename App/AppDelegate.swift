@@ -834,6 +834,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             busAdapter = DormantVoiceBusEmitter()
         }
 
+        // Track B-5 (2026-05-03 voice audit fix): production chunk pump.
+        // VoiceController.startSTTSession opens an `AsyncStream<AudioChunk>`
+        // and hands the consumer side to the STT provider; the pump fills
+        // the producer side.
+        //
+        // Threading: the read loop is `Task.detached` so it doesn't block
+        // VoiceController's actor. We poll the ring at 1024-frame windows
+        // (~64 ms @ 16 kHz) — large enough to amortize the cross-task hop
+        // but small enough to keep STT partial latency under VAD's hangover.
+        //
+        // Race note: the same RingBuffer is also drained by WakeWordDAG and
+        // AudioLevelEmitter. RingBuffer's docstring claims SPSC, but the
+        // existing AudioLevelEmitter already violates that — the pump
+        // inherits the same race. Track B-5+ should fan out via a per-tap
+        // broadcaster to give STT its own samples; for now the listening
+        // path runs while wake-word fires don't consume the ring (the DAG
+        // pauses inference once we transition to .listening but its read
+        // loop continues to advance the read pointer). Documented for
+        // follow-up rather than fixed under audit scope.
+        let chunkPump: @Sendable (AsyncStream<AudioChunk>.Continuation) async -> Void = { [weak self] cont in
+            // Resolve the ring buffer. If the graph isn't ready yet (e.g.,
+            // installVoice short-circuited), the pump finishes immediately
+            // so the STT provider drains and finalize() returns "".
+            guard let owner = await MainActor.run(body: { self?.audioGraphOwner }),
+                  let ring = await owner.ringBuffer else {
+                cont.finish()
+                return
+            }
+
+            var scratch = [Float](repeating: 0, count: 1024)
+            while !Task.isCancelled {
+                let count = scratch.withUnsafeMutableBufferPointer { ptr in
+                    ring.readMono16k(into: ptr)
+                }
+                if count > 0 {
+                    let samples = count == scratch.count
+                        ? scratch
+                        : Array(scratch.prefix(count))
+                    cont.yield(AudioChunk(pcm16k: samples))
+                } else {
+                    // Ring drained — yield 10 ms before retrying so we don't
+                    // spin against a starving producer.
+                    try? await Task.sleep(nanoseconds: 10_000_000)
+                }
+            }
+            cont.finish()
+        }
+
         let vc = VoiceController(
             wakeWordStream: wakeWordDAG.wakeWordStream,
             vadFactory: { sileroVAD },
@@ -842,7 +890,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             orchestrator: orchAdapter,
             bannerCoordinator: bannerAdapter,
             bus: busAdapter,
-            voiceHudCont: voiceCont
+            voiceHudCont: voiceCont,
+            chunkPump: chunkPump
         )
         voiceController = vc
 
