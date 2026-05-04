@@ -1,10 +1,10 @@
 # Session State
 
-**Last Updated:** 2026-05-04 (afternoon)
+**Last Updated:** 2026-05-04 (afternoon — P0-P2 audit-fix sweep close)
 
 ## Current Status
 
-`develop` at `6e249ee`, ahead of origin (push pending). Tree clean. Track A + Track B-1..7 + Cleanup batch + Track C (vision) + Track D code-work (D-1..D-4 + D-5/D-6 skeletons) closed. D-5/D-6 binaries + D-7 model pulls remain on the user (environment work the executor cannot do autonomously).
+`develop` at `2d9a25a`, ahead of origin (push pending). Tree clean. Track A + Track B-1..7 + Cleanup batch + Track C (vision) + Track D code-work (D-1..D-4 + D-5/D-6 skeletons) + audit-2026-05-04 P0/P1/P2/P3-18 fixes closed. D-5/D-6 binaries + D-7 model pulls remain on the user (environment work the executor cannot do autonomously).
 
 ## What Was Done This Session
 
@@ -53,6 +53,11 @@
 - **Commit `51750c1` — Track D-3** (priorFacts wiring): pre-fix `MemoryExtractionOrchestrator.process(_:)` hardcoded `priorFacts: []` — extractor was blind to existing facts, only ever ADDed, never UPDATEd. Added `PriorFactsLookup` typealias + `priorFactsLookup` ctor parameter (default `emptyPriorFactsLookup` preserves pre-D-3 behavior). Lookup throws degrade to empty list with a warning log so the drain task survives. New `MemoryStore.recentActiveFacts(limit:)` + matching `MemoryQueries.recentActiveFactsSQL` (server-side cap, active-only). AppDelegate's installMemory passes a closure returning up to 50 recent active facts. Tests: `testD3_priorFactsLookupDrivesUpdateOp` (stub provider emits UPDATE only when it sees `[99]` prior fact id in system prompt; asserts `applyOp` receives `.update(supersedes: 99, …)`); `testD3_priorFactsLookupErrorDegradesToEmpty` (lookup throws, job still applies its ADD op). Memory 86 → 88.
 - **Commit `c3bd0a5` — Track D-4** (remember-Brutus end-to-end): new `RememberBrutusEndToEndTests.testExtractionWriteThenSearchFindsBrutus` proves the extraction → store → search loop holds. Real `MemoryExtractionOrchestrator` + `MemoryExtractor` + `HybridSearch`; fakes for the vec/Ollama-dependent surfaces (`FakeStore` actor conforms to both apply path and `MemoryReadStore`; `StubEmbedder` returns constant 768-dim vector; `BrutusProvider` returns one ADD op then `messageStop`). Scenario: turn 1 "My dog Brutus is a Bernese Mountain Dog." → ADD lands in store → turn 2 "What breed is Brutus?" → `search.searchFacts` returns one hit with summary `"Brutus breed Bernese Mountain Dog"`. Boundary stops at `HybridSearch.searchFacts`; MCP-side dispatch covered by `InProcessMemoryToolsTests` in the MCP package. Memory 86 → 87 (D-3 added via grouping; total Memory tests now 87).
 - **Commit `6e249ee` — Track D-5/D-6** (deferred build + fetch script skeletons): `scripts/build-sqlite-with-extensions.sh` (clang flags for `SQLITE_ENABLE_LOAD_EXTENSION=1` + FTS5 + RTREE + threadsafe=2; TODO markers for SQLite version, amalgamation URL, SHA256, codesign identity) and `scripts/fetch-sqlite-vec.sh` (GitHub release tag + SHA256 + asset path; TODO markers for version + hash). Both mode 755, exit 1 with clear "TODO: fill in …" message until pins land — no deceptive successful stub.
+- **Commits `57847f2` / `f9cd25d` / `2d9a25a` — audit-2026-05-04 P2 stragglers**:
+  - `57847f2` (P2-14, test-seam visibility): VoiceController `_forceState` / `_testFireSpeechEnd` / `_testCurrentSttSessionId` (4 seams) flipped from `public` → `internal`; MCPClient `_testHandle` + MCPServerHandle `_testProcessIdentifier` (2 seams) flipped to `@_spi(Testing) public`. Voice tests already use `@testable import`; MCP tests gain `@testable @_spi(Testing) import JarvisMCP`; Harness's `MCPCrashRunner` opts in via `@_spi(Testing) import JarvisMCP`. Public ABI no longer leaks test entry points.
+  - `f9cd25d` (P2-15, mock naming): new CLAUDE.md §"Test naming conventions" (line 127) documents Mock/Stub/Fake taxonomy (records-and-scripts / canned-data / realistic-stateful). 15 worst-mismatch stragglers renamed in older corpus: 6 `Stub*` → `Mock*` (HybridSearchTests StubEmbedder/StubStore, SessionHistoryTests StubStore, InProcessMemoryToolsTests StubHybrid/StubHistory/StubForget — all record calls); 8 `Mock*` → `Stub*` (STTBackendSwitchTests MockSpeechAnalyzerBridge/MockWhisperKitBridge, VoiceWiringTests Mock*ForW4 ×6 — all canned no-ops); 1 `Fake*` → `Mock*` (FakeJSEvaluator in two files — comment already said "Records each call for assertion"). Did NOT touch types added in today's P1+P2 fix commits per audit constraint.
+  - `2d9a25a` (P3-18 / security LOW-3): `scripts/check-applescript-confirmation.sh` — defense-in-depth grep gate. For each non-comment/non-test line containing `run_applescript`, asserts the enclosing register-call body (line + up to 5 following lines, terminated at `)`) contains `requiresConfirmation: true`. Verified catches regression: temporarily flipped `App/MCP/MCPRuntimeWiring.swift:119` to `false` → gate FAILed with the file:line citation; reverted; gate PASSes on clean tree. Comment-only references in HudStateIntent.swift:19 + InProcessTool.swift:9 are filtered by `is_comment_line`.
+
 - **Commit `c7f9ece` — Track B-6** (VAD-gated session end):
   - `VoiceController.startSTTSession` now spawns a per-session VAD interceptor task. Pump output flows through it, forwarding every chunk to STT *and* running Silero VAD per 512-sample window.
   - New private `runVADInterceptor`: tracks armed state on `.speechStart`, counts consecutive silence chunks after `.speechEnd`, and triggers `endSTTSession()` once the hangover threshold (5 chunks ≈ 160 ms) is reached. Mid-utterance speech resumption cancels the pending finalize.
@@ -65,7 +70,7 @@
 
 | Branch | Status |
 |--------|--------|
-| `develop` | At `6e249ee`, ahead of origin (push pending). Tree clean. |
+| `develop` | At `2d9a25a`, ahead of origin (push pending). Tree clean. |
 
 ## Pending Work
 
@@ -79,5 +84,5 @@
 
 - Audit reports: `.planning/audit-2026-05-03/{SYNTHESIS,voice,voice-audit,hud-audit,vision-audit,memory-audit,llm-audit,tests-audit}.md`
 - Plan: `.planning/AUDIT-AND-FIX-PLAN.md`, findings tracker: `.planning/AUDIT-FINDINGS.md`
-- Test stack at session end: Voice 84 XCTest (1 pre-existing testI3 failure) + 22 swift-testing (3 skipped), AgentCore 215/215, Replay 33/33, Bus 58/58, Vision **72** XCTest, Memory **87** XCTest (was 86; +1 RememberBrutusEndToEnd; +2 D-3 priorFacts variants count under existing `MemoryExtractionOrchestratorTests`), webview/hud **97** vitest. All 6 boundary gates PASS, app builds clean. Pre-existing baseline issues unrelated to this batch: `packages/Shell/Tests/ShellTests/InputMonitoringDenialTests.swift` compile failure on clean tree, `webview/packages/hud/src/hud/SegmentedRing.tsx` typecheck warnings, `TTSInterruptTests.testI3` 10s flake. Flag for follow-up; out of scope here.
-- Next-session orientation: read `.planning/audit-2026-05-03/SYNTHESIS.md` first, then this file, then `git log --oneline 19362f6..HEAD`'s commit bodies for the Track D story.
+- Test stack at session end (post P2-14/15/P3-18): Voice 87 XCTest + 23 swift-testing (3 skipped), MCP 85 XCTest, Memory 88 XCTest (19 skipped — vec0/Ollama gating), Bus 58 XCTest, AgentCore 19 + 72 XCTest, Vision 19/72 XCTest, Shell 5+7 XCTest, webview/hud **97** vitest. **All 18 boundary gates PASS** (17 pre-existing + new check-applescript-confirmation.sh), app builds clean. Pre-existing baseline issues unrelated to this batch: `webview/packages/hud/src/hud/SegmentedRing.tsx` typecheck warnings, `TTSInterruptTests.testI3` 10s flake. Flag for follow-up; out of scope here.
+- Next-session orientation: read `.planning/audit-2026-05-04/SYNTHESIS.md` first, then this file, then `git log --oneline 6e249ee..HEAD` for the audit P0-P2 fix story.

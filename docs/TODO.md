@@ -47,6 +47,14 @@ Live triage list. Higher up = higher priority. Move done items to a dated archiv
 - [ ] Phase F1 — top-level IntegrationTests target (the structural fix; one cold-launch e2e test would catch INT-1/2/3 + F-E-RACE-1/FK-1/WIRE-1)
 - [x] Phase F2 — `scripts/check-no-leftover-stubs.sh` linter (catches "Replaced in 0X-0Y" rot) (`5cd46c9`)
 
+## Audit-2026-05-04 P0-P2 closure (2026-05-04 afternoon)
+
+- [x] P0 sweep (small fixes + 3 doc rewrites) (`14cff7b`, `6ce94a7`, `7a72ee6`, `26f5ae3`)
+- [x] P1+P2 fixes — Voice correctness + cross-cutting cleanup (`f19657a`, `81357ca`, `e606c63`, `e8bbbcf`, `11cb659`, `a4f7666`, `263705d`)
+- [x] P2-14 — test seam visibility cleanup (Voice 4 seams `public`→`internal`, MCP 2 seams `public`→`@_spi(Testing) public`) (`57847f2`)
+- [x] P2-15 — Mock/Fake/Stub naming convention documented in CLAUDE.md §"Test naming conventions" + 15 worst-mismatch stragglers renamed (`f9cd25d`)
+- [x] P3-18 / security LOW-3 — `scripts/check-applescript-confirmation.sh` defense-in-depth grep gate (verified catches regression) (`2d9a25a`)
+
 ## Knowledge graph / docs hygiene
 
 - [ ] REQUIREMENTS.md traceability table is all `[ ]` despite ~70 of 79 being satisfied per phase SUMMARY frontmatters. Reconcile in one sweep at milestone close.
