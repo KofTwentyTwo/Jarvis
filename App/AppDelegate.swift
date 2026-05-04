@@ -195,17 +195,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// MemoryStore opened against ~/Library/Application Support/Jarvis/jarvis.db.
     /// nil if vec0.dylib is missing or the open path failed — memory degrades
-    /// gracefully (no extraction, no retrieval; agent runs without memory).
+    /// gracefully (no retrieval; extraction still runs but writes are dropped).
     var memoryStore: MemoryStore?
+
+    /// Track-D D-1: distinguishes "store unavailable" (no writes, no search)
+    /// from "store ok, search degraded" (writes ok, search disabled). Today
+    /// MemoryStore.init throws on vec failure → store nil → both flags false.
+    /// When a future ops plan ships custom libsqlite3 with extension loading
+    /// but vec0.dylib is still missing, we'll be able to construct MemoryStore
+    /// without vec — at that point this flag splits from `memoryStore != nil`.
+    var memorySearchAvailable: Bool = false
 
     /// Background extraction orchestrator (Plan 07-02). Drains the bounded
     /// AsyncChannel(capacity: 32, dropOldest) one job at a time so a stalled
     /// 32B-model extraction never blocks turnEnd (MEM-06).
+    ///
+    /// Track-D D-1: now constructed even when memoryStore is nil. The applyOp
+    /// closure no-ops when there's no store, so the extractor → coordinator
+    /// chain runs (LLM still sees the conversation, decides ADD/UPDATE/NOOP)
+    /// — visible via system log instead of the Phase-7-era silent dormancy.
     var memoryExtractionOrchestrator: MemoryExtractionOrchestrator?
 
     /// Subscribes to AgentOrchestrator.events; on .turnEnd(.endTurn) enqueues
     /// an ExtractionJob into memoryExtractionOrchestrator. Held strongly so
     /// the subscriber Task it spawns isn't cancelled prematurely.
+    ///
+    /// Track-D D-1: now constructed even when memoryStore is nil — see
+    /// `memoryExtractionOrchestrator` doc above.
     var memoryExtractionCoordinator: MemoryExtractionCoordinator?
 
     /// Task spawned in `applicationWillFinishLaunching` that constructs and
@@ -948,53 +964,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///      `start(...)` call is skipped — see SUMMARY's Deferred wiring.
     ///   7. Log success.
     @MainActor
-    private func installMemory() async {
+    func installMemory() async {
         // 1. DB URL.
         let dbURL = configFileURL()
             .deletingLastPathComponent()
             .appendingPathComponent("jarvis.db")
 
-        // 2. MemoryStore.
-        let store: MemoryStore
+        // 2. MemoryStore. Track-D D-1: failure no longer cascades into
+        //    extractor/coordinator construction. Today, MemoryStore.init
+        //    throws when vec0.dylib is missing (or sqlite3_load_extension is
+        //    stripped from libsqlite3) → store stays nil, search disabled,
+        //    writes route to a no-op closure. The extractor still runs so
+        //    we can observe extraction over the conversation in system log
+        //    even before the dylib bundling lands.
+        var store: MemoryStore? = nil
         do {
             store = try MemoryStore(databaseURL: dbURL)
         } catch {
-            // Graceful-degradation contract: the agent runs without memory
-            // when vec0.dylib is unavailable on this host (forwarded to
-            // Phase 8 hardening). Log + early return; voice + agent loops
-            // remain operational.
             systemLogger?.warning(
-                "installMemory: store init failed (vec0.dylib missing or DB locked?): \(String(describing: error))"
+                "installMemory: store init failed (vec0.dylib missing or DB locked?): \(String(describing: error)) — extractor will run but writes will no-op"
             )
-            return
         }
-        memoryStore = store
+        self.memoryStore = store
+        // Today, store != nil ⟺ vec_version() succeeded ⟺ search works.
+        // When custom libsqlite3 lands, we'll be able to construct the
+        // store without vec; the flag will then split from store!=nil.
+        let searchAvailable = (store != nil)
+        self.memorySearchAvailable = searchAvailable
 
-        // 3. Wire the replay sink so MemoryStore.applyOp emits
-        //    ReplayEvent.memoryMutation through to the existing on-disk
-        //    replay log. The Memory module declines to import Replay.ReplayLog
-        //    directly (07-02 design); AppDelegate is the only place that
-        //    bridges the two.
-        if let log = replayLog {
-            await store.setReplayLog(AppDelegateMemoryReplaySink(replayLog: log))
-        } else {
-            systemLogger?.warning("installMemory: replayLog absent — memory mutation rows won't persist")
+        // 3. Wire the replay sink (only meaningful when store exists).
+        if let store = store {
+            if let log = replayLog {
+                await store.setReplayLog(AppDelegateMemoryReplaySink(replayLog: log))
+            } else {
+                systemLogger?.warning("installMemory: replayLog absent — memory mutation rows won't persist")
+            }
         }
 
-        // 4. MemoryExtractor on OllamaProvider(qwen2.5-coder:32b).
+        // 4. MemoryExtractor on OllamaProvider(qwen2.5-coder:32b). Always
+        //    constructed — the LLM call is independent of the store.
         let extractorProvider = OllamaProvider(
             baseURL: URL(string: "http://127.0.0.1:11434")!
         )
         let extractor = MemoryExtractor(provider: extractorProvider)
 
         // 5. Background orchestrator. Held strongly; start() spawns drain.
-        //    The applyOp closure adapts the orchestrator's (op, Int64)
-        //    contract to MemoryStore.applyOp, which is the SOLE emission
-        //    site for ReplayEvent.memoryMutation.
+        //    Track-D D-1: when `store` is nil the applyOp closure logs +
+        //    drops the op instead of throwing — the drain loop survives
+        //    so a future store reconstruction (e.g., installMemory retry)
+        //    can replace this orchestrator if needed.
+        let logger = self.systemLogger
         let memoryOrch = MemoryExtractionOrchestrator(
             extractor: extractor,
-            applyOp: { op, turnId in
-                _ = try await store.applyOp(op, sourceTurnId: turnId)
+            applyOp: { [weak self] op, turnId in
+                if let store = await self?.memoryStore {
+                    _ = try await store.applyOp(op, sourceTurnId: turnId)
+                } else {
+                    // T-06-05-03 / memory-content note: log only the op kind
+                    // and the turnId hash, never the subject/object content.
+                    logger?.debug("memory applyOp dropped (no store): turnId=\(turnId)")
+                }
             }
         )
         await memoryOrch.start()
@@ -1007,7 +1036,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let coord = MemoryExtractionCoordinator(memoryOrchestrator: memoryOrch)
         memoryExtractionCoordinator = coord
 
-        systemLogger?.info("installMemory: MemoryExtractionOrchestrator started")
+        systemLogger?.info(
+            "installMemory: extractor up; store=\(store != nil) search=\(searchAvailable)"
+        )
     }
 
     // MARK: - Agent install (Plan 09-01)

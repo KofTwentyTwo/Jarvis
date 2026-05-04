@@ -44,6 +44,7 @@
 		78AA6D0286502DC0F1F4304D /* HudState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF7206DB98EC02734975536 /* HudState.swift */; };
 		79991014825C2BF8E7226CF8 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = 003ADC59F1F11095A80EAE32 /* MCP */; };
 		7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B7BF8E7124E4F8B43EA5F3 /* OnboardingWizardController.swift */; };
+		8085ECA422FCEFF21FA27273 /* Memory in Frameworks */ = {isa = PBXBuildFile; productRef = 2F2268C4CA98018F9214D776 /* Memory */; };
 		8161FA597A019607B3DE7DA1 /* JarvisLogging in Frameworks */ = {isa = PBXBuildFile; productRef = 0216B841D52A80482E6DA800 /* JarvisLogging */; };
 		8196D4F5AF4011F7F93E48EC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1517F151F3BA96803143692 /* AppDelegate.swift */; };
 		8684EF1EAC5D350C2CCAB3CF /* VoiceBusEmitterAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C47026AC23B268604965C5C /* VoiceBusEmitterAdapter.swift */; };
@@ -58,6 +59,7 @@
 		9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */; };
 		9A06E835DE29158C0EC43DE3 /* webview in Resources */ = {isa = PBXBuildFile; fileRef = 8C8267C7BE6D4B16FEE6004E /* webview */; };
 		9ECD7215D86C83BB826F903E /* Shell in Frameworks */ = {isa = PBXBuildFile; productRef = 8D3EE6699BA5134A3A067596 /* Shell */; };
+		9F391DC98880FE923E6594CF /* MemoryInstallWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AE91F0E707C480DE5724510 /* MemoryInstallWiringTests.swift */; };
 		9F451A31E6DF755ABC86885A /* WizardStageTCCView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43886353ECED823D4CB689D3 /* WizardStageTCCView.swift */; };
 		A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */; };
 		A30C09AE5D98B07A92945E1F /* ReplayingToolResultObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0358E0CAC1377752398FA3C4 /* ReplayingToolResultObserver.swift */; };
@@ -164,6 +166,7 @@
 		4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisHUDPanel.swift; sourceTree = "<group>"; };
 		467AE2D19D58325D227E2F89 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		46CB8B7693CEA625D7331C3E /* HudStateCoordinatorBusWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinatorBusWiringTests.swift; sourceTree = "<group>"; };
+		4AE91F0E707C480DE5724510 /* MemoryInstallWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryInstallWiringTests.swift; sourceTree = "<group>"; };
 		4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandColors.swift; sourceTree = "<group>"; };
 		4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconController.swift; sourceTree = "<group>"; };
 		510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateEnumTests.swift; sourceTree = "<group>"; };
@@ -259,6 +262,7 @@
 				9ECD7215D86C83BB826F903E /* Shell in Frameworks */,
 				8161FA597A019607B3DE7DA1 /* JarvisLogging in Frameworks */,
 				3A6BFB4974C5891335CD12D5 /* Voice in Frameworks */,
+				8085ECA422FCEFF21FA27273 /* Memory in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -365,6 +369,7 @@
 				3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */,
 				6639284829C6DB4F69ED47F7 /* MCPBusGatewayAdapterTests.swift */,
 				0B5B16BDAC02919861AA4B0B /* MCPRuntimeWiringTests.swift */,
+				4AE91F0E707C480DE5724510 /* MemoryInstallWiringTests.swift */,
 				2468510EF34D9D8D56F5E3B9 /* MenuBarIconControllerTests.swift */,
 				3577EF13419964F207DF4A37 /* VoiceOrchestratorAdapterTests.swift */,
 				BB9BC03FD0377EB67CC0F7DB /* VoiceWiringTests.swift */,
@@ -694,6 +699,7 @@
 				8D3EE6699BA5134A3A067596 /* Shell */,
 				0216B841D52A80482E6DA800 /* JarvisLogging */,
 				F8C32F1B64110815E54CFE4F /* Voice */,
+				2F2268C4CA98018F9214D776 /* Memory */,
 			);
 			productName = JarvisAppTests;
 			productReference = 6784683F2262D8AFA439668D /* JarvisAppTests.xctest */;
@@ -1266,6 +1272,7 @@
 				461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */,
 				70D09A556654E11B140AFBD4 /* MCPBusGatewayAdapterTests.swift in Sources */,
 				5AD556F5095852328E72BE36 /* MCPRuntimeWiringTests.swift in Sources */,
+				9F391DC98880FE923E6594CF /* MemoryInstallWiringTests.swift in Sources */,
 				5B5175F8D07766B3394DF19C /* MenuBarIconControllerTests.swift in Sources */,
 				B5416071D18E6C124365A8EC /* VoiceOrchestratorAdapterTests.swift in Sources */,
 				F6423C84483BB194348837F5 /* VoiceWiringTests.swift in Sources */,
@@ -1972,6 +1979,10 @@
 		254100776001B345FD91877C /* Voice */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Voice;
+		};
+		2F2268C4CA98018F9214D776 /* Memory */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Memory;
 		};
 		4CB4DC60ABEBF2DC7A7FFE4C /* AgentCore */ = {
 			isa = XCSwiftPackageProductDependency;

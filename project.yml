@@ -423,6 +423,12 @@ targets:
       # @testable import the App target's voice integration code.
       - package: Voice
         product: Voice
+      # Track-D D-1: MemoryInstallWiringTests asserts AppDelegate.installMemory's
+      # post-D-1 wiring graph (extractor + coordinator construct even on vec
+      # failure; in-process tool registry gating). Requires Memory for the
+      # @testable import that lets the test reach internal types.
+      - package: Memory
+        product: Memory
   JarvisEntitlementProbeTests:
     type: bundle.unit-test
     platform: macOS
