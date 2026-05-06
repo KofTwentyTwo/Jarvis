@@ -329,7 +329,30 @@ Plans:
 
 **Depends on:** Phase 9 (orchestrator + MCP runtime + bus topology); Phase 6 (voice subsystem); Phase 7 (vision); Phase 5 (MCP tool registration patterns).
 
-**Plans:** TBD (set during /gsd-plan-phase 10)
+**Plans:** 5 plans
+
+Plans:
+**Wave 1**
+- [ ] 10-01-PLAN.md — MCP self-knowledge tools: list_audio_devices, get_active_audio_route, get_self_state, list_camera_devices via in-process adapter pattern (SELF-01..04) (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 10-02-PLAN.md — System prompt preamble via ContextBuilder.selfAwarePreamble + AppDelegate rewire (SELF-05/06) (Wave 2; depends on 10-01)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 10-03-PLAN.md — DevOverlay subscriber fix: investigation note + surgical AppDelegate wiring (DIAG-02) (Wave 3; depends on 10-02)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 10-04-PLAN.md — Audio Loopback + TTS Playback diagnostic menu items under new Diagnostics submenu (DIAG-03/04) (Wave 4; depends on 10-03)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 10-05-PLAN.md — Voice Log AppKit window: salvage VoiceLog package from stash + 9 inline publish callsites (DIAG-01) (Wave 5; depends on 10-04)
+
+**Cross-cutting constraints:**
+- All 18 boundary gates green at HEAD before plan SUMMARY.md commits (CLAUDE.md § Boundary gates)
+- bash scripts/check-app-builds.sh PASS at HEAD before plan SUMMARY.md commits
+- Live Verification section populated in SUMMARY.md per RESEARCH.md § Live-Launch Verification Format (D-26)
+- Test names follow Mock/Stub/Fake taxonomy from CLAUDE.md § Test naming conventions (D-31)
+- Plan structure honors D-01 (serial, no parallel-agent fan-out), D-02 (5 plans in foundation→UI order), D-03 (5 plans not 4 or 6), D-04 (every plan ends with Live Verification SUMMARY section)
 
 **Success criteria (preview, refined during /gsd-spec-phase 10):**
 1. Jarvis answers "what mic are you using?" correctly via an MCP tool, not by directing the user to System Settings.
