@@ -153,7 +153,7 @@ The orchestrator + provider implementations. Four library products: `AgentCore` 
 
 ### MCP (`packages/MCP`)
 
-Tool dispatch + child-process spawning. Two library products: `JarvisMCP` (the dispatcher chain — `MCPClient` actor manages registry of `MCPServerHandle`s with per-server restart mutex; `ToolRegistry` carries metadata; `MCPToolDispatcher` is the inner; `ConfirmingToolDispatcher` is the outer, gating `requiresConfirmation: true` tools through `ConfirmationBroker`/`ConfirmationPresenter`; `SanitizeForModel` runs `UntrustedWrapper` over tool results) and `JarvisChildSpawn` (`ChildSpawnGate` enforces `FD_CLOEXEC` + minimal `PATH` env on every helper spawn). In-process tools (`SearchMemoryTool`, `ForgetFactTool`, `SearchConversationTool`) live under `Sources/MCP/InProcess/` and ride a separate `InProcessToolRegistry`.
+Tool dispatch + child-process spawning. Two library products: `JarvisMCP` (the dispatcher chain — `MCPClient` actor manages registry of `MCPServerHandle`s with per-server restart mutex; `ToolRegistry` carries metadata; `MCPToolDispatcher` is the inner; `ConfirmingToolDispatcher` is the outer, gating `requiresConfirmation: true` tools through `ConfirmationBroker`/`ConfirmationPresenter`; `SanitizeForModel` runs `UntrustedWrapper` over tool results) and `JarvisChildSpawn` (`ChildSpawnGate` enforces `FD_CLOEXEC` + minimal `PATH` env on every helper spawn). In-process tools live under `Sources/MCP/InProcess/` and ride a separate `InProcessToolRegistry` — `SearchMemoryTool` + `ForgetFactTool` (Track D-2, store-/search-availability gated), the four Phase 10 / Wave-1 self-knowledge tools `ListAudioDevicesTool` / `GetActiveAudioRouteTool` / `GetSelfStateTool` / `ListCameraDevicesTool` (`74b9ac2`, all read-only, no confirmation), and the unwired `SearchConversationTool` (code-present; not yet registered in `App/`).
 
 **Anti-pattern enforced:** `requiresConfirmation: true` for `run_applescript` is grep-gated at two sites (`scripts/check-applescript-confirmation.sh`).
 
@@ -269,6 +269,7 @@ These are the rules with teeth — most are grep-gated. Don't relax them without
 |-----------|---------|
 | Change the voice state machine | `packages/Voice/Sources/Voice/VoiceController.swift` |
 | Add an MCP tool | Register in `App/MCP/MCPRuntimeWiring.swift`; helper binary under `mcp-servers/<name>/` |
+| Add an in-process MCP tool | Implement under `packages/MCP/Sources/MCP/InProcess/`; bridge to runtime in `App/MCP/InProcess*Adapters.swift`; register in `AppDelegate.installSelfKnowledgeTools` (or analogous) |
 | Change HUD visuals (rings, particles) | `webview/packages/hud/src/hud/` |
 | Add a Bus event | Add the case to BOTH `packages/Bus/Sources/Bus/BusOutbound.swift` AND `webview/packages/bus/src/`; bump `Protocol.swift` version |
 | Change the agent turn loop | `packages/AgentCore/Sources/AgentOrchestrator/AgentOrchestrator.swift` |
