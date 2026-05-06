@@ -209,7 +209,11 @@ public actor AgentOrchestrator {
         var t2AvailableForThisTurn = false
         if !input.images.isEmpty, let router = self.visionRouter,
            let firstImage = input.images.first {
-            let cloudOptIn = ContextBuilder().matchesCloudOptIn(input.userText)
+            // Plan 10-02 disambiguation: qualify with `JarvisVision.` because
+            // AgentCore now also exposes a `ContextBuilder` (the self-aware
+            // system-prompt composer). The two types live in distinct modules;
+            // bare `ContextBuilder()` would be ambiguous to the type checker.
+            let cloudOptIn = JarvisVision.ContextBuilder().matchesCloudOptIn(input.userText)
             let decision = await router.route(
                 for: firstImage,
                 prompt: input.userText,

@@ -1262,7 +1262,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             toolDispatcher: mcpRuntime.dispatcher,
             replayLog: replayLog,
             sessionId: sessionId,
-            systemPrompt: "You are Jarvis, a personal macOS assistant.",
+            // Plan 10-02 (SELF-05 / SELF-06) — replaces the hardcoded
+            // "You are Jarvis, a personal macOS assistant." literal with
+            // ContextBuilder's locked self-aware preamble. The preamble
+            // names introspection tools so the model prefers calling them
+            // over generic "open System Settings" answers. Per D-12
+            // fallback the orchestrator still takes systemPrompt:String at
+            // init; per-turn presence enrichment continues to flow through
+            // PresenceStateSnapshot.shared (passed below).
+            systemPrompt: ContextBuilder.systemPrompt(for: .empty),
             availableTools: [],
             visionRouter: self.visionRouter,
             presenceSnapshot: PresenceStateSnapshot.shared
@@ -1605,7 +1613,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// pending-frame slot so the camera capture is ready.
     @MainActor
     func tryPhraseAttachIfMatch(_ text: String) async {
-        let cb = ContextBuilder()
+        // Plan 10-02 disambiguation: qualify with `JarvisVision.` because
+        // AgentCore now also exposes a `ContextBuilder` (self-aware system-
+        // prompt composer). matchesFrameAttachPhrase lives on Vision's.
+        let cb = JarvisVision.ContextBuilder()
         if cb.matchesFrameAttachPhrase(text), let fac = self.frameAttachController {
             await fac.requestAttach(reason: .phraseDetected(in: text))
         }

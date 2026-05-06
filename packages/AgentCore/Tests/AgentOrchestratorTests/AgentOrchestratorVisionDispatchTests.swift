@@ -206,7 +206,11 @@ final class AgentOrchestratorVisionDispatchTests: XCTestCase {
     /// behaviour at the ContextBuilder boundary because the orchestrator
     /// merely forwards the bool.
     func testContextBuilderDetectsCloudOptIn() async throws {
-        let cb = ContextBuilder()
+        // Plan 10-02 disambiguation: qualify with `JarvisVision.` because
+        // AgentCore now also exposes a `ContextBuilder` (self-aware system-
+        // prompt composer). This test still targets the Vision module's
+        // cloud-opt-in detector.
+        let cb = JarvisVision.ContextBuilder()
         XCTAssertTrue(cb.matchesCloudOptIn("send to opus, what's this"),
                       "ContextBuilder must flag 'send to opus' as cloud opt-in")
         XCTAssertFalse(cb.matchesCloudOptIn("what's this"),
