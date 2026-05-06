@@ -329,11 +329,11 @@ Plans:
 
 **Depends on:** Phase 9 (orchestrator + MCP runtime + bus topology); Phase 6 (voice subsystem); Phase 7 (vision); Phase 5 (MCP tool registration patterns).
 
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 10-01-PLAN.md — MCP self-knowledge tools: list_audio_devices, get_active_audio_route, get_self_state, list_camera_devices via in-process adapter pattern (SELF-01..04) (Wave 1)
+- [x] 10-01-PLAN.md — MCP self-knowledge tools: list_audio_devices, get_active_audio_route, get_self_state, list_camera_devices via in-process adapter pattern (SELF-01..04) (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 10-02-PLAN.md — System prompt preamble via ContextBuilder.selfAwarePreamble + AppDelegate rewire (SELF-05/06) (Wave 2; depends on 10-01)

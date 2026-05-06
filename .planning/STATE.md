@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-05-06T20:00:25.174Z"
+last_updated: "2026-05-06T20:59:28.557Z"
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 48
-  completed_plans: 43
-  percent: 90
+  completed_plans: 44
+  percent: 92
 ---
 
 # State: Jarvis
@@ -25,19 +25,21 @@ progress:
 
 **v1 definition:** "Usable Jarvis" — week-one skeleton + full voice loop + vision first pass + memory first pass.
 
-**Current focus:** Audit-and-stabilize cycle on the v0.12.0 milestone. All 9 phases shipped; the work in flight now is closing the "wired but dead" gaps the 2026-05-03 / 2026-05-04 audits surfaced (voice, vision, memory, bus). No new phase has been opened — the next milestone (v0.13.0) is not yet scoped.
+**Current focus:** Phase 10 — self-awareness-diagnostics
 
 ---
 
 ## Current Position
 
+Phase: 10 (self-awareness-diagnostics) — EXECUTING
+Plan: 2 of 5
 **Status:** Ready to execute
 
 **Active workstream:** post-v0.12.0 audit-and-stabilize. Tracked day-to-day in `docs/SESSION-STATE.md` (handoff state across sessions) and `docs/TODO.md` (live triage list, higher-up = higher priority).
 
 **Progress:**
 
-[██████████] 100% — 9 / 9 phases shipped, 43 / 43 plans closed.
+[█████████░] 92%
 
 | Phase | Name | Status | Closed |
 |-------|------|--------|--------|
