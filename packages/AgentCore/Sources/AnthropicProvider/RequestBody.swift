@@ -87,7 +87,8 @@ enum RequestBody {
                 : encodeSystem(systemMessages, cacheHints: cacheHints),
             messages: encodedConv,
             tools: tools.isEmpty ? nil : try tools.map(encodeTool),
-            toolChoice: encodeToolChoice(toolChoice)
+            toolChoice: encodeToolChoice(toolChoice),
+            stream: true
         )
 
         let encoder = JSONEncoder()
@@ -235,6 +236,11 @@ struct AnthropicRequestBody: Encodable {
     let messages: [EncodedMessage]
     let tools: [EncodedTool]?
     let toolChoice: EncodedToolChoice
+    /// Anthropic's `/v1/messages` returns SSE iff this is `true`. Without it,
+    /// the server returns a regular JSON response (200 OK + ~1 KB body) and
+    /// the SSELineReader yields zero `data:` frames — the canonical
+    /// `streamTruncatedFinal` cause caught live on 2026-05-05.
+    let stream: Bool
 
     enum CodingKeys: String, CodingKey {
         case model
@@ -243,6 +249,7 @@ struct AnthropicRequestBody: Encodable {
         case messages
         case tools
         case toolChoice = "tool_choice"
+        case stream
     }
 }
 
