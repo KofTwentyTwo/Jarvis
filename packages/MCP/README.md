@@ -16,8 +16,11 @@ Tool dispatch + child-process spawning. Two library products: `JarvisMCP` (the d
 | `ConfirmationBroker` / `ConfirmationPresenter` | Awaitable confirmation channel + UI presenter |
 | `ConfirmationOutcome` | `.approved` / `.denied` / `.timeout` |
 | `SanitizeForModel` | Wraps tool results in `UntrustedWrapper` + applies 8 KB cap |
-| `InProcessTool` (protocol) | In-process tools (`SearchMemoryTool`, `ForgetFactTool`, `SearchConversationTool`) |
-| `InProcessToolRegistry` | Separate registry for in-process tools (no helper spawn) |
+| `InProcessTool` (protocol) | Contract for in-process tools (no helper spawn) |
+| `InProcessToolRegistry` | Separate registry for in-process tools |
+| `SearchMemoryTool` / `ForgetFactTool` | Memory in-process tools (Track D-2). Gated on store + search availability in `AppDelegate` |
+| `SearchConversationTool` | In-process scaffold (code-present; not yet registered in `App/`) |
+| `ListAudioDevicesTool` / `GetActiveAudioRouteTool` / `GetSelfStateTool` / `ListCameraDevicesTool` | Phase 10 / Wave-1 self-knowledge tools (`74b9ac2`). All read-only, no confirmation. App-side dispatcher adapters live in `App/MCP/InProcessSelfStateAdapters.swift` |
 
 ### `JarvisChildSpawn`
 
@@ -31,7 +34,7 @@ Tool dispatch + child-process spawning. Two library products: `JarvisMCP` (the d
 
 ## Used by
 
-`App/MCP/MCPRuntimeWiring.swift`, `App/AppDelegate`, `packages/Vision` (uses `JarvisChildSpawn`), `packages/Memory` (in-process tool adapters wired via `App/MCP/InProcessMemoryAdapters.swift`), `packages/Harness`.
+`App/MCP/MCPRuntimeWiring.swift`, `App/AppDelegate`, `packages/Vision` (uses `JarvisChildSpawn`), `packages/Memory` (in-process tool adapters wired via `App/MCP/InProcessMemoryAdapters.swift`), `App/MCP/InProcessSelfStateAdapters.swift` (Phase 10 self-knowledge dispatchers), `packages/Harness`.
 
 ## Key invariants / contracts
 
@@ -53,3 +56,4 @@ Tool dispatch + child-process spawning. Two library products: `JarvisMCP` (the d
 - `Sources/MCP/SanitizeForModel.swift` — UntrustedWrapper + cap
 - `Sources/JarvisChildSpawn/ChildSpawnGate.swift` — FD_CLOEXEC gate
 - `Sources/MCP/InProcess/SearchMemoryTool.swift` — in-process memory tool
+- `Sources/MCP/InProcess/{ListAudioDevicesTool,GetActiveAudioRouteTool,GetSelfStateTool,ListCameraDevicesTool}.swift` — Phase 10 / Wave-1 self-knowledge tools
