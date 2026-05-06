@@ -1,64 +1,84 @@
 {
-  "version": "1.1",
-  "timestamp": "2026-05-03T01:30:00Z",
-  "context": "milestone-audit",
-  "phase": "post-Phase-B",
-  "phase_name": "Audit complete; fix loop begun",
-  "phase_dir": null,
-  "plan": ".planning/AUDIT-AND-FIX-PLAN.md",
-  "task": "Phase E first-fix landed (BLOCKER-INT-2 / tokens half). Next: BLOCKER-INT-3 (HUD chat input UI) is the gating item for any text turn to be user-testable end-to-end.",
+  "version": "1.0",
+  "timestamp": "2026-05-06T18:34:51.749Z",
+  "phase": "10",
+  "phase_name": "self-awareness-diagnostics",
+  "phase_dir": ".planning/phases/10-self-awareness-diagnostics",
+  "plan": null,
+  "task": 0,
+  "total_tasks": 0,
   "status": "paused",
-  "branch": "develop",
-  "commits_ahead_of_origin": 51,
-  "tree_state": "clean",
-  "completed_this_session": [
-    {"id": "T1", "phase": "A2", "name": "Strip BootDiag instrumentation; keep WKContentWorld + Injection.js production fixes", "commit": "2c349a9"},
-    {"id": "T2", "phase": "A3", "name": "Real Settings panel — SettingsWindowController + AppDelegate wiring + replace 'coming soon' stub + reroute menu Settings… from wizard to panel", "commit": "7043b3b"},
-    {"id": "T3", "phase": "B1+B2", "name": "Milestone audit — /gsd-audit-uat (1 outstanding UAT = F-A1-01) + /gsd-audit-milestone (3 new INT blockers + 2 warnings); status flips tech_debt → gaps_found", "commit": "082dfa8"},
-    {"id": "T4", "phase": "F1 (1/4)", "name": "Real-WKWebView handshake integration test in packages/Bus/Tests/BusTests/RealWKWebViewIntegrationTests.swift — would have caught the WKContentWorld bug class. Bus suite 54 → 56.", "commit": "326a27d"},
-    {"id": "T5", "phase": "E (1/many)", "name": ".bus subscriber forwarding tokenDelta to OutboundBatcher (closes BLOCKER-INT-2 / tokens half). Adds case .bus to broadcaster Priority + protection rules + AppDelegate.installAgent subscriber.", "commit": "602a95b"}
+  "completed_tasks": [
+    {"id": "spec", "name": "Phase 10 SPEC.md (10 requirements, ambiguity 0.18, gate passed)", "status": "done", "commit": "c8e37ab"}
   ],
-  "verification_runs_this_session": [
-    {"step": "A1 smoke test", "result": "HUD reaches STANDBY (visual + BootDiag trace); rings render statically (= F-A1-01)"},
-    {"step": "A4 smoke test", "result": "fresh dev-reset → build → launch → STANDBY confirmed visually"},
-    {"step": "Settings panel save round-trip", "result": "API key persisted to Keychain (svce=com.koftwentytwo.jarvis, acct=anthropic, fresh CREATE timestamp); hotkey persisted to UserDefaults Jarvis.hotkey ({\"keyCode\":101,\"modifiers\":8650752} = F9 + function/control)"},
-    {"step": "RealWKWebViewIntegrationTests", "result": "2/2 pass in ~1.0–1.4s real-WebKit"},
-    {"step": "AgentCore swift test", "result": "178/178 pass (broadcaster .bus protection rule asserted)"},
-    {"step": "Bus swift test", "result": "55/56 pass (F-A2-01 stale assertion still fails as expected)"}
+  "remaining_tasks": [
+    {"id": "discuss", "name": "/gsd-discuss-phase 10 — implementation decisions (HOW)", "status": "not_started"},
+    {"id": "plan", "name": "/gsd-plan-phase 10 — produces RESEARCH.md + plans (~4-6 expected)", "status": "not_started"},
+    {"id": "execute", "name": "/gsd-execute-phase 10 — wave-based plan execution with live-launch verification at each step", "status": "not_started"},
+    {"id": "verify", "name": "/gsd-verify-phase 10 — goal-backward verification of 14 acceptance criteria", "status": "not_started"}
+  ],
+  "blockers": [
+    {
+      "description": "Voice loop wake-word fire still unverified post-b92d062 TCC fix; user did not speak during the 20s log-stream window",
+      "type": "human_action",
+      "workaround": "Plan 1 should include a live wake-word test as part of its verification step"
+    },
+    {
+      "description": "Voice replies are mute (TTS structurally wired but no audible verification yet)",
+      "type": "technical",
+      "workaround": "DIAG-04 in SPEC.md addresses this with a TTS playback diagnostic menu item"
+    },
+    {
+      "description": "Stashed partial work from failed parallel agent dispatch (camera button, DevOverlay, Voice Log packages partially written)",
+      "type": "technical",
+      "workaround": "stash@{0} 'partial-work-from-failed-parallel-dispatch-2026-05-06' — review for salvageable scaffolding when implementing DIAG-01 (Voice Log) and DIAG-02 (DevOverlay); discard if unhelpful"
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Test mic permission flow: relaunch Jarvis (after tccutil reset Microphone com.koftwentytwo.jarvis), confirm system mic prompt appears, click Allow, then say 'Hey Jarvis' and verify wake-word fires in logs",
+      "context": "b92d062 added the request but the flow hasn't been verified end-to-end with actual speech",
+      "blocking": false
+    },
+    {
+      "action": "Test camera permission flow: same as above with tccutil reset Camera, then click HUD camera button to verify the click → frame attach path",
+      "context": "b92d062 added camera TCC; click flow needs live verification (not in Phase 10 SPEC scope; informational only)",
+      "blocking": false
+    },
+    {
+      "action": "Decide between /gsd-discuss-phase 10 (full Socratic ~30-45 min) or /gsd-discuss-phase 10 --auto (Claude picks defaults, ~5 min) when resuming",
+      "context": "SPEC.md is comprehensive; --auto is recommended to avoid burning time on questions where the answer is implied",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Phase 10 scope: 6 self-knowledge MCP tools + 4 diagnostic UI surfaces, with live-launch verification baked into every plan",
+      "rationale": "2026-05-04..06 chaos: agents shipped passing tests for inert production paths. AC-13 makes live-relaunch the new gate.",
+      "phase": "10"
+    },
+    {
+      "decision": "Voice Log chosen as AppKit window (not webview) to avoid widening WKContentWorld",
+      "rationale": "Mirrors DevOverlay pattern; doesn't require Bus schema changes",
+      "phase": "10"
+    },
+    {
+      "decision": "Self-knowledge surfaced as MCP tools (not bus messages)",
+      "rationale": "Tools are how the model already calls into Jarvis; bus would require schema changes (out of scope)",
+      "phase": "10"
+    },
+    {
+      "decision": "Camera button verification is a verification step, not a SPEC requirement",
+      "rationale": "b92d062 already added camera TCC request; this phase confirms via live test",
+      "phase": "10"
+    },
+    {
+      "decision": "Out of scope: tier-2 Orpheus TTS, vec0.dylib bundling, Ollama models, AppDelegate refactor, Bus schema changes",
+      "rationale": "Each is a separate phase with its own constraints (weight downloads, user environment, refactor risk)",
+      "phase": "10"
+    }
   ],
   "uncommitted_files": [],
-  "blockers": [],
-  "human_actions_pending": [],
-  "open_findings_summary": {
-    "blockers": [
-      {"id": "F-A1-01", "title": "HUD rings static at STANDBY", "where": "webview/packages/hud/src/hud/RingMesh.tsx (R3F shader/state runtime)"},
-      {"id": "F-A2-01", "title": "WebviewBridgeOutboundTests asserts retired JarvisBusWorld", "where": "packages/Bus/Tests/BusTests/WebviewBridgeOutboundTests.swift:80"},
-      {"id": "F-B2-INT-1", "title": "NoopBusGateway swallows tool-call events", "where": "App/AppDelegate.swift:467 + 1606-1618; needs real BusGateway adapter"},
-      {"id": "F-B2-INT-3", "title": "HUD has no chat input UI", "where": "webview/packages/hud/src/chat/ChatPanel.tsx (read-only); needs input form + outbound chatSubmit producer"},
-      {"id": "F-B2-INT-4", "title": "CameraCapture returns 1×1 black JPEG (= C1)", "where": "packages/Vision/Sources/Vision/CameraCapture.swift:106"}
-    ],
-    "warnings": [
-      {"id": "F-B2-INT-2-rest", "title": "turnEnded forwarding still open (tokenDelta done)", "where": "App/AppDelegate.swift busSubscriberTask + needs OrchestratorEvent.turnEnd → BusOutbound.turnEnded translation"},
-      {"id": "F-B2-WARN-1", "title": "TTS engine nil; voice loop is mute", "where": "App/AppDelegate.swift:676-678; needs TTSEngineActor production wiring"},
-      {"id": "F-B2-WARN-2", "title": "sessionHistory declared but never emitted", "where": "BusOutbound.swift:25; needs hydrate-on-webviewReady"}
-    ],
-    "cosmetic": ["stale-comment-1 (AppDelegate.swift:1190-1192)", "C5 await", "C6 swift-log default impl", "C7 popUpMenu", "C8 String(cString:)"]
-  },
-  "next_action": {
-    "primary": "F-B2-INT-3 — add chat input UI to webview HUD ChatPanel.tsx + wire outbound chatSubmit producer. This is the gating item: without it, the just-landed .bus token forwarder cannot be exercised by any user action. Phase E priority #1.",
-    "alternatives": [
-      "F-A1-01 — investigate R3F ring animation. Likely small (shader/state issue in RingMesh.tsx). Could be quicker win for visual feedback.",
-      "F-B2-INT-2-rest — close turnEnded forwarding. Translation: OrchestratorEvent.turnEnd(turnId,stopReason) → BusOutbound.turnEnded(id,terminator). Pairs naturally with INT-3 landing.",
-      "F-B2-INT-1 — replace NoopBusGateway with real BusGateway impl. Needed for tool-call cards.",
-      "F-A2-01 — one-line fix to test asserting WKContentWorld.page instead of named world. Pure hygiene."
-    ]
-  },
-  "durable_artifacts": [
-    {"path": ".planning/AUDIT-AND-FIX-PLAN.md", "purpose": "multi-session plan, A→G phases", "status": "intact"},
-    {"path": ".planning/v0.12.0-MILESTONE-AUDIT.md", "purpose": "formal milestone audit (status: gaps_found)", "status": "current as of 2026-05-02 20:05"},
-    {"path": ".planning/AUDIT-FINDINGS.md", "purpose": "running cross-session triage list", "status": "current"},
-    {"path": ".planning/.continue-here.md", "purpose": "human-readable session handoff", "status": "refreshed in this commit"},
-    {"path": ".planning/HANDOFF.json", "purpose": "machine-readable session snapshot", "status": "refreshed in this commit (= this file)"}
-  ],
-  "context_notes": "Session 2026-05-02 (continued past midnight) ran the full Phase A → Phase B → first F1 + E commits. Five commits landed cleanly. The integration audit revealed 4 cross-phase blockers that 9/9 unit-level GSD verifications missed — exact bug class AUDIT-AND-FIX-PLAN was written for. Phase E first fix added the missing .bus subscriber wire. tokenDelta now reaches the bridge; user can't trigger a turn yet (no chat input UI). Resume with INT-3."
+  "next_action": "Run /gsd-discuss-phase 10 --auto to lock implementation decisions, then /gsd-plan-phase 10 to decompose into plans. Each plan must end with live-launch verification per SPEC AC-13.",
+  "context_notes": "Today's session pivoted from autonomous-agent execution to live-test-driven debugging. Three runtime bugs fixed tactically: d8983af (stream:true on Anthropic body — root cause of streamTruncatedFinal), cb7ee6f (mic-regrant phantom rebuild killing wake-word stream within 2s of every cold launch), b92d062 (explicit AVCaptureDevice.requestAccess for mic + camera + honest wizard copy). Then GSD discipline restored for larger work via Phase 10 SPEC. The lesson burned in: 'tests green' != 'production works'. Audit reports passed every prior plan as 'structurally complete' while live launch revealed silent mic, mute TTS, empty Voice Log, DevOverlay zeros, and an LLM claiming it had no audio hardware. Phase 10 SPEC bakes live-launch verification into every plan so this class of regression cannot ship unnoticed."
 }
