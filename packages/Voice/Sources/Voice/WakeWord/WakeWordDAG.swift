@@ -17,12 +17,17 @@ private let logger = Logger(subsystem: "com.koftwentytwo.jarvis", category: "Wak
 /// frame per the openWakeWord pipeline. Post-VPIO, Plan 06-01's graph taps at
 /// the probed sample rate and resamples to 16 kHz before writing to the ring.
 ///
-/// ## Plan 06-01 integration
-/// `cancel()` has the signature `@Sendable () async -> Void` matching the
-/// `AudioGraphOwner.cancelInFlight` slot. Plan 06-05 wires it:
+/// ## Plan 06-01 integration (2026-05-05 voice-loop fix)
+/// `stopFeed()` has the signature `@Sendable () async -> Void` matching the
+/// `AudioGraphOwner.cancelInFlight` slot. AppDelegate wires it:
 /// ```swift
-/// await audioGraphOwner.cancelInFlight = { [dag] in await dag.cancel() }
+/// await audioGraphOwner.setCancelInFlight { [dag] in await dag.stopFeed() }
 /// ```
+/// `stopFeed()` cancels the feed Task but PRESERVES the public stream so
+/// `VoiceController.spawnWakeWordConsumer` keeps iterating across the rebuild
+/// boundary. AppDelegate's rebuildStream consumer re-arms the DAG against the
+/// new ring after the rebuild succeeds. `cancel()` is reserved for permanent
+/// shutdown (called from `VoiceController.shutdown` only).
 ///
 /// ## Pause/resume preserve-counter decision
 /// The `consecutive` counter is owned by `OpenWakeWordSession`, NOT by the DAG.
@@ -32,11 +37,6 @@ private let logger = Logger(subsystem: "com.koftwentytwo.jarvis", category: "Wak
 /// after resume (e.g., the user says "Hey" → pause → "Jarvis" → resume → fires).
 /// Reversal cost: change the `if paused { continue }` to
 /// `if paused { _ = session.resetConsecutive(); continue }` (one line).
-///
-/// ## cancelInFlight wiring
-/// `cancel()` → `feedTask?.cancel()` → the Task loop exits on `Task.isCancelled`.
-/// The stream continuation is finished immediately in `cancel()` so consumers see
-/// the stream end without waiting for the Task to drain.
 public actor WakeWordDAG {
 
     // MARK: - Public surface
@@ -130,18 +130,35 @@ public actor WakeWordDAG {
 
     /// Cancels the feed Task and finishes the wake-word stream.
     ///
-    /// Called by `AudioGraphOwner.cancelInFlight` during the six-step teardown
-    /// (Plan 06-01, step 1). The Task cancels within 50 ms (one sleep cycle +
-    /// cooperative cancellation on `Task.isCancelled` check).
-    ///
-    /// After `cancel()`, the `wakeWordStream` is finished — no further events will
-    /// be emitted. Callers that iterate `wakeWordStream` will see the async for-loop
-    /// exit naturally.
+    /// Permanent shutdown — call from `VoiceController.shutdown` only. After
+    /// `cancel()`, the `wakeWordStream` is finished and no further events
+    /// will be emitted. Callers that iterate `wakeWordStream` will see the
+    /// async for-loop exit naturally.
     public func cancel() async {
         feedTask?.cancel()
         feedTask = nil
         streamCont.finish()
         logger.info("WakeWordDAG: cancelled — stream finished")
+    }
+
+    /// Cancels the feed Task WITHOUT finishing the wake-word stream.
+    ///
+    /// Use this for transient teardown across an `AudioGraphOwner` rebuild:
+    /// the producer (ring) is going away, but the public consumer stream
+    /// must remain live so `VoiceController.spawnWakeWordConsumer`'s
+    /// `for await event in stream` keeps iterating across the rebuild
+    /// boundary. After the new graph is open, call `start(ring:)` again
+    /// against the new ring.
+    ///
+    /// Wired as `AudioGraphOwner.cancelInFlight` (2026-05-05 voice-loop fix).
+    /// Previously `cancelInFlight` called `cancel()` which finished the
+    /// stream — combined with the `lastMicStatus = false` startup bug in
+    /// `AudioGraphOwner.startMicRegrantWatcher`, the wake path died ~2s
+    /// after launch on every cold start.
+    public func stopFeed() async {
+        feedTask?.cancel()
+        feedTask = nil
+        logger.info("WakeWordDAG: feed stopped (stream preserved for rebuild)")
     }
 
     // MARK: - Private state

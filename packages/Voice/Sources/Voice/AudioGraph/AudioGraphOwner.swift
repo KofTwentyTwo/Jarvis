@@ -162,6 +162,14 @@ public actor AudioGraphOwner {
     /// simulates `AVCaptureDevice.authorizationStatus(for: .audio)` transitions.
     internal var authStatusProbe: (@Sendable () -> Bool)?   // returns true if authorized
 
+    /// Test seam: install `authStatusProbe` from non-isolated test code
+    /// before calling `open()`. Required because `authStatusProbe` is
+    /// actor-isolated and setting it from a `@Test` function requires an
+    /// `await` hop through this method.
+    internal func _testSetAuthStatusProbe(_ probe: @escaping @Sendable () -> Bool) {
+        self.authStatusProbe = probe
+    }
+
     /// Test seam: called after each graph is built successfully, providing access
     /// to the fresh `AudioGraph` so tests can install recording hooks on it.
     internal var _onGraphBuilt: ((AudioGraph) -> Void)?
@@ -285,8 +293,32 @@ public actor AudioGraphOwner {
     /// Polls `AVCaptureDevice.authorizationStatus(for: .audio)` every 2 s.
     /// Fires `rebuild(trigger: .micRegrant)` on `.denied → .authorized` transition.
     /// Pitfall #5 (06-RESEARCH): KVO is unavailable on authorization status.
+    ///
+    /// **Startup priming (2026-05-05 voice-loop fix):** the watcher seeds
+    /// `lastMicStatus` from the current authorization status BEFORE entering
+    /// the polling loop. Without this, `lastMicStatus` defaulted to `false`
+    /// and the first poll always saw a spurious `false → authorized`
+    /// transition — firing an unwanted rebuild ~2s after `open()` whose
+    /// teardown cancelled the wake-word DAG via `cancelInFlight`. Symptom on
+    /// real hardware: wake word never fires because the DAG is shut down
+    /// before the user can speak. Coverage:
+    /// `MicRegrantWatcherStartupTests` (no-spurious-rebuild assertion).
     private func startMicRegrantWatcher() {
         micRegrantWatcher = Task { [weak self] in
+            // Prime `lastMicStatus` with the current auth state so the first
+            // poll doesn't fire a phantom `false → authorized` rebuild on
+            // every cold launch. Scoped to a local strong reference so the
+            // weak/release semantics of the polling loop below are unaffected.
+            if let strongSelf = self {
+                let initial: Bool
+                if let probe = await strongSelf.authStatusProbe {
+                    initial = probe()
+                } else {
+                    initial = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+                }
+                await strongSelf.setLastMicStatus(initial)
+            }
+
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
                 guard let self else { return }
