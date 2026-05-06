@@ -321,4 +321,25 @@ Plans:
 
 ---
 
-*Roadmap defined: 2026-04-22*
+### Phase 10: Self-Awareness & Live Diagnostics
+
+**Goal:** Jarvis can answer factual questions about its own runtime state and host hardware, and we have UI surfaces that let the developer (and user) verify each subsystem is actually moving bytes — not just structurally wired. Closes the runtime-vs-tested gap that produced the 2026-05-05 / 2026-05-06 live-launch failures (silent mic, mute TTS, empty Voice Log, DevOverlay zeros, "I don't have a microphone" replies).
+
+**Requirements:** SELF-01..06, DIAG-01..04 (drafted in `10-SPEC.md`)
+
+**Depends on:** Phase 9 (orchestrator + MCP runtime + bus topology); Phase 6 (voice subsystem); Phase 7 (vision); Phase 5 (MCP tool registration patterns).
+
+**Plans:** TBD (set during /gsd-plan-phase 10)
+
+**Success criteria (preview, refined during /gsd-spec-phase 10):**
+1. Jarvis answers "what mic are you using?" correctly via an MCP tool, not by directing the user to System Settings.
+2. The system prompt embeds Jarvis's own identity, model name, host capabilities, and tool catalog so the model never claims to be "text-only."
+3. Voice Log window opens via menu, populates in real-time with every wake-word fire / VAD decision / STT partial+final / TTS synthesize call, and persists across launches.
+4. DevOverlay populates during turns: provider+model, token counts, cache hit %, latency, last 5 tool calls.
+5. Audio loopback diagnostic and TTS playback diagnostic exist as menu items and prove I/O works without depending on wake-word or LLM.
+6. Camera button click → frame attached to a turn (post-TCC fix from 2026-05-06 b92d062).
+7. App build green, all boundary gates green, live-launch verification recorded for each plan.
+
+---
+
+*Roadmap defined: 2026-04-22; Phase 10 added 2026-05-06*
