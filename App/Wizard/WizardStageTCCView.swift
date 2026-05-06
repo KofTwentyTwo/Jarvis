@@ -32,13 +32,13 @@ struct WizardStageTCCView: View {
             inputMonitoringRow
 
             explainerRow(
-                title: "Microphone (later)",
-                body: "Will be requested when the voice loop is turned on. Jarvis will not listen until then.",
+                title: "Microphone (auto-prompts shortly)",
+                body: "Jarvis will request mic access automatically a moment after this wizard, when the voice loop starts. Wake-word + voice replies depend on it.",
                 ctaLabel: "Learn more →"
             )
             explainerRow(
-                title: "Camera (later)",
-                body: "Will be requested when the vision features are turned on. Jarvis will not watch until then.",
+                title: "Camera (auto-prompts shortly)",
+                body: "Jarvis will request camera access automatically a moment after this wizard, when vision features start. Used for presence detection and the camera button.",
                 ctaLabel: "Learn more →"
             )
             explainerRow(

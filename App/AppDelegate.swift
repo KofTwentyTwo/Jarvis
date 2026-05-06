@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Bus
 import Config
 import DevOverlay
@@ -806,6 +807,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // 2026-05-06 — TCC mic permission. macOS does not deterministically
+        // surface the microphone prompt from AVAudioEngine alone; without an
+        // explicit `AVCaptureDevice.requestAccess(for: .audio)` call the
+        // app receives a silent input stream and the wizard's "request at
+        // first use" contract is violated. This is the single point where
+        // the voice loop first claims the mic, so it's the right place to
+        // request. Failure to grant degrades voice to dormant — the rest of
+        // the app keeps running.
+        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        let micGranted: Bool
+        switch micStatus {
+        case .authorized:
+            micGranted = true
+        case .notDetermined:
+            systemLogger?.info("installVoice: requesting mic permission (.notDetermined)")
+            micGranted = await AVCaptureDevice.requestAccess(for: .audio)
+            systemLogger?.info("installVoice: mic permission \(micGranted ? "granted" : "denied")")
+        case .denied, .restricted:
+            systemLogger?.warning("installVoice: mic permission \(String(describing: micStatus)) — voice loop dormant; user must grant in System Settings")
+            micGranted = false
+        @unknown default:
+            micGranted = false
+        }
+
+        guard micGranted else {
+            audioGraphDegradationTask?.cancel()
+            audioGraphRebuildTask?.cancel()
+            self.audioGraphOwner = nil
+            return
+        }
+
         // Open the graph. Failure here is non-fatal: voice degrades to
         // dormant + banner, the rest of the app keeps running. The owner
         // itself emits `.aecUnavailable` on its retry path, so we only need
@@ -1569,6 +1601,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.bannerCoordinator?.enqueue(.cameraRevoked)
                 }
             }
+        }
+
+        // 2026-05-06 — TCC camera permission. Mirrors the mic-permission
+        // pattern in installVoice. Without an explicit
+        // `AVCaptureDevice.requestAccess(for: .video)` call macOS does not
+        // surface the camera prompt and `CameraCapture.open()` silently
+        // fails as `.cameraDenied`. We request before `open()` so the
+        // first-launch path either gets the prompt or we proceed
+        // gracefully degraded.
+        let camStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        switch camStatus {
+        case .authorized:
+            break
+        case .notDetermined:
+            systemLogger?.info("installVision: requesting camera permission (.notDetermined)")
+            let granted = await AVCaptureDevice.requestAccess(for: .video)
+            systemLogger?.info("installVision: camera permission \(granted ? "granted" : "denied")")
+        case .denied, .restricted:
+            systemLogger?.warning("installVision: camera permission \(String(describing: camStatus)) — vision features dormant")
+        @unknown default:
+            break
         }
 
         // Try to open. Failure is non-fatal — banner already enqueued by
