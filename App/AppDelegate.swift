@@ -215,6 +215,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// cancelled prematurely.
     var voiceInstallTask: Task<Void, Never>?
 
+    /// Plan 10-01: registers the four self-knowledge MCP tools
+    /// (`list_audio_devices`, `get_active_audio_route`, `get_self_state`,
+    /// `list_camera_devices`) into the existing
+    /// `inProcessToolRegistry`. Spawned AFTER voiceInstallTask so the live
+    /// `audioGraphOwner` reference is available for `AudioGraphRouteAdapter`.
+    var selfKnowledgeInstallTask: Task<Void, Never>?
+
+    /// Plan 10-01 / D-11: captured at app start so `get_self_state` can
+    /// report APP uptime (NOT host uptime via `ProcessInfo.systemUptime`).
+    let launchInstant: Date = Date()
+
     // MARK: - Memory subsystem (Plan 07-01..07-02 wired in 07-06)
 
     /// MemoryStore opened against ~/Library/Application Support/Jarvis/jarvis.db.
@@ -647,6 +658,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         voiceInstallTask = Task { @MainActor [weak self] in
             await self?.agentInstallTask?.value
             await self?.installVoice()
+        }
+
+        // 15. Plan 10-01: register the four self-knowledge MCP tools
+        //     (list_audio_devices, get_active_audio_route, get_self_state,
+        //     list_camera_devices) AFTER voice so the live audioGraphOwner
+        //     reference is available for AudioGraphRouteAdapter. The
+        //     CoreAudio + AVCaptureDevice queries are read-only metadata
+        //     only — no TCC prompt. D-10: every tool registers with
+        //     requiresConfirmation:false explicitly.
+        selfKnowledgeInstallTask = Task { @MainActor [weak self] in
+            await self?.voiceInstallTask?.value
+            await self?.installSelfKnowledgeTools()
         }
     }
 
@@ -1439,6 +1462,129 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         systemLogger?.info(
             "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach + voice + bus subscribers active)"
+        )
+    }
+
+    // MARK: - Self-knowledge install (Plan 10-01)
+
+    /// Plan 10-01 / SELF-01..04. Registers the four read-only self-knowledge
+    /// MCP tools into the in-process registry built by installMemory.
+    ///
+    /// Runs AFTER installVoice so the live `audioGraphOwner` reference is
+    /// available for `AudioGraphRouteAdapter`. If `inProcessToolRegistry`
+    /// or `audioGraphOwner` are nil (memory short-circuited or voice
+    /// failed to construct the graph), this method degrades gracefully —
+    /// the tools that don't depend on the missing reference still
+    /// register, the rest are skipped with a single warning.
+    ///
+    /// D-10: every tool registers with `requiresConfirmation = false`
+    /// explicitly (read-only, no side effects). The flag is on the tool
+    /// type itself; no defaulting at the registry boundary.
+    /// D-09: dispatchers do NOT cache — every call queries fresh state.
+    @MainActor
+    func installSelfKnowledgeTools() async {
+        guard let registry = self.inProcessToolRegistry else {
+            systemLogger?.warning(
+                "installSelfKnowledgeTools: inProcessToolRegistry nil — memory short-circuited; self-knowledge tools dormant"
+            )
+            return
+        }
+
+        // SELF-01 + SELF-04: pure CoreAudio / AVCaptureDevice queries —
+        // no live-actor refs needed.
+        await registry.register(
+            ListAudioDevicesTool(dispatcher: CoreAudioDeviceListAdapter())
+        )
+        await registry.register(
+            ListCameraDevicesTool(dispatcher: AVCaptureDeviceListAdapter())
+        )
+
+        // SELF-02: requires the live AudioGraphOwner. If voice didn't
+        // start (no mic, no models, etc.), skip this one so the tool
+        // doesn't appear in the registry returning a perpetually-nil
+        // route — better to omit than to silently lie.
+        if let owner = self.audioGraphOwner {
+            await registry.register(
+                GetActiveAudioRouteTool(
+                    dispatcher: AudioGraphRouteAdapter(owner: owner)
+                )
+            )
+        } else {
+            systemLogger?.warning(
+                "installSelfKnowledgeTools: audioGraphOwner nil — get_active_audio_route not registered"
+            )
+        }
+
+        // SELF-03: closure-injected probes hop into the live actors.
+        // ProviderIdentity reads from the configStore's per-turn snapshot
+        // (the orchestrator's ground truth for which provider it'll route
+        // to next). Voice loop state hops into VoiceController. TTS tier
+        // and STT backend come from the per-turn config. Wake-word mute
+        // is persisted in UserDefaults by `MuteWakeWord`.
+        let configStore = self.configStore
+        let voiceController = self.voiceController
+        let launchInstant = self.launchInstant
+
+        let providerIdentity: @Sendable () async -> SelfStateAdapter.ProviderIdentity = {
+            guard let configStore else {
+                return (provider: "anthropic", model: "claude-opus-4-7")
+            }
+            let snap = await configStore.perTurn()
+            let providerName: String
+            let modelName: String
+            switch snap.provider {
+            case .anthropic:
+                providerName = "anthropic"
+                modelName = "claude-opus-4-7"   // CLAUDE.md / RESEARCH-DELTAS D1
+            case .ollama:
+                providerName = "ollama"
+                modelName = "qwen2.5-coder:32b"  // CLAUDE.md known-good local baseline
+            }
+            return (provider: providerName, model: modelName)
+        }
+        let voiceState: @Sendable () async -> String? = {
+            guard let voiceController else { return nil }
+            let s = await voiceController.state
+            switch s {
+            case .idle:                       return "idle"
+            case .listening(let source):
+                switch source {
+                case .wakeWord: return "listening:wakeWord"
+                case .ptt:      return "listening:ptt"
+                }
+            case .thinking:                   return "thinking"
+            case .speaking:                   return "speaking"
+            case .reconfiguring(let reason):  return "reconfiguring:\(reason)"
+            }
+        }
+        let ttsTier: @Sendable () async -> String = {
+            guard let configStore else { return "tier1" }
+            let snap = await configStore.perTurn()
+            return snap.tts.tier
+        }
+        let sttBackend: @Sendable () async -> String = {
+            guard let configStore else { return "speechAnalyzer" }
+            let snap = await configStore.perTurn()
+            return snap.stt.whisperKitFallback ? "whisperKit" : "speechAnalyzer"
+        }
+        let wakeWordMuted: @Sendable () async -> Bool = {
+            UserDefaults.standard.bool(forKey: "features.voice.wakeWordMuted")
+        }
+
+        let selfState = SelfStateAdapter(
+            bundle: .main,
+            launchInstant: launchInstant,
+            providerIdentity: providerIdentity,
+            voiceState: voiceState,
+            ttsTier: ttsTier,
+            sttBackend: sttBackend,
+            wakeWordMuted: wakeWordMuted
+        )
+        await registry.register(GetSelfStateTool(dispatcher: selfState))
+
+        let names = await registry.registered().map(\.name).sorted()
+        systemLogger?.info(
+            "installSelfKnowledgeTools: registered self-knowledge tools — registry now contains \(names)"
         )
     }
 

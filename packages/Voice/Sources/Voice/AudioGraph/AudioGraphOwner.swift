@@ -3,6 +3,21 @@ import OSLog
 
 private let logger = Logger(subsystem: "com.koftwentytwo.jarvis", category: "AudioGraphOwner")
 
+/// Plan 10-01 / SELF-02. Minimal `Sendable` snapshot of the active
+/// AudioGraph's probed input format. Returned by
+/// `AudioGraphOwner.activeRouteSnapshot()`. Hardware-identity (UID/name)
+/// is not part of this struct — the App-side `AudioGraphRouteAdapter`
+/// resolves those via CoreAudio at snapshot time.
+public struct ActiveRouteSnapshot: Sendable, Equatable {
+    public let sampleRate: Double
+    public let channels: Int
+
+    public init(sampleRate: Double, channels: Int) {
+        self.sampleRate = sampleRate
+        self.channels = channels
+    }
+}
+
 /// Actor that owns the live `AudioGraph` and manages its full lifecycle.
 ///
 /// Responsibilities:
@@ -55,6 +70,25 @@ public actor AudioGraphOwner {
     public func subscribe(capacityFrames: Int = BufferBroadcaster.defaultSubscriberCapacityFrames) -> BufferBroadcaster.Subscription? {
         guard let graph else { return nil }
         return graph.broadcaster.subscribe(capacityFrames: capacityFrames)
+    }
+
+    /// Plan 10-01 / SELF-02 additive accessor.
+    ///
+    /// Returns the probed input-side sample rate + channel count the
+    /// AudioGraph reported at build time (matches the
+    /// `AudioGraph: probed format sampleRate=X channels=Y` log line).
+    /// Returns `nil` if the graph is not currently open.
+    ///
+    /// Hardware-identity (input/output device UID + name) is intentionally
+    /// NOT included here — the App-side `AudioGraphRouteAdapter` queries
+    /// CoreAudio for those at snapshot time so Voice doesn't need to take
+    /// on the device-introspection concern. Read-only; no side effects.
+    public func activeRouteSnapshot() -> ActiveRouteSnapshot? {
+        guard let graph else { return nil }
+        return ActiveRouteSnapshot(
+            sampleRate: graph.probedFormat.sampleRate,
+            channels: Int(graph.probedFormat.channelCount)
+        )
     }
 
     // MARK: - Init

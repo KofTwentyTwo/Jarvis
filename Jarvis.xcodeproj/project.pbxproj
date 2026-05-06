@@ -93,6 +93,7 @@
 		E218ADC35078C6F26F0D0041 /* HUDBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */; };
 		E39D7F3B185FA8D84C33B421 /* Config in Frameworks */ = {isa = PBXBuildFile; productRef = 1058DB02D52D27FA07A79025 /* Config */; };
 		E49FEEFE453A055F65DA31FF /* WizardStageHotkeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FC22D7D34AB5E6061959D7 /* WizardStageHotkeyView.swift */; };
+		E7F6C8E910BA8B5F7629DEF7 /* InProcessSelfStateAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 906C8E54650D79A94FB3C669 /* InProcessSelfStateAdapters.swift */; };
 		E8CD13B014BB64CAB1ACA632 /* AppDelegateEntitlementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A231DEC7B592B6D527B0283C /* AppDelegateEntitlementTests.swift */; };
 		EB03A8906003E55271CAF133 /* JarvisVision in Frameworks */ = {isa = PBXBuildFile; productRef = C1168750998C14962FE14DEC /* JarvisVision */; };
 		EB07CD704A3568F27DD4D901 /* Shell in Frameworks */ = {isa = PBXBuildFile; productRef = 6FAD561608B0D1C402015E0D /* Shell */; };
@@ -194,6 +195,7 @@
 		8C27488AAB75A245B580A95B /* WizardTCCStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardTCCStageTests.swift; sourceTree = "<group>"; };
 		8C8267C7BE6D4B16FEE6004E /* webview */ = {isa = PBXFileReference; lastKnownFileType = folder; name = webview; path = App/Resources/webview; sourceTree = SOURCE_ROOT; };
 		8FB47EBED48DF63272C6D77F /* AppDelegateFrameAttachAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateFrameAttachAdapters.swift; sourceTree = "<group>"; };
+		906C8E54650D79A94FB3C669 /* InProcessSelfStateAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InProcessSelfStateAdapters.swift; sourceTree = "<group>"; };
 		909BFE54FAE9CA6B878D5625 /* AppDelegateWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateWiringTests.swift; sourceTree = "<group>"; };
 		90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisApp.swift; sourceTree = "<group>"; };
 		960E9FC636D6FF3DD68E5FE9 /* Replay */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Replay; path = packages/Replay; sourceTree = SOURCE_ROOT; };
@@ -557,6 +559,7 @@
 			children = (
 				C4723FBC0F20AD2EFF146A24 /* AppDelegateContextBuilderAdapter.swift */,
 				252A86D40325F2186A86A505 /* InProcessMemoryAdapters.swift */,
+				906C8E54650D79A94FB3C669 /* InProcessSelfStateAdapters.swift */,
 				CBF3EF4CDCC653EF50D99AF7 /* MCPRuntimeWiring.swift */,
 				0358E0CAC1377752398FA3C4 /* ReplayingToolResultObserver.swift */,
 			);
@@ -1322,6 +1325,7 @@
 				5230995216EF1EE333B51529 /* HudStateCoordinator.swift in Sources */,
 				896984D88C412595C0F6F97E /* HudStateIntent.swift in Sources */,
 				98165CEB562FE32CD16BAA1D /* InProcessMemoryAdapters.swift in Sources */,
+				E7F6C8E910BA8B5F7629DEF7 /* InProcessSelfStateAdapters.swift in Sources */,
 				526BDF4D6BC5714809B2E937 /* JarvisApp.swift in Sources */,
 				BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */,
 				CD2C5779101FE0384611ECCC /* MCPBusGatewayAdapter.swift in Sources */,

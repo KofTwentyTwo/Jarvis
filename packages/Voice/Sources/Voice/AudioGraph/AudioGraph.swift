@@ -127,6 +127,13 @@ public final class AudioGraph: Sendable {
     /// `ringBuffer` for back-compat.
     private let primarySubscription: BufferBroadcaster.Subscription
 
+    /// Probed input format — what AVAudioEngine reported BEFORE the
+    /// 16 kHz mono target. Plan 10-01 / SELF-02: exposed via
+    /// `AudioGraphOwner.activeRouteSnapshot()` so `get_active_audio_route`
+    /// can answer "what mic is the graph bound to?" with the actual
+    /// hardware-side sample rate, not the downstream contract value.
+    public let probedFormat: AVAudioFormat
+
     // MARK: - Private AVFoundation objects
 
     // `nonisolated(unsafe)` because they are created once in `init` and then
@@ -241,6 +248,7 @@ public final class AudioGraph: Sendable {
         self.broadcaster = broadcaster
         self.primarySubscription = primarySub
         self.ringBuffer = ring
+        self.probedFormat = probedFormat
         self.variant = aec
             ? .aecOn(targetFormat)
             : .aecOff(targetFormat)
