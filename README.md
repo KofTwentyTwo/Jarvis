@@ -4,7 +4,7 @@ A personal, always-on macOS AI assistant styled after the Iron Man HUD. Native S
 
 ## Status
 
-`develop` at app version **0.1.0** (Info.plist `CFBundleShortVersionString`). All nine planned phases shipped; in post-milestone audit-and-stabilize. Day-to-day state lives in [`docs/SESSION-STATE.md`](docs/SESSION-STATE.md) and [`docs/TODO.md`](docs/TODO.md); milestone-level state in [`.planning/STATE.md`](.planning/STATE.md).
+`develop` at app version **0.1.0** (Info.plist `CFBundleShortVersionString`). Nine planned phases shipped; Phase 10 (self-awareness diagnostics) mid-flight — Wave 1 landed at `3974a15` (four self-knowledge MCP tools). Post-milestone audit-and-stabilize closures (Tracks A, B-1..7, C-1..6, D-1..6) are in. Day-to-day state lives in [`docs/SESSION-STATE.md`](docs/SESSION-STATE.md) and [`docs/TODO.md`](docs/TODO.md); milestone-level state in [`.planning/STATE.md`](.planning/STATE.md).
 
 What works today, against the live tree:
 
@@ -15,7 +15,7 @@ What works today, against the live tree:
 | Tier-2 TTS (Orpheus) | Deferred — `B-8` requires ~6 GB MLX weight download; degrades to tier-1 |
 | Vision (camera capture, frame-attach to a turn) | Wired; T2 vision provider explicitly missing pending sidecar |
 | Memory (extraction + hybrid search) | Code-complete; functionally OFF until `vec0.dylib` ships (Track D-5/D-6) and `ollama pull nomic-embed-text` runs (D-7) |
-| MCP tools | `get_time`, `get_clipboard`, `run_applescript` (gated by HUD confirmation), plus in-process `search_memory` / `forget_fact` |
+| MCP tools | Helpers: `get_time`, `get_clipboard`, `run_applescript` (HUD-confirmation-gated). In-process: `search_memory`, `forget_fact` (memory; gated on store + vec availability), and the Phase 10 Wave 1 self-knowledge set — `list_audio_devices`, `get_active_audio_route`, `get_self_state`, `list_camera_devices` (`74b9ac2`). |
 
 Personal-use only; not multi-tenant, not auth'd, not a commercial product. See [`.planning/PROJECT.md`](.planning/PROJECT.md) for project context.
 
