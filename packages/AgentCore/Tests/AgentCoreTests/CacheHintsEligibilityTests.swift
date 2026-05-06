@@ -68,4 +68,71 @@ final class CacheHintsEligibilityTests: XCTestCase {
         let hints = CacheHints.eligibleForSystemPrompt(prompt, ttl: .ephemeral5m)
         XCTAssertEqual(hints?.systemPromptTTL, .ephemeral5m)
     }
+
+    // MARK: - Phase 10 / Plan 10-02 — Self-aware preamble cache invariance
+    //
+    // Threat T-10-CACHE-01: introducing the self-aware preamble must NOT push
+    // the system prompt over the 4096-char cache-eligibility boundary
+    // unintentionally (RESEARCH Pitfall #4 / Assumption A4 / PATTERNS AP-04).
+    //
+    // The preamble is also locked per D-13 (single Swift string constant) and
+    // D-14 (no Markdown tool catalog block — the Anthropic API tools array is
+    // the catalog).
+
+    /// preambleDoesNotEnableCacheUnintentionally — VALIDATION map row
+    /// SELF-06 / T-10-CACHE-01.
+    ///
+    /// Asserts:
+    /// 1. selfAwarePreamble length stays well below 2048 chars (head-room
+    ///    against the 4096-char cache boundary so combined with rare
+    ///    presence/memory enrichments it stays under 4 KB).
+    /// 2. selfAwarePreamble starts with the prefix "You are Jarvis"
+    ///    (D-13 lock anchor).
+    /// 3. selfAwarePreamble does not contain a Markdown triple-backtick code
+    ///    fence (D-14 — no tool catalog enumeration as block).
+    /// 4. CacheHints.eligibleForSystemPrompt verdict for the prior literal
+    ///    equals the verdict for the new preamble — i.e., the preamble does
+    ///    not unintentionally flip cache-marker emission compared to the
+    ///    prior tiny literal.
+    /// 5. ContextBuilder.systemPrompt(for: .empty) returns a string starting
+    ///    with the selfAwarePreamble (preamble FIRST, per D-12).
+    func test_preambleDoesNotEnableCacheUnintentionally() {
+        let preamble = ContextBuilder.selfAwarePreamble
+
+        // (1) Head-room against the cache boundary.
+        XCTAssertLessThan(
+            preamble.count,
+            2048,
+            "selfAwarePreamble must stay well below the 4096-char cache boundary; combined with presence/memory enrichments it must stay < 4 KB (Pitfall #4 / A4)."
+        )
+
+        // (2) D-13 lock anchor.
+        XCTAssertTrue(
+            preamble.hasPrefix("You are Jarvis"),
+            "selfAwarePreamble must begin with 'You are Jarvis' (D-13 locked identity)."
+        )
+
+        // (3) D-14 no Markdown tool-catalog block.
+        XCTAssertFalse(
+            preamble.contains("```"),
+            "selfAwarePreamble must not contain a Markdown triple-backtick (D-14 — Anthropic tools array is the catalog)."
+        )
+
+        // (4) Cache-eligibility verdict invariance vs. prior literal.
+        let priorLiteral = "You are Jarvis, a personal macOS assistant."
+        let priorVerdict = CacheHints.eligibleForSystemPrompt(priorLiteral)
+        let preambleVerdict = CacheHints.eligibleForSystemPrompt(preamble)
+        XCTAssertEqual(
+            priorVerdict == nil,
+            preambleVerdict == nil,
+            "Preamble must not flip cache-marker emission relative to the prior 10-token literal (T-10-CACHE-01)."
+        )
+
+        // (5) Composer order: preamble FIRST (D-12).
+        let composed = ContextBuilder.systemPrompt(for: .empty)
+        XCTAssertTrue(
+            composed.hasPrefix(preamble),
+            "ContextBuilder.systemPrompt(for: .empty) must start with selfAwarePreamble (D-12 — preamble FIRST, then per-turn enrichments)."
+        )
+    }
 }
