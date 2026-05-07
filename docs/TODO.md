@@ -2,15 +2,18 @@
 
 Live triage list. Higher up = higher priority. Move done items to a dated archive section if the file gets long.
 
-## ▶ TOP — Architectural pivot to API-first (2026-05-07)
+## ▶ TOP — Migration to v1.0 API begins (2026-05-07 evening)
 
-**Authoritative handoff:** `.planning/architecture/HANDOFF-2026-05-07.md`. Read it before any work in the next session.
+**v1.0 contract LOCKED** as the pair `JARVIS-API-DESIGN-v0.1.md` + `JARVIS-API-DESIGN-v0.2.md` (UQ-1..UQ-5 answered). Index: `.planning/architecture/README.md`. Migration plan: `JARVIS-API-MIGRATION-PLAN.md`. Test contract: `JARVIS-API-TEST-CONTRACT.md`. Skeleton: `Tools/jarvis-diag/` (compiles green).
 
-- [ ] **Next session:** dispatch the 6-agent design swarm per the handoff. Goal: `JARVIS-API-DESIGN.md` v1.0 + test contract + migration plan, implementation-ready by 2026-05-07T23:59 local.
-- [ ] After v1.0 lock: cross-AI peer review (GPT-5 Pro / Gemini 2.5 Pro / fresh Opus instance) — likely tomorrow.
-- [ ] After cross-AI review: begin migration per `JARVIS-API-MIGRATION-PLAN.md`. Each migration step gates on the harness staying green.
+- [x] **2026-05-07 evening:** 6-agent design swarm executed end-to-end. v0.1 (1036 lines, 7 surfaces) + v0.2 (synthesis + UQ answers) + 3 reviews + migration plan + test contract + skeleton, all under `.planning/architecture/`.
+- [ ] **Next session — cross-AI peer review of v1.0** (GPT-5 Pro / Gemini 2.5 Pro / fresh Opus). Iterate to v1.1 only if findings warrant.
+- [ ] **After peer review — B-02 tactical patch on `develop` directly** — single commit + `streamTruncated` regression test. Specified in `JARVIS-API-MIGRATION-PLAN.md §3`.
+- [ ] **Then — M-0 (pre-migration gates) directly on `develop`** — `packages/JarvisAPI/`, lift `RealWKWebViewIntegrationTests` to public harness runner, promote 3 grep gates to behavioral, dual-version handshake. ~2.5–3.5 engineer-days.
+- [ ] **Then — M-1 (Self surface) on a feature branch + PR** — first surface migration; closes B-08.
+- [ ] **Then — M-2..M-7** per migration plan, each on own feature branch + PR.
 
-**Until the API is locked, DO NOT fix individual bugs piecemeal** — they re-scope against the new contract.
+**Until v1.0 implementation begins, DO NOT fix B-02..B-08 piecemeal** — they re-scope against the v1.0 contract per the migration plan. (B-02 has its own one-commit tactical patch path per UQ-2.)
 
 ## Carry-forward bugs (re-scope against new API)
 

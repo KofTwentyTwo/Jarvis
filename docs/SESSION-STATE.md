@@ -1,10 +1,44 @@
 # Session State
 
-**Last Updated:** 2026-05-07 (evening — architectural pivot to API-first; design swarm queued)
+**Last Updated:** 2026-05-07 (evening — swarm complete; v1.0 contract locked; migration plan + test contract shipped)
 
-## ▶ Next Session: Design Swarm — read FIRST
+## ▶ Next Session: Cross-AI peer review + B-02 patch + M-0 — read FIRST
 
-The next session's primary task is to dispatch a 6-agent swarm that produces a frontend-agnostic backend API design + test contract + migration plan, implementation-ready by midnight 2026-05-07. **Authoritative handoff:** `.planning/architecture/HANDOFF-2026-05-07.md`. Read that document before doing anything else; this file and `docs/TODO.md` are supplements.
+The architectural-pivot design swarm executed end-to-end on 2026-05-07. The v1.0 API contract is **locked** as the pair `JARVIS-API-DESIGN-v0.1.md` + `JARVIS-API-DESIGN-v0.2.md` (UQ-1..UQ-5 answered in v0.2 §5). All artifacts under `.planning/architecture/`; index in `.planning/architecture/README.md`.
+
+**Next session's actions in order:**
+1. Cross-AI peer review of v1.0 (GPT-5 Pro / Gemini 2.5 Pro / fresh Opus). Iterate to v1.1 if findings warrant.
+2. **B-02 tactical patch on `develop` directly** — single commit + regression test for `streamTruncated`. Specified in `JARVIS-API-MIGRATION-PLAN.md §3`.
+3. **M-0** (pre-migration gates) directly on `develop`. Creates `packages/JarvisAPI/`, lifts `RealWKWebViewIntegrationTests` to a public harness runner, promotes grep gates to behavioral, dual-version handshake. ~2.5–3.5 engineer-days.
+4. **M-1** (Self surface) on its own feature branch + PR — first surface migration; closes B-08.
+5. M-2..M-7 in sequence on per-step feature branches per the migration plan.
+
+Total estimated migration: **19–26 engineer-days (~4–5.5 calendar weeks at solo pace).**
+
+## ▶ Earlier this session — Design swarm output (2026-05-07 evening)
+
+`develop` HEAD was `b36e8eb` (handoff commit) at swarm start. Tonight's commit adds all `.planning/architecture/` artifacts and the `Tools/jarvis-diag/` skeleton (compiles green; type-signatures only).
+
+**Locked decisions:**
+- **UQ-1:** runtime gate `JARVIS_HARNESS=1` (single binary).
+- **UQ-2:** B-02 tactical patch outside migration + regression test; B-04 stays in M-6.
+- **UQ-3:** explicit `Voice.synthesizeTurn(turnId:text:tier:)` command (orchestrator-as-driver visible at API).
+- **UQ-4:** Settings owns ALL configuration mutation; Voice has only runtime-control verbs; `bargeIn` migrates to Turn.
+- **UQ-5:** parametric harness mandated — every scenario runs `.inProcessActor` AND `.jsonRoundTripWebView`.
+
+Plus 4 orchestrator-decided defaults (UUIDs for identifiers; `~/Library/Application Support/Jarvis-Harness/` data isolation; `Settings._setConfirmationDefault(.deny)` default; bus dual-version handshake `["2.3.0", "2.4.0-rc"]` during M-0..M-7).
+
+**Carry-forward bug status (unchanged tonight; closes during migration per UQ-2 + plan):**
+- B-02 → tactical patch BEFORE M-1
+- B-03 → M-5 (Vision)
+- B-04, B-05 → M-6 (Voice)
+- B-06 → M-7 (Turn) [DOM observability gap acknowledged; out of harness scope]
+- B-07 → deferred (Plan 10-05 re-scope)
+- B-08 → M-1 (Self)
+
+---
+
+## ▶ 2026-05-07 morning — substrate fixes (pre-pivot)
 
 ## Current Status (2026-05-07 end-of-session)
 
