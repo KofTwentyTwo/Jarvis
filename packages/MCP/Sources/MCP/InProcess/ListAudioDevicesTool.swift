@@ -50,6 +50,14 @@ public struct AudioDeviceEntry: Sendable, Codable, Equatable {
 public struct ListAudioDevicesTool: InProcessTool {
 
     public let name: String = "list_audio_devices"
+    public let toolDescription: String = """
+    Lists every audio I/O device on the user's Mac (one entry per direction — \
+    inputs and outputs as separate rows). Each entry includes name, UID, \
+    sample rate, channel count, default-device flag, and active flag. Call \
+    this tool when the user asks about microphones, speakers, headphones, or \
+    audio devices in general — never speculate or tell them to open System \
+    Settings.
+    """
     public let requiresConfirmation: Bool = false
 
     public var schemaJSON: Data { Self.schema }

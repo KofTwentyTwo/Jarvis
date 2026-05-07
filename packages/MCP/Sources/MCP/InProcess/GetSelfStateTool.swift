@@ -57,6 +57,14 @@ public struct SelfState: Sendable, Codable, Equatable {
 public struct GetSelfStateTool: InProcessTool {
 
     public let name: String = "get_self_state"
+    public let toolDescription: String = """
+    Returns a point-in-time snapshot of Jarvis's own runtime state — app \
+    version, build mode (debug/release), pid, uptime, active LLM provider \
+    and model, TTS tier, STT backend, wake-word mute flag, and current \
+    voice-loop state. Call this tool when the user asks what model is \
+    running, whether wake-word is muted, how long the app has been up, or \
+    any question about Jarvis's own configuration.
+    """
     public let requiresConfirmation: Bool = false
 
     public var schemaJSON: Data { Self.schema }

@@ -46,6 +46,13 @@ public struct ActiveAudioRoute: Sendable, Codable, Equatable {
 public struct GetActiveAudioRouteTool: InProcessTool {
 
     public let name: String = "get_active_audio_route"
+    public let toolDescription: String = """
+    Returns the microphone and speaker that the running voice loop is \
+    currently bound to (input + output device names and UIDs, sample rate, \
+    channel count, and AEC variant). Call this tool when the user asks \
+    what mic, headset, or speakers Jarvis is using right now — it reflects \
+    the live AudioGraph route, not the system default.
+    """
     public let requiresConfirmation: Bool = false
 
     public var schemaJSON: Data { Self.schema }

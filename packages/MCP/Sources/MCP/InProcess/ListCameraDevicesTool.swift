@@ -42,6 +42,13 @@ public struct CameraDeviceEntry: Sendable, Codable, Equatable {
 public struct ListCameraDevicesTool: InProcessTool {
 
     public let name: String = "list_camera_devices"
+    public let toolDescription: String = """
+    Lists every camera device the host exposes (built-in FaceTime camera, \
+    Continuity/external cameras, etc.) with localized name, unique ID, \
+    connection state, and position (front/back/external/unknown). Call this \
+    tool when the user asks what cameras are available — enumeration is \
+    metadata-only and does NOT trigger the camera permission prompt.
+    """
     public let requiresConfirmation: Bool = false
 
     public var schemaJSON: Data { Self.schema }

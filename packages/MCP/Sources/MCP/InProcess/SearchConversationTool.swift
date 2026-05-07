@@ -26,6 +26,13 @@ public struct SearchConversationTurn: Sendable, Codable, Equatable {
 public struct SearchConversationTool: InProcessTool {
 
     public let name: String = "search_conversation"
+    public let toolDescription: String = """
+    Returns the most recent N turns of the current chat session (user + \
+    assistant messages with role, content, timestamp, and source). \
+    Session-scoped — does NOT search across past sessions. Call this tool \
+    when the user references something said earlier in this conversation \
+    that may have scrolled out of the visible context window.
+    """
     public let requiresConfirmation: Bool = false
 
     public var schemaJSON: Data {

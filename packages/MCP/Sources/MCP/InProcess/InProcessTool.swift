@@ -10,6 +10,12 @@ import Foundation
 public protocol InProcessTool: Sendable {
     /// Tool name as exposed to the LLM.
     var name: String { get }
+    /// Human-readable one-line description for the LLM. Plan 10-02b /
+    /// B-01: surfaced into the Anthropic / Ollama tools[] payload as the
+    /// `description` field so the model knows when to call this tool. Use
+    /// `toolDescription` (not `description`) to avoid colliding with
+    /// `CustomStringConvertible.description` on conforming types.
+    var toolDescription: String { get }
     /// JSON Schema bytes used by the tool catalog when ListTools is called.
     var schemaJSON: Data { get }
     /// D-02: forget_fact is destructive and must always confirmation-gate

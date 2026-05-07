@@ -11,6 +11,13 @@ public protocol ForgetFactDispatching: Sendable {
 public struct ForgetFactTool: InProcessTool {
 
     public let name: String = "forget_fact"
+    public let toolDescription: String = """
+    Forgets a single previously-stored fact by its numeric factId (obtained \
+    from search_memory hits). Destructive — closes the fact's valid_to \
+    interval and sets forgotten_at; the row is NEVER deleted. ALWAYS \
+    confirmation-gated through the HUD's confirmation prompt. Call this \
+    tool only when the user explicitly asks Jarvis to forget something.
+    """
     public let requiresConfirmation: Bool = true
 
     public var schemaJSON: Data {

@@ -27,6 +27,14 @@ public struct SearchMemoryHit: Sendable, Codable, Equatable {
 public struct SearchMemoryTool: InProcessTool {
 
     public let name: String = "search_memory"
+    public let toolDescription: String = """
+    Searches Jarvis's long-term memory store for facts the user has \
+    previously shared (preferences, names, dates, project context). \
+    Hybrid keyword (FTS5) + semantic (vec0) search across all sessions; \
+    returns up to k hits ranked by reciprocal-rank fusion. Call this tool \
+    when the user references something they told Jarvis earlier or asks \
+    "do you remember…" — never claim to remember without searching first.
+    """
     public let requiresConfirmation: Bool = false
 
     public var schemaJSON: Data {

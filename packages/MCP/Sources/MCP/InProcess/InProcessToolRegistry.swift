@@ -1,4 +1,5 @@
 import Foundation
+import AgentCore
 
 /// Holds [String: any InProcessTool] and dispatches CallTool requests by name.
 /// AppDelegate (Plan 07-06) builds one and injects it alongside the existing
@@ -26,5 +27,22 @@ public actor InProcessToolRegistry {
             throw InProcessToolError.unknownTool(name)
         }
         return try await tool.call(args: args)
+    }
+
+    /// Plan 10-02b / B-01: project every registered in-process tool to a
+    /// `ToolSchema` (name + human-readable description + JSON-schema bytes)
+    /// suitable for the Anthropic / Ollama tools[] payload. Returned in
+    /// stable name-sorted order so request bodies are deterministic across
+    /// turns (helpful for prompt caching and snapshot tests).
+    public func toolSchemas() -> [ToolSchema] {
+        tools.values
+            .map { tool in
+                ToolSchema(
+                    name: tool.name,
+                    description: tool.toolDescription,
+                    inputSchema: tool.schemaJSON
+                )
+            }
+            .sorted { $0.name < $1.name }
     }
 }
