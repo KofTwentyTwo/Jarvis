@@ -90,7 +90,8 @@ public enum MCPRuntimeWiring {
         bundleURL: URL,
         bus: any BusGateway,
         replayChannel: BoundedAsyncChannel<ReplayEnvelope>,
-        turnIDResolver: @escaping @Sendable () async -> TurnID? = { nil }
+        turnIDResolver: @escaping @Sendable () async -> TurnID? = { nil },
+        inProcessRegistry: InProcessToolRegistry? = nil
     ) async throws -> MCPRuntime {
         let helpersDir = bundleURL.appendingPathComponent("Contents/Helpers", isDirectory: true)
 
@@ -122,8 +123,29 @@ public enum MCPRuntimeWiring {
         //    channel. CR-02 wires the actual ME-04 contract end-to-end.
         let observer = ReplayingToolResultObserver(replayChannel: replayChannel, turnIDResolver: turnIDResolver)
 
-        // 4. Inner MCPToolDispatcher (Plan 05-04).
-        let inner = MCPToolDispatcher(client: client, registry: registry, observer: observer)
+        // 4. Inner MCPToolDispatcher (Plan 05-04). Stdio fallback path.
+        let stdioDispatcher = MCPToolDispatcher(client: client, registry: registry, observer: observer)
+
+        // Plan 10-02c (B-01b): if an InProcessToolRegistry is provided, wrap
+        // the stdio dispatcher with InProcessAwareToolDispatcher so the model's
+        // tool_use blocks for in-process tools (memory tools + four self-knowledge
+        // tools registered later in installSelfKnowledgeTools) actually dispatch
+        // instead of failing "tool unknown" at the stdio-only inner.
+        // The composite shares the registry's confirmationCache so the outer
+        // ConfirmingToolDispatcher's sync requiresConfirmation lookup picks up
+        // forget_fact's gating.
+        let inner: any ToolDispatcher
+        if let inProcReg = inProcessRegistry {
+            inner = InProcessAwareToolDispatcher(
+                inProcessRegistry: inProcReg,
+                confirmationCache: inProcReg.confirmationCache,
+                inner: stdioDispatcher,
+                observer: observer
+            )
+        } else {
+            // Back-compat for tests that don't supply an in-process registry.
+            inner = stdioDispatcher
+        }
 
         // 5. Broker + presenter (cycle-broken via the holder indirection).
         let presenterHolder = ConfirmationPresenterHolder()

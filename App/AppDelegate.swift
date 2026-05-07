@@ -270,7 +270,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the registration but the dispatch path is not yet hooked. The audit
     /// gap "tools exist but unregistered" is closed by this ivar; the
     /// "tools exposed to LLM" gap is independent and tracked separately.
-    var inProcessToolRegistry: InProcessToolRegistry?
+    /// Plan 10-02c (B-01b): default-init eagerly so the SAME registry instance
+    /// is shared between `installMCP` (passes it to MCPRuntimeWiring.build for
+    /// the dispatch routing composite) and `installMemory` /
+    /// `installSelfKnowledgeTools` (register tools into it). All three tasks
+    /// run in parallel; pre-construction guarantees they all see the same
+    /// actor reference regardless of who wins the race.
+    var inProcessToolRegistry: InProcessToolRegistry? = InProcessToolRegistry()
 
     /// Task spawned in `applicationWillFinishLaunching` that constructs and
     /// starts the memory subsystem.
@@ -575,11 +581,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await MainActor.run { [weak self] in self?.outboundBatcher }
             })
             do {
+                // Plan 10-02c (B-01b): pass the eagerly-constructed
+                // inProcessToolRegistry so MCPRuntimeWiring can wrap the inner
+                // MCPToolDispatcher with InProcessAwareToolDispatcher. Memory
+                // tools (registered later by installMemory) and the four
+                // self-knowledge tools (registered later by
+                // installSelfKnowledgeTools) land in this same registry
+                // instance — the composite's name-routing query reads from
+                // the live actor on every dispatch so late registrations are
+                // routable too.
                 let runtime = try await MCPRuntimeWiring.build(
                     bundleURL: bundleURL,
                     bus: busAdapter,
                     replayChannel: channel,
-                    turnIDResolver: { nil }  // pre-orchestrator returns nil (observer logs without writing).
+                    turnIDResolver: { nil },  // pre-orchestrator returns nil (observer logs without writing).
+                    inProcessRegistry: self.inProcessToolRegistry
                 )
                 self.mcpRuntime = runtime
                 let toolCount = await runtime.client.registeredToolNames().count
@@ -1137,11 +1153,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        let registry = await Self.buildInProcessToolRegistry(
+        // Plan 10-02c (B-01b): self.inProcessToolRegistry is now eagerly
+        // default-initialized at property declaration so installMCP can
+        // hand the SAME instance to MCPRuntimeWiring.build for the dispatch
+        // routing composite. Memory tools register INTO the existing
+        // registry rather than into a fresh one constructed here.
+        let registry = self.inProcessToolRegistry ?? InProcessToolRegistry()
+        self.inProcessToolRegistry = registry
+        await Self.populateMemoryTools(
+            in: registry,
             forgetDispatcher: forgetDispatcher,
             searchDispatcher: searchDispatcher
         )
-        self.inProcessToolRegistry = registry
 
         let toolNames = await registry.registered().map { $0.name }
         systemLogger?.info(
@@ -1164,13 +1187,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         searchDispatcher: (any HybridSearchDispatching)?
     ) async -> InProcessToolRegistry {
         let registry = InProcessToolRegistry()
+        await populateMemoryTools(
+            in: registry,
+            forgetDispatcher: forgetDispatcher,
+            searchDispatcher: searchDispatcher
+        )
+        return registry
+    }
+
+    /// Plan 10-02c (B-01b): populate memory tools INTO an existing registry.
+    /// Same gating semantics as `buildInProcessToolRegistry`, but writes to
+    /// the caller's registry instance so the eagerly-constructed
+    /// `inProcessToolRegistry` (shared with `MCPRuntimeWiring.build` for the
+    /// dispatch composite) gets the memory tools registered alongside the
+    /// later-registered self-knowledge tools.
+    static func populateMemoryTools(
+        in registry: InProcessToolRegistry,
+        forgetDispatcher: (any ForgetFactDispatching)?,
+        searchDispatcher: (any HybridSearchDispatching)?
+    ) async {
         if let forget = forgetDispatcher {
             await registry.register(ForgetFactTool(dispatcher: forget))
         }
         if let search = searchDispatcher {
             await registry.register(SearchMemoryTool(dispatcher: search))
         }
-        return registry
     }
 
     // MARK: - Agent install (Plan 09-01)
