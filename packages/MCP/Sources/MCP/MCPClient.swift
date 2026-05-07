@@ -13,6 +13,7 @@
 // Plan: 05-01
 
 import Foundation
+import AgentCore
 import JarvisChildSpawn
 import Logging
 import MCP
@@ -54,6 +55,13 @@ public struct ToolMetadata: Sendable, Equatable {
 public actor MCPClient {
     private var registry: [String: MCPServerHandle] = [:]
     private var toolToServer: [String: String] = [:]
+    /// Plan 10-02b / B-01: cache of `Tool` definitions returned by each
+    /// helper's `tools/list` response. The Anthropic / Ollama provider
+    /// request bodies need name + description + inputSchema for every
+    /// stdio tool; previously this catalog was lost after registration
+    /// (only `toolToServer` survived). Keyed by tool name (mirrors
+    /// `toolToServer`'s scope).
+    private var toolDefinitions: [String: Tool] = [:]
     private let logger: Logger
 
     public init(logger: Logger = MCPLogChannel.logger(label: "client")) {
@@ -94,6 +102,10 @@ public actor MCPClient {
         registry[name] = handle
         for tool in listed.tools {
             toolToServer[tool.name] = name
+            // Plan 10-02b / B-01: retain the full Tool definition so
+            // `toolCatalog()` can hand back name + description +
+            // inputSchema for the model's tools[] payload.
+            toolDefinitions[tool.name] = tool
         }
         logger.info("registered MCP helper '\(name)' with \(listed.tools.count) tool(s)")
     }
@@ -193,6 +205,43 @@ public actor MCPClient {
         Array(toolToServer.keys)
     }
 
+    /// Plan 10-02b / B-01: project every registered stdio tool to a
+    /// `ToolSchema(name, description, inputSchema)` for the LLM request
+    /// body's `tools[]` payload. The MCP SDK's `Tool.description` is
+    /// optional — empty descriptions degrade to a placeholder so the
+    /// orchestrator never feeds the provider an empty `description`
+    /// field (Anthropic accepts empty strings, but it strips the model's
+    /// signal for when to call the tool). Returned in stable name-sorted
+    /// order so request bodies are deterministic across turns.
+    public func toolCatalog() -> [ToolSchema] {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return toolDefinitions.values
+            .compactMap { tool -> ToolSchema? in
+                let description = tool.description?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let resolvedDescription: String
+                if let description, !description.isEmpty {
+                    resolvedDescription = description
+                } else {
+                    // Defensive fallback — every helper SHOULD send a
+                    // description in its tools/list response, but if one
+                    // doesn't we'd rather pass the tool through with a
+                    // placeholder than drop it from the catalog.
+                    resolvedDescription = "MCP tool '\(tool.name)' (no description provided by helper)."
+                }
+                guard let schemaBytes = try? encoder.encode(tool.inputSchema) else {
+                    logger.warning("toolCatalog: failed to encode inputSchema for tool '\(tool.name)' — dropping from catalog")
+                    return nil
+                }
+                return ToolSchema(
+                    name: tool.name,
+                    description: resolvedDescription,
+                    inputSchema: schemaBytes
+                )
+            }
+            .sorted { $0.name < $1.name }
+    }
+
     // MARK: - Teardown
 
     public func shutdown() async {
@@ -201,6 +250,7 @@ public actor MCPClient {
         }
         registry.removeAll()
         toolToServer.removeAll()
+        toolDefinitions.removeAll()
     }
 
     // MARK: - Test-only inspection
