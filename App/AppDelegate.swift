@@ -1256,6 +1256,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             return
         }
+        // Plan 10-02b / B-01: source the tool catalog lazily from BOTH
+        // the in-process registry (memory + self-knowledge tools) AND
+        // the stdio MCPClient (mcp-time / mcp-clipboard /
+        // mcp-applescript). The in-process registry is populated in
+        // stages — memory tools register inside installMemory (before
+        // installAgent runs), but the four Phase 10-01 self-knowledge
+        // tools register inside installSelfKnowledgeTools (which runs
+        // AFTER installAgent because it depends on the live
+        // audioGraphOwner). A static snapshot at orchestrator
+        // construction time would freeze out the self-knowledge tools.
+        // The resolver fires per outer-loop iteration in
+        // AgentOrchestrator.runTurnLoop, so by the time the user submits
+        // their first turn the catalog is fully populated. No per-event
+        // cost — one resolver invocation per LLM round-trip.
+        let mcpClientLocal = mcpRuntime.client
+        let inProcessRegistryRef: InProcessToolRegistry? = self.inProcessToolRegistry
+        let toolCatalogResolver: @Sendable () async -> [ToolSchema] = {
+            var catalog: [ToolSchema] = []
+            // Stdio helpers (get_time / get_clipboard / run_applescript).
+            let stdio = await mcpClientLocal.toolCatalog()
+            catalog.append(contentsOf: stdio)
+            // In-process tools (memory + self-knowledge).
+            if let inProc = inProcessRegistryRef {
+                let inProcessSchemas = await inProc.toolSchemas()
+                catalog.append(contentsOf: inProcessSchemas)
+            }
+            return catalog
+        }
         let orchestrator = AgentOrchestrator(
             configStore: configStore,
             providerFactory: providerFactory,
@@ -1272,6 +1300,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // PresenceStateSnapshot.shared (passed below).
             systemPrompt: ContextBuilder.systemPrompt(for: .empty),
             availableTools: [],
+            availableToolsResolver: toolCatalogResolver,
             visionRouter: self.visionRouter,
             presenceSnapshot: PresenceStateSnapshot.shared
         )
