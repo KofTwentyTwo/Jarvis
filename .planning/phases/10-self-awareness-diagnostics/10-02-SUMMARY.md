@@ -73,7 +73,7 @@ Each task was committed atomically:
 
 1. **Task 1 (Wave-0 RED): preambleDoesNotEnableCacheUnintentionally** — `5bb9371` (test)
 2. **Task 2 (GREEN): selfAwarePreamble + systemPrompt(for:) + AppDelegate rewire** — `f22bf2e` (feat)
-3. **Task 3: Live verification** — PENDING (blocking checkpoint, see Live Verification section)
+3. **Task 3: Live verification** — PARTIAL (2026-05-07): AC-06 PASS, AC-05 FAIL on substrate bug B-01 (`availableTools: []` hardcoded at AppDelegate.swift:1274). See Live Verification section for evidence.
 
 **Plan metadata commit:** _to be created_ (this SUMMARY.md + STATE.md + ROADMAP.md update).
 
@@ -184,15 +184,30 @@ After Jarvis is up and HUD is responsive (use the chat panel — voice is fine t
 
 ### Acceptance Match
 
-- **AC-05:** PENDING — awaiting human verification per checkpoint protocol. Mark `PASS — <evidence>` once both Expected behaviors A and B above are observed; mark `FAIL — <observed wording>` if the model still says it has no mic / no hardware access / is text-only.
-- **AC-06:** PENDING — awaiting human verification per checkpoint protocol. Mark `PASS — <evidence>` once the model denies being text-only and names voice + vision; mark `FAIL — <observed wording>` if it confirms text-only or omits a capability.
+- **AC-05:** **FAIL — substrate bug, not a preamble bug.** Live verification on 2026-05-07 with build artifact `f22bf2e`. Asked: "What microphone are you using?". Model replied: `I'll check that for you. {"name": "get_active_audio_route", "arguments": {}}` — emitted the tool name as visible chat text and never returned the device name. Diagnosis: `App/AppDelegate.swift:1274` constructs `AgentOrchestrator(... availableTools: [], ...)` with a hardcoded empty array. The four self-knowledge tools register correctly in `InProcessToolRegistry` (Plan 10-01's unit test `registersFourSelfKnowledgeTools` PASSES — but on the wrong layer), yet the orchestrator never sources them into the Anthropic API `tools[]` field. Result: the model sees the preamble naming tools that don't exist in its API schema, so it hallucinates a JSON-looking tool definition into the chat instead of dispatching a real `tool_use` block. **Same bug almost certainly silenced ALL prior tool calls** (`get_time`, `get_clipboard`, `run_applescript`, `search_memory`, `forget_fact`, vision tools) — the catalog has been empty since whenever this line landed. Plan 10-02's preamble change is correct in isolation; the substrate that the preamble names was never wired. Fix lives in a follow-up "availableTools wiring" track, not in Plan 10-02 scope.
+- **AC-06:** **PASS** — Live verification 2026-05-07 with build artifact `f22bf2e`. Asked: "Are you a text-only assistant?". Model replied verbatim: *"No, definitely not. I'm Jarvis, running as a Swift app on your Mac. I can hear you through your microphone, speak back through your speakers, see through your camera when needed, and introspect things like your audio devices, clipboard, the current time, and even run AppleScript to interact with your system. Want me to demonstrate something?"* — explicit denial of text-only status, names mic + speakers + camera + introspection capabilities. Preamble landed correctly.
 
-> **Resume signal:** Type `approved` once both AC-05 and AC-06 have been flipped from PENDING to PASS in this section. If either fails, paste the observed wording into a comment so the executor can iterate on the preamble within D-13's locked-string constraints.
+> **Resume signal status (2026-05-07):** AC-06 PASS, AC-05 BLOCKED on substrate bug. Plan 10-02's own scope (preamble + composer + AppDelegate rewire + cache regression test) is complete and correct. AC-05 cannot pass until `availableTools` is sourced from `InProcessToolRegistry` — that is a follow-up wiring fix outside Plan 10-02's authored scope. Verify-phase will treat this plan as **partial** until the substrate fix lands and AC-05 is re-tested.
 
-## Next Plan Readiness
+### Carry-forward bugs surfaced during this verification (NOT Plan 10-02 scope)
 
-- **Plan 10-03 (DevOverlay subscriber fix)** can start immediately. The introspection tool calls now reliably fire from the model when self-knowledge questions land — Plan 10-03's job is to make those tool calls visible in the DevOverlay last-5 panel.
-- **Open question for Plan 10-03:** the AC-05 verification path falls back to `log stream` because DevOverlay's last-5-tool-calls list is still empty post-`d8983af`. Once 10-03 ships, re-running this Live Verification should show the tool call in DevOverlay directly; that's the cleaner evidence path going forward.
+- **B-01 — `availableTools: []` hardcoded** at `App/AppDelegate.swift:1274`. Blocks every tool call across the agent. Highest priority. (Discovered 2026-05-07 via AC-05 verification.)
+- **B-02 — Conversation continuity broken across turns**. After Jarvis asked "Want me to demonstrate something?" and the user replied "yes", Jarvis responded "I don't have context for what you're agreeing to". Prior assistant turn is not threading into the next request's `messages[]` array.
+- **B-03 — HUD camera button click delivers nothing.** Source `webview/packages/hud/src/chat/CameraButton.tsx` and dist bundle from this morning both contain `frameAttachRequested` emit, and the swift handler at `App/AppDelegate.swift:2045` exists, but the click never lands. Bus delivery path needs investigation.
+- **B-04 — Voice input dead.** Wake-word + STT pipeline never receives audio in production despite `b92d062` adding `requestAccess`. Mic indicator may not fire either. (Was: Plan 10-03 / DIAG-02 visibility was supposed to make this provable; the visibility itself depends on B-01 because DevOverlay shows tool calls.)
+- **B-05 — TTS silent.** Jarvis never speaks audibly. AVSpeechSynthesizer wired but not heard. (Plan 10-04 / DIAG-04 was scoped exactly to isolate this without depending on a full agent turn.)
+
+The B-01..B-05 punch list supersedes the original Plan 10-03/04/05 sequencing. Phase 10 should re-plan around these substrate bugs before proceeding with the remaining diagnostic UI plans, because diagnostic UI on a dead substrate produces empty diagnostic UI.
+
+## Next Plan Readiness — REVISED 2026-05-07
+
+The 2026-05-07 live-launch verification surfaced 5 substrate bugs (B-01..B-05 above) that were not visible to unit tests. Continuing with Plans 10-03/04/05 as originally sequenced would build diagnostic UI on top of a substrate that has no tools, no voice in, no voice out, and no working camera button — every plan would fail its human-verify checkpoint.
+
+**Recommended path forward (pending user direction):**
+
+1. **Plan 10-02b (substrate audit)** — focused fix track for B-01..B-05. Address B-01 (tool catalog wiring) FIRST because it unblocks every other tool-call-dependent verification including AC-05. B-02..B-05 require their own diagnoses.
+2. **Re-run AC-05** under Plan 10-02 once B-01 fix lands; Plan 10-02 closes as PASS retroactively.
+3. **Re-evaluate Plan 10-03/04/05 sequence** — some of those plans may now be partially redundant (DIAG-04 TTS playback exists specifically because TTS is silent; if a B-05 root-cause fix lands first, DIAG-04 is documentation rather than verification).
 
 ## Self-Check: PASSED
 
