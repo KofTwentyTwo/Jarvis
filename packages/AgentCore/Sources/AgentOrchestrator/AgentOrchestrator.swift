@@ -37,6 +37,14 @@ public actor AgentOrchestrator {
     private let sessionId: SessionID
     private let systemPrompt: String
     private let availableToolsList: [ToolSchema]
+    /// Plan 10-02b / B-01: optional lazy resolver for the tool catalog.
+    /// When non-nil, takes precedence over `availableToolsList` and is
+    /// invoked once per outer turn iteration so registration timing on
+    /// the in-process side (e.g. self-knowledge tools register AFTER
+    /// installAgent runs) doesn't strand the orchestrator with a stale
+    /// snapshot. Tests continue to pass an immutable array via
+    /// `availableTools:`; production wires the resolver.
+    private let availableToolsResolver: (@Sendable () async -> [ToolSchema])?
     /// Plan 09-02 / D-01 — image-bearing turns are dispatched through the
     /// VisionRouter BEFORE the streaming loop. Defaulted-nil so existing test
     /// sites (and the Plan 1 installAgent wiring before Plan 2 lands) compile
@@ -97,6 +105,7 @@ public actor AgentOrchestrator {
         sessionId: SessionID,
         systemPrompt: String,
         availableTools: [ToolSchema] = [],
+        availableToolsResolver: (@Sendable () async -> [ToolSchema])? = nil,
         visionRouter: VisionRouter? = nil,
         presenceSnapshot: PresenceStateSnapshot? = nil
     ) {
@@ -107,6 +116,7 @@ public actor AgentOrchestrator {
         self.sessionId = sessionId
         self.systemPrompt = systemPrompt
         self.availableToolsList = availableTools
+        self.availableToolsResolver = availableToolsResolver
         self.visionRouter = visionRouter
         self.presenceSnapshot = presenceSnapshot
         self.logger = Logger(label: JarvisLogChannel.agent.rawValue)
@@ -348,7 +358,18 @@ public actor AgentOrchestrator {
             // Compute tool_choice based on remaining budget.
             // AGENT-07: budget exhausted → toolChoice .none → cap-recovery.
             let toolChoice: ToolChoice = toolCallBudget > 0 ? .auto : .none
-            let toolsForCall: [ToolSchema] = toolCallBudget > 0 ? availableToolsList : []
+            // Plan 10-02b / B-01: prefer the lazy resolver so production
+            // can refresh the catalog as in-process tools register after
+            // installAgent runs. Tests pass an immutable array via
+            // `availableTools:` and leave `availableToolsResolver: nil`,
+            // so behavior there is unchanged.
+            let resolvedCatalog: [ToolSchema]
+            if let resolver = availableToolsResolver {
+                resolvedCatalog = await resolver()
+            } else {
+                resolvedCatalog = availableToolsList
+            }
+            let toolsForCall: [ToolSchema] = toolCallBudget > 0 ? resolvedCatalog : []
 
             // D-01: image-bearing turns use the multimodal stream overload so
             // the provider can encode the image bytes per its API
