@@ -2,6 +2,50 @@
 
 Live triage list. Higher up = higher priority. Move done items to a dated archive section if the file gets long.
 
+## ▶ TOP — Architectural pivot to API-first (2026-05-07)
+
+**Authoritative handoff:** `.planning/architecture/HANDOFF-2026-05-07.md`. Read it before any work in the next session.
+
+- [ ] **Next session:** dispatch the 6-agent design swarm per the handoff. Goal: `JARVIS-API-DESIGN.md` v1.0 + test contract + migration plan, implementation-ready by 2026-05-07T23:59 local.
+- [ ] After v1.0 lock: cross-AI peer review (GPT-5 Pro / Gemini 2.5 Pro / fresh Opus instance) — likely tomorrow.
+- [ ] After cross-AI review: begin migration per `JARVIS-API-MIGRATION-PLAN.md`. Each migration step gates on the harness staying green.
+
+**Until the API is locked, DO NOT fix individual bugs piecemeal** — they re-scope against the new contract.
+
+## Carry-forward bugs (re-scope against new API)
+
+Live evidence collected during 2026-05-07 user testing. All re-scope against the new API contract — do NOT fix piecemeal in the next session.
+
+- [ ] B-02 — Conversation continuity broken (prior turn context lost across turns)
+- [ ] B-03 — HUD camera button click does nothing
+- [ ] B-04 — Voice input dead (wake-word + STT silent)
+- [ ] B-05 — TTS silent (text replies not spoken)
+- [ ] B-06 — Chat panel doesn't auto-scroll
+- [ ] B-07 — Voice Log menu item missing (Plan 10-05 deferred)
+- [ ] B-08 — `get_self_state` correct ID but Claude paraphrases as "Opus 4.5" — minor
+
+## Substrate fixes shipped 2026-05-07
+
+- [x] B-01a (Plan 10-02b): tool catalog enumeration — `availableTools:` no longer hardcoded `[]` (`e0c0310`)
+- [x] B-01b (Plan 10-02c): dispatch routing — `InProcessAwareToolDispatcher` composite routes in-process tools (`1b7fb81`)
+- [x] Live-verified at HEAD `1b7fb81`: real device names + real `tool_use`/`tool_result` round-trips for `get_active_audio_route` / `get_time` / `get_self_state`
+
+## Phase 10 status at handoff
+
+- [x] 10-01: 4 self-knowledge MCP tools — AC-01..04 PASS
+- [~] 10-02: system prompt preamble — AC-06 PASS; AC-05 retroactively PASS via 10-02b/c live verification (SUMMARY flip pending)
+- [x] 10-02b: B-01a substrate fix
+- [~] 10-02c: B-01b substrate fix shipped; SUMMARY missing
+- [ ] 10-03 / 10-04 / 10-05: DEFERRED — re-scope against new API after design lock
+
+## Loose ends (housekeeping; not blockers for swarm)
+
+- [ ] Flip Plan 10-02 AC-05 from FAIL → PASS in `10-02-SUMMARY.md` (live evidence: HEAD `1b7fb81`)
+- [ ] Author `10-02c-SUMMARY.md` (only PLAN exists)
+- [ ] `stash@{0}` triage — Voice Log / camera / DevOverlay scaffolding from 2026-05-06; defer until Plan 10-05 re-scoped
+
+---
+
 ## Demo path (one working modality)
 
 - [x] Track A: text turn + animated rings (`1f8e03e`)

@@ -1,8 +1,56 @@
 # Session State
 
-**Last Updated:** 2026-05-04 (evening — documentation sweep close)
+**Last Updated:** 2026-05-07 (evening — architectural pivot to API-first; design swarm queued)
 
-## Current Status
+## ▶ Next Session: Design Swarm — read FIRST
+
+The next session's primary task is to dispatch a 6-agent swarm that produces a frontend-agnostic backend API design + test contract + migration plan, implementation-ready by midnight 2026-05-07. **Authoritative handoff:** `.planning/architecture/HANDOFF-2026-05-07.md`. Read that document before doing anything else; this file and `docs/TODO.md` are supplements.
+
+## Current Status (2026-05-07 end-of-session)
+
+`develop` at `1b7fb81`, push pending. Tree clean (only ignorable untracked: `.claude/scheduled_tasks.lock`, `build-devoupload/`).
+
+**This session's work — substrate fixes for the agent's tool-call pipeline:**
+
+- `260350b`..`9a59648` — Plan 10-02b: tool catalog enumeration (B-01a) — orchestrator now sources `availableTools:` from the runtime catalog instead of hardcoded `[]`. Closes the regression that landed silently in commit `fdb56d2` (Phase 9 Plan 09-01) and silenced ALL tool calls for ~3 days.
+- `a75ae0a` — Plan 10-02 SUMMARY recording AC-06 PASS / AC-05 FAIL after the live test surfaced B-01.
+- `3cf0d39`..`1b7fb81` — Plan 10-02c: dispatch routing (B-01b) — `InProcessAwareToolDispatcher` composite routes in-process tool calls (memory + four self-knowledge) through `InProcessToolRegistry.dispatch`; preserves confirmation gating. Live-verified: "what mic are you using?" now returns "Sennheiser SDW 5 BS headset (USB) at 48 kHz, with AEC on" with real `tool_use`/`tool_result` round-trip.
+
+**Phase 10 status at session-end:**
+
+- 10-01 (4 self-knowledge tools) — shipped, AC-01..04 PASS
+- 10-02 (system prompt preamble) — AC-06 PASS; AC-05 retroactively PASS via 10-02b/c live verification (SUMMARY's FAIL marker not yet flipped — deferred per handoff)
+- 10-02b — shipped, B-01a closed
+- 10-02c — shipped, B-01b closed; **SUMMARY missing** (only PLAN written; deferred to post-design housekeeping)
+- 10-03 / 10-04 / 10-05 — DEFERRED. They build diagnostic UI on top of subsystems still dead. Re-scope against new API after design lock.
+
+**Why the pivot to API-first design:** two days of "fix → test green → relaunch → still broken" produced 7 carry-forward bugs (B-02..B-08 — see TODO.md and the handoff). The verification gate has been "executor self-reports green tests + boundary gates," which cannot detect substrate failures. The architectural pivot dissolves this entire bug class by forcing every behavior through a tested API contract. **Stopping individual bug fixes** until the API design is locked.
+
+## Carry-forward bugs (DO NOT fix piecemeal)
+
+Live evidence collected during today's verification. All re-scope against the new API.
+
+| ID | Symptom |
+|----|---------|
+| B-02 | Conversation continuity broken — prior turn context lost |
+| B-03 | HUD camera button click does nothing |
+| B-04 | Voice input dead — wake-word + STT silent |
+| B-05 | TTS silent — text replies not spoken |
+| B-06 | Chat panel doesn't auto-scroll as text streams |
+| B-07 | Voice Log menu item missing (Plan 10-05 unrun) |
+| B-08 | `get_self_state` returns correct ID but Claude paraphrases as "Opus 4.5" |
+
+## Pre-existing carry-forwards (unchanged today)
+
+- D-5 / D-6 — `libsqlite3.dylib` + `vec0.dylib` build-and-bundle (user environment work)
+- D-7 — `ollama pull nomic-embed-text` + `qwen2.5-coder:32b`
+- HUMAN-UAT — VOICE-07/09/10/12/13/14 on Release Developer ID archive
+- B-7-followup — AudioLevelEmitter production wiring
+- TTSInterruptTests.testI3 pre-existing 10s flake
+
+---
+
+## Earlier session — 2026-05-04 (preserved below for context)
 
 `develop` at `0234eaa`, push pending. Tree clean. Track A + Track B-1..7 + Cleanup batch + Track C (vision) + Track D code-work (D-1..D-4 + D-5/D-6 skeletons) + audit-2026-05-04 P0/P1/P2/P3-18 fixes + documentation sweep closed. D-5/D-6 binaries + D-7 model pulls remain on the user (environment work the executor cannot do autonomously).
 
