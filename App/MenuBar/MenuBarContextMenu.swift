@@ -8,7 +8,8 @@ public enum MenuBarContextMenu {
         setupAction: @escaping () -> Void,
         settingsAction: @escaping () -> Void,
         devOverlayToggleAction: @escaping () -> Void,
-        stateDumpAction: @escaping () -> Void
+        stateDumpAction: @escaping () -> Void,
+        statusAction: @escaping () -> Void
     ) -> NSMenu {
         let menu = NSMenu()
 
@@ -22,6 +23,9 @@ public enum MenuBarContextMenu {
 
         menu.addItem(NSMenuItem.separator())
 
+        // Round 3 — operator-facing live subsystem health. Opens an
+        // AppKit panel that re-probes on every appearance.
+        menu.addItem(makeItem(title: "Status…", action: statusAction))
         menu.addItem(makeItem(title: "Show Dev Overlay", action: devOverlayToggleAction))
         menu.addItem(makeItem(title: "Copy State Dump", action: stateDumpAction))
 

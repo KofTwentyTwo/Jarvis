@@ -183,6 +183,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// are user-driven from the Status menu.
     private var bootHealthTask: Task<Void, Never>?
 
+    /// Round 3 — lazy `StatusPanel`. Constructed on first menu click;
+    /// kept alive across closes via `isReleasedWhenClosed = false`.
+    private var statusPanel: StatusPanel?
+
     /// Drain task spawned in `applicationWillFinishLaunching` — reads
     /// envelopes from `orchToReplayChannel` and forwards to `replayLog`.
     /// CR-02: production consumer for ME-04. Previously this task
@@ -746,6 +750,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let snapshot = await bootHealthOrchestrator.runAll()
         emitBootHealthLog(snapshot: snapshot)
         enqueueFailedBootHealthBanners(snapshot: snapshot)
+    }
+
+    /// Round 3 — opens the Status panel (lazy-creates on first click).
+    /// The panel's `.task { await model.reprobe() }` SwiftUI modifier
+    /// fires a fresh probe sweep on every appearance, so the user always
+    /// sees live state — never a stale boot snapshot.
+    @MainActor
+    func openStatusPanel() {
+        if statusPanel == nil {
+            let model = StatusPanelModel(
+                orchestrator: bootHealthOrchestrator,
+                probeRunner: { [weak self] in
+                    await self?.runBootHealth()
+                }
+            )
+            statusPanel = StatusPanel(model: model)
+        }
+        statusPanel?.present()
     }
 
     /// Constructs one probe per subsystem and registers it on the
@@ -2298,7 +2320,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             setupAction: { [weak self] in self?.openWizard(firstLaunch: false) },
             settingsAction: { [weak self] in self?.openSettings() },
             devOverlayToggleAction: { [weak self] in self?.toggleDevOverlay() },
-            stateDumpAction: { [weak self] in self?.copyStateDump() }
+            stateDumpAction: { [weak self] in self?.copyStateDump() },
+            statusAction: { [weak self] in self?.openStatusPanel() }
         )
         let controller = MenuBarIconController(statusItem: item, contextMenu: menu)
         controller.setLeftClickAction { [weak self] in self?.toggleHUD() }

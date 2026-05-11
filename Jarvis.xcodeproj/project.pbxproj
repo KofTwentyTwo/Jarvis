@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		01787A3F29649644D0B3090D /* MCPAppleScriptMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5077B9E3E7541D72CE0EB1B /* MCPAppleScriptMain.swift */; };
 		B0010002000000000000B002 /* BootHealthProbes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0010001000000000000B001 /* BootHealthProbes.swift */; };
+		B0020002000000000000B002 /* StatusPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0020001000000000000B001 /* StatusPanel.swift */; };
 		0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF0892A5DFF2AD38A93834 /* BannerContent.swift */; };
 		07E7F32B3857ED215DE59FBE /* Keychain in Frameworks */ = {isa = PBXBuildFile; productRef = 1440CCDB2CC412B099BD0310 /* Keychain */; };
 		0B1E24FF2DB306F28A36680E /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 8B5C832427B631F1F6EED6C2 /* Logging */; };
@@ -146,6 +147,7 @@
 /* Begin PBXFileReference section */
 		00C01D284ECCFC986C7F2E16 /* Keychain */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Keychain; path = packages/Keychain; sourceTree = SOURCE_ROOT; };
 		B0010001000000000000B001 /* BootHealthProbes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootHealthProbes.swift; sourceTree = "<group>"; };
+		B0020001000000000000B001 /* StatusPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanel.swift; sourceTree = "<group>"; };
 		024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStateTests.swift; sourceTree = "<group>"; };
 		0358E0CAC1377752398FA3C4 /* ReplayingToolResultObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplayingToolResultObserver.swift; sourceTree = "<group>"; };
 		096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBanner.swift; sourceTree = "<group>"; };
@@ -370,6 +372,7 @@
 				604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */,
 				B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */,
 				4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */,
+				B0020001000000000000B001 /* StatusPanel.swift */,
 			);
 			path = MenuBar;
 			sourceTree = "<group>";
@@ -1344,6 +1347,7 @@
 				8EF7109838AD91E95506BD1B /* MCPRuntimeWiring.swift in Sources */,
 				A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */,
 				9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */,
+				B0020002000000000000B002 /* StatusPanel.swift in Sources */,
 				7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */,
 				EF9A869A3403AF044999784F /* ProductionChunkPump.swift in Sources */,
 				63C78894699F60D1DE3A6715 /* RejectReasonCopy.swift in Sources */,
