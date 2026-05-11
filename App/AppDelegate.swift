@@ -761,6 +761,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let orchestrator = self.agentOrchestrator {
             await orchestrator.setDegradationSummary(summary)
         }
+        // Round 4 — paint the menu-bar icon red when overall health is
+        // loud or critical so the user sees the warning even with the
+        // HUD closed. Single-writer-safe: contentTintColor lives on the
+        // NSStatusItemButton, not in HudState, so HUD-08 stays intact.
+        menuBarController?.applyHealth(snapshot.overallHealth)
     }
 
     /// Round 4 — build the agent-facing "DO NOT promise" preamble from a

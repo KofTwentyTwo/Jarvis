@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+import AgentCore
 @testable import Jarvis
 
 @MainActor
@@ -60,6 +61,34 @@ final class MenuBarIconControllerTests: XCTestCase {
         let settings = menu.items.first { $0.title == "Settings…" }
         XCTAssertNotNil(settings)
         XCTAssertFalse(settings!.isEnabled)
+    }
+
+    // MARK: - Round 4 — boot-health tint
+
+    /// Round 4: `.loud` and `.critical` paint the menu-bar button red;
+    /// `.ok` and `.soft` clear the tint.
+    func test_applyHealthTintsRedForLoudAndCritical() {
+        let statusBar = NSStatusBar.system
+        let item = statusBar.statusItem(withLength: NSStatusItem.variableLength)
+        defer { statusBar.removeStatusItem(item) }
+        let menu = MenuBarContextMenu.build(setupAction: {}, devOverlayToggleAction: {}, stateDumpAction: {})
+        let controller = MenuBarIconController(statusItem: item, contextMenu: menu)
+
+        controller.applyHealth(.critical)
+        XCTAssertEqual(controller.currentHealth, .critical)
+        XCTAssertEqual(item.button?.contentTintColor, NSColor.systemRed)
+
+        controller.applyHealth(.loud)
+        XCTAssertEqual(controller.currentHealth, .loud)
+        XCTAssertEqual(item.button?.contentTintColor, NSColor.systemRed)
+
+        controller.applyHealth(.soft)
+        XCTAssertEqual(controller.currentHealth, .soft)
+        XCTAssertNil(item.button?.contentTintColor)
+
+        controller.applyHealth(.ok)
+        XCTAssertEqual(controller.currentHealth, .ok)
+        XCTAssertNil(item.button?.contentTintColor)
     }
 
     func test_hudStateVoiceOverLabels() {

@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import AgentCore
 
 /// Owns the `NSStatusItem` and drives Core Animation on its button layer for the
 /// five `HudState` transitions. Follows RESEARCH.md §Question 7 lines 753-869.
@@ -34,6 +35,31 @@ public final class MenuBarIconController {
 
     /// Current state, exposed read-only for tests.
     public var state: HudState { currentState }
+
+    /// Round 4 — current overall boot-health, exposed read-only for tests.
+    /// `nil` until `applyHealth(_:)` is first called.
+    public private(set) var currentHealth: OverallHealth?
+
+    /// Round 4 — apply a boot-health tint to the menu-bar icon. `.loud` and
+    /// `.critical` paint a red `contentTintColor` so the icon visibly
+    /// communicates that something is wrong even when no HUD is open.
+    /// `.ok` and `.soft` clear the tint (system label color resumes).
+    ///
+    /// Why `contentTintColor` and not a separate image: template images
+    /// already swap colors with `contentTintColor` (Apple's documented
+    /// behavior), so we get the red without bundling a second asset.
+    /// Critical: we don't write to HudState — the single-writer invariant
+    /// for HudState (HUD-08) stays intact.
+    public func applyHealth(_ health: OverallHealth) {
+        currentHealth = health
+        guard let button = statusItem.button else { return }
+        switch health {
+        case .loud, .critical:
+            button.contentTintColor = NSColor.systemRed
+        case .ok, .soft:
+            button.contentTintColor = nil
+        }
+    }
 
     /// Transition to a new HUD state. Same-state transitions are no-ops.
     public func transition(to newState: HudState) {
