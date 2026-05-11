@@ -74,6 +74,44 @@ final class HUDBannerCoordinatorTests: XCTestCase {
         wait(for: [exp], timeout: 2.0)
     }
 
+    // MARK: - Round 4 — non-dismissible critical banners
+
+    /// Round 4: non-dismissible banners must ignore `dismissCurrent()`.
+    /// The whole point is that the user cannot silently restore the
+    /// lying-Jarvis failure mode the round was created to fix.
+    func test_nonDismissibleBannerIgnoresDismiss() {
+        let panel = HUDBannerPanel()
+        let coordinator = HUDBannerCoordinator(panel: panel)
+        coordinator.enqueue(.bootHealthCritical(subsystem: "memory", reason: "vec0 missing"))
+        XCTAssertEqual(
+            coordinator.currentBanner?.id,
+            "boot-health-critical-memory",
+            "critical banner should render immediately"
+        )
+        coordinator.dismissCurrent()
+        XCTAssertEqual(
+            coordinator.currentBanner?.id,
+            "boot-health-critical-memory",
+            "dismissCurrent must no-op for non-dismissible banners"
+        )
+    }
+
+    /// Round 4: a critical (priority-1, non-dismissible) banner must
+    /// pre-empt a lower-priority current banner just like keychainEmpty
+    /// would — the non-dismissible flag does not break the priority
+    /// pre-emption invariant.
+    func test_criticalBannerPreemptsLowerPriorityCurrent() {
+        let panel = HUDBannerPanel()
+        let coordinator = HUDBannerCoordinator(panel: panel)
+        coordinator.enqueue(.hotkeyBindFailed) // priority 3
+        coordinator.enqueue(.bootHealthCritical(subsystem: "memory", reason: "vec0 missing"))
+        XCTAssertEqual(
+            coordinator.currentBanner?.id,
+            "boot-health-critical-memory",
+            "priority-1 critical banner should pre-empt priority-3 current"
+        )
+    }
+
     /// WR-05: a higher-priority banner enqueued during the 300ms drain
     /// window must not be clobbered by the queued lower-priority banner
     /// after the drain timer fires.

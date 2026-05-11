@@ -10,6 +10,11 @@ public struct BannerContent: Sendable, Equatable, Identifiable {
     public let title: String
     public let body: String
     public let action: Action?
+    /// Round 4 — when true, the dismiss X is hidden and `dismissCurrent()`
+    /// is a no-op. Reserved for critical subsystem failures where letting
+    /// the user dismiss the warning would silently restore the lying-Jarvis
+    /// failure mode the round was created to fix.
+    public let nonDismissible: Bool
 
     public struct Action: Sendable, Equatable {
         public let label: String
@@ -20,12 +25,20 @@ public struct BannerContent: Sendable, Equatable, Identifiable {
         }
     }
 
-    public init(id: String, priority: Int, title: String, body: String, action: Action?) {
+    public init(
+        id: String,
+        priority: Int,
+        title: String,
+        body: String,
+        action: Action?,
+        nonDismissible: Bool = false
+    ) {
         self.id = id
         self.priority = priority
         self.title = title
         self.body = body
         self.action = action
+        self.nonDismissible = nonDismissible
     }
 }
 
@@ -98,12 +111,44 @@ public extension BannerContent {
     /// than the keychain/hotkey banners (those block specific features
     /// the user already asked for); higher priority than ollama-rejected
     /// so a probe-failure shadows an environment-config issue.
+    ///
+    /// Round 4 — kept for backwards compat / non-critical fallbacks. The
+    /// `bootHealthCritical` and `bootHealthLoud` presets below cover the
+    /// new severity-driven routing.
     static func bootHealthFailed(subsystem: String, reason: String) -> BannerContent {
         BannerContent(
             id: "boot-health-failed-\(subsystem)",
             priority: 3,
             title: "Subsystem failed boot probe",
             body: "\(subsystem.capitalized): \(reason). Open Status… in the menu bar for details.",
+            action: nil
+        )
+    }
+
+    /// Round 4 — critical subsystem failure (memory off, no API key, no
+    /// MCP tools, webview never armed). Pre-empts every other banner
+    /// (priority 1) and is non-dismissible: the user cannot click it
+    /// away. The agent's system-prompt preamble (Slice 3) names the same
+    /// subsystem so the model can't lie about the affected capability.
+    static func bootHealthCritical(subsystem: String, reason: String) -> BannerContent {
+        BannerContent(
+            id: "boot-health-critical-\(subsystem)",
+            priority: 1,
+            title: "\(subsystem.capitalized): critical failure",
+            body: "\(reason). Open Status… in the menu bar for details. Until this is fixed, Jarvis will warn the model not to rely on \(subsystem).",
+            action: nil,
+            nonDismissible: true
+        )
+    }
+
+    /// Round 4 — loud (but not blocking) subsystem failure. Dismissible.
+    /// Lower priority than critical so a critical banner overshadows it.
+    static func bootHealthLoud(subsystem: String, reason: String) -> BannerContent {
+        BannerContent(
+            id: "boot-health-loud-\(subsystem)",
+            priority: 3,
+            title: "\(subsystem.capitalized): degraded",
+            body: "\(reason). Open Status… in the menu bar for details.",
             action: nil
         )
     }

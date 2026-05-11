@@ -862,15 +862,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// One banner per `.failed` subsystem. `BannerContent.bootHealthFailed`
-    /// dedups internally by id so re-probing doesn't spam — the same
-    /// subsystem id won't enqueue twice in a launch.
+    /// Round 4 — one banner per non-ok subsystem, routed by severity:
+    ///   * `.critical` → non-dismissible red banner at priority 1, plus
+    ///     a [system] CRITICAL log line so the system channel reflects it.
+    ///   * `.loud`     → dismissible banner at priority 3.
+    ///   * `.soft`     → no banner (Status panel only).
+    ///
+    /// Banner ids are severity-scoped, so re-probing the same subsystem
+    /// doesn't spam — same `boot-health-critical-memory` id dedupes
+    /// inside the coordinator.
     @MainActor
     private func enqueueFailedBootHealthBanners(snapshot: BootHealthSnapshot) {
-        for health in snapshot.failed {
-            let reason: String
-            if case .failed(let r, _) = health.status { reason = r } else { reason = "unknown" }
-            bannerCoordinator?.enqueue(.bootHealthFailed(subsystem: health.name, reason: reason))
+        for health in snapshot.subsystems {
+            guard let severity = health.status.severity else { continue }
+            let reason = reasonForBanner(health.status)
+            switch severity {
+            case .critical:
+                systemLogger?.error("BootHealth: [system] CRITICAL subsystem=\(health.name) reason=\(reason)")
+                bannerCoordinator?.enqueue(.bootHealthCritical(subsystem: health.name, reason: reason))
+            case .loud:
+                bannerCoordinator?.enqueue(.bootHealthLoud(subsystem: health.name, reason: reason))
+            case .soft:
+                continue
+            }
+        }
+    }
+
+    /// Round 4 — extracts the reason string from a non-ok status for use
+    /// in banner copy. Falls back to "unknown" for `.ok` (defensive — the
+    /// caller already filters those out via `severity.map`).
+    @MainActor
+    private func reasonForBanner(_ status: ProbeStatus) -> String {
+        switch status {
+        case .ok: return "unknown"
+        case .degraded(let r, _), .failed(let r, _), .unknown(let r, _):
+            return r
         }
     }
 

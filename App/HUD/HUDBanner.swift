@@ -33,14 +33,20 @@ struct HUDBanner: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     Spacer(minLength: 8)
-                    Button(action: onDismiss) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .semibold))
-                            .frame(width: 24, height: 24)
+                    // Round 4 — hide the dismiss X for non-dismissible
+                    // banners (critical subsystem failures). The coordinator
+                    // also no-ops `dismissCurrent` for these, but hiding
+                    // the affordance prevents user confusion.
+                    if !content.nonDismissible {
+                        Button(action: onDismiss) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11, weight: .semibold))
+                                .frame(width: 24, height: 24)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        .accessibilityLabel("Dismiss notification")
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(Color(NSColor.secondaryLabelColor))
-                    .accessibilityLabel("Dismiss notification")
                 }
                 if let action = content.action {
                     Button(action.label, action: onAction)

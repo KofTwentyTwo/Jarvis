@@ -59,7 +59,14 @@ public final class HUDBannerCoordinator {
 
     /// Dismiss the current banner (remembered dismissed-this-launch) and drain
     /// the next queued banner after a 300ms gap per UI-SPEC line 496.
+    ///
+    /// Round 4 — non-dismissible banners (critical subsystem failures) cannot
+    /// be dismissed by the user. The coordinator no-ops here so the banner
+    /// stays on screen until programmatically cleared (e.g., `clear()` at
+    /// app quit, or a re-probe that found the subsystem healthy and
+    /// enqueued a different banner that pre-empted it).
     public func dismissCurrent() {
+        if let c = current, c.nonDismissible { return }
         if let c = current { dismissedThisLaunch.insert(c.id) }
         current = nil
         panel.orderOut(nil)
