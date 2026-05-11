@@ -207,7 +207,7 @@ final class MemoryExtractorTests: XCTestCase {
         }
     }
 
-    func testExtractorUsesQwen25Coder32B() async throws {
+    func testExtractorUsesQwen36() async throws {
         let mock = MockLLMProvider()
         mock.scriptedEvents = [.messageStop]
 
@@ -215,7 +215,7 @@ final class MemoryExtractorTests: XCTestCase {
         _ = try await extractor.extract(
             userText: "u", assistantText: "a", priorActiveFacts: []
         )
-        XCTAssertEqual(mock.capturedModel, ModelID.qwen25coder32b)
+        XCTAssertEqual(mock.capturedModel, ModelID.qwen36)
     }
 
     func testExtractorCallsToolChoiceAuto() async throws {
