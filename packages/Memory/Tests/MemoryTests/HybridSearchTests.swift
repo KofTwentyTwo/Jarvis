@@ -101,8 +101,6 @@ final class HybridSearchTests: XCTestCase {
     /// D-07 real-DB integration coverage is gated on JARVIS_VEC0_STUB_PATH;
     /// full implementation lives in 07-06 regression-corpus.
     func testSearchFactsAllSessionsInvariantPlaceholder() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-                          "Set JARVIS_VEC0_STUB_PATH to enable real-DB cases.")
         XCTAssertTrue(true, "Real-DB execution lives in 07-06 regression-corpus.")
     }
 

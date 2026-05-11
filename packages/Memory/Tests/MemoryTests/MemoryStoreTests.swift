@@ -1,39 +1,19 @@
 import XCTest
 @testable import Memory
 
+/// **D-5/D-6 closure (2026-05-11):** vec0 is now statically linked into
+/// CSQLiteVec (jkrukowski/SQLiteVec). `MemoryStore.init` always has vec0
+/// available — there's no "missing dylib" path to test. The prior
+/// `testInitThrowsWhenVecDylibMissing` case was removed; its dormant-
+/// memory rationale no longer applies because AppDelegate.installMemory
+/// hard-fails at boot (no graceful degradation).
 final class MemoryStoreTests: XCTestCase {
 
-    /// Without vec0.dylib in Bundle.module (the 07-01 placeholder bundle
-    /// state), MemoryStore.init throws .vecLoadFailed. AppDelegate
-    /// installMemory() (Plan 07-06) catches this and degrades gracefully.
-    func testInitThrowsWhenVecDylibMissing() throws {
-        // Defensive: clear the env-var stub so the lookup hits the missing path.
-        let priorStub = ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"]
-        if priorStub != nil {
-            unsetenv("JARVIS_VEC0_STUB_PATH")
-        }
-        defer {
-            if let priorStub {
-                setenv("JARVIS_VEC0_STUB_PATH", priorStub, 1)
-            }
-        }
-
-        let tmp = try Self.tempDB()
-        XCTAssertThrowsError(try MemoryStore(databaseURL: tmp)) { err in
-            guard case MemoryError.vecLoadFailed = err else {
-                return XCTFail("Expected MemoryError.vecLoadFailed, got \(err)")
-            }
-        }
-    }
-
-    /// When JARVIS_VEC0_STUB_PATH is set to a real vec0.dylib (e.g., a
-    /// developer-installed system copy of sqlite-vec for tests), init
-    /// succeeds and the schema tables exist.
-    ///
-    /// Skipped unless the env var is set — this is an env-gated probe (S-8).
-    func testInitWithStubVecDylib() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-                          "Set JARVIS_VEC0_STUB_PATH to a vec0.dylib to exercise the real load path.")
+    /// MemoryStore.init succeeds: schema tables exist, WAL is active, and
+    /// the `facts_vec` virtual table (vec0-backed) was created during
+    /// migration — proving auto-extension registration via
+    /// `CSQLiteVec.core_vec_init()` fired before `sqlite3_open`.
+    func testInitCreatesSchemaWithVec0Available() async throws {
         let tmp = try Self.tempDB()
         let store = try MemoryStore(databaseURL: tmp)
 
@@ -47,11 +27,16 @@ final class MemoryStoreTests: XCTestCase {
         let mode = try await store.querySingleString("PRAGMA journal_mode")
         XCTAssertEqual(mode?.lowercased(), "wal")
 
-        // facts_vec exists.
+        // facts_vec virtual table exists — the load-bearing vec0 proof.
         let vecCount = try await store.queryRowCount(
             "SELECT name FROM sqlite_master WHERE name='facts_vec'"
         )
         XCTAssertEqual(vecCount, 1)
+
+        // vec_version() reads back — auto-extension registration succeeded.
+        let v = try await store.querySingleString("SELECT vec_version()")
+        XCTAssertNotNil(v)
+        XCTAssertTrue(v?.hasPrefix("v") == true, "vec_version must be tagged like 'v0.1.x'")
     }
 
     private static func tempDB() throws -> URL {

@@ -4,15 +4,13 @@
 //
 // Phase 7 / Plan 07-01 — local memory subsystem (SQLite + FTS5 + sqlite-vec).
 //
-// Memory has NO external SPM dependencies. sqlite-vec v0.1.10-alpha.3 is
-// loaded as a runtime dylib via direct sqlite3_load_extension C API; it is
-// NOT a Swift package. System libsqlite3 is pulled in via "import SQLite3"
-// from Foundation — see packages/Replay/Sources/Replay/SQLiteConnection.swift
-// line 2 for the same idiom.
-//
-// SQLiteConnection is reused from Replay (its docstring lines 12-22 explicitly
-// says it was authored with Phase 7 in mind). Plan 07-01 adds a withHandle(_:)
-// accessor to SQLiteConnection so Memory can call sqlite3_load_extension.
+// D-5/D-6 closure (2026-05-11): SQLite and sqlite-vec are now statically
+// linked together via the `CSQLiteVec` target of jkrukowski/SQLiteVec.
+// SQLiteConnection (in Replay) re-exports CSQLiteVec; Memory consumes it
+// transitively but also names the product directly so the import in
+// MemoryStore.swift resolves by name. The old runtime extension-loading
+// pathway (sqlite3_load_extension via dlsym) is retired — it never worked
+// on macOS because Apple strips that symbol from the system libsqlite3.
 import PackageDescription
 
 let package = Package(
@@ -29,6 +27,11 @@ let package = Package(
         .package(path: "../AgentCore"),
         .package(path: "../Replay"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
+        // D-5/D-6: Memory directly imports CSQLiteVec for the
+        // process-global `core_vec_init()` auto-extension registration.
+        // Replay already pulls SQLiteVec for SQLiteConnection; declaring
+        // here gives Memory a named product to import. Same version pin.
+        .package(url: "https://github.com/jkrukowski/SQLiteVec.git", from: "0.0.14"),
     ],
     targets: [
         .target(
@@ -39,11 +42,9 @@ let package = Package(
                 .product(name: "AgentOrchestrator", package: "AgentCore"),
                 .product(name: "Replay", package: "Replay"),
                 .product(name: "Logging", package: "swift-log"),
+                .product(name: "CSQLiteVec", package: "SQLiteVec"),
             ],
             path: "Sources/Memory",
-            resources: [
-                .copy("Resources/PLACEHOLDER.txt"),
-            ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

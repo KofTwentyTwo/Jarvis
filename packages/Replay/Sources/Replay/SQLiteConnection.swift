@@ -1,5 +1,13 @@
 import Foundation
-import SQLite3
+// D-5/D-6 closure (2026-05-11): switched from `import SQLite3` (which
+// resolves to Apple's stripped /usr/lib/libsqlite3.dylib via the SDK's
+// SQLite3.tbd — no `sqlite3_load_extension` symbol) to `import CSQLiteVec`
+// from jkrukowski/SQLiteVec. CSQLiteVec compiles sqlite3.c + sqlite-vec.c
+// into one static C target with `core_vec_init()` registering vec0 as an
+// auto-extension. All sqlite3_* call sites below are unchanged in source —
+// the linker now resolves them to our bundled sqlite3 with vec0 built in.
+// See Replay/Package.swift comment for the dependency rationale.
+@_exported import CSQLiteVec
 
 // SQLite's static destructor sentinels are not exported as Swift constants.
 // We need SQLITE_TRANSIENT so SQLite copies the bound buffer (text/blob) —

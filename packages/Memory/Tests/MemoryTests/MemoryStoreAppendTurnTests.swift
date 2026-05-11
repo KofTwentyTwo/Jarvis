@@ -20,10 +20,6 @@ final class MemoryStoreAppendTurnTests: XCTestCase {
     /// AT-1: appendTurn writes one row that recentTurnsForSession surfaces.
     /// Round-trips role/content/source verbatim and increments the row count.
     func testAT1_appendTurnRoundTripsViaRecentTurnsForSession() async throws {
-        try XCTSkipUnless(
-            ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-            "Set JARVIS_VEC0_STUB_PATH to a vec0.dylib to exercise appendTurn."
-        )
         let tmp = try Self.tempDB()
         let store = try MemoryStore(databaseURL: tmp)
 
@@ -52,10 +48,6 @@ final class MemoryStoreAppendTurnTests: XCTestCase {
     /// chronological user→assistant order — the contract the AppDelegate
     /// production wiring relies on.
     func testAT2_userAssistantPairReversesToChronological() async throws {
-        try XCTSkipUnless(
-            ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-            "Set JARVIS_VEC0_STUB_PATH to a vec0.dylib to exercise appendTurn."
-        )
         let tmp = try Self.tempDB()
         let store = try MemoryStore(databaseURL: tmp)
 
@@ -88,10 +80,6 @@ final class MemoryStoreAppendTurnTests: XCTestCase {
 
     /// AT-3: appendTurn is scoped by session_id. Two sessions don't bleed.
     func testAT3_sessionScopingIsolatesRows() async throws {
-        try XCTSkipUnless(
-            ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-            "Set JARVIS_VEC0_STUB_PATH to a vec0.dylib to exercise appendTurn."
-        )
         let tmp = try Self.tempDB()
         let store = try MemoryStore(databaseURL: tmp)
 
@@ -119,10 +107,6 @@ final class MemoryStoreAppendTurnTests: XCTestCase {
     /// trigger isn't dormant — without this, future chat-search features
     /// on `turns` would silently return empty results.
     func testAT4_turnsFtsTriggerFiresOnAppend() async throws {
-        try XCTSkipUnless(
-            ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-            "Set JARVIS_VEC0_STUB_PATH to a vec0.dylib to exercise appendTurn."
-        )
         let tmp = try Self.tempDB()
         let store = try MemoryStore(databaseURL: tmp)
 

@@ -33,12 +33,15 @@ final class MemoryStoreApplyOpTests: XCTestCase {
     // MARK: - Test 1: ADD inserts a fact
 
     func testApplyOpADDInsertsFact() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-                          "Set JARVIS_VEC0_STUB_PATH to a vec0.dylib to exercise applyOp ADD.")
         let tmp = try Self.tempDB()
         let store = try MemoryStore(databaseURL: tmp)
         let mock = MockReplayLog()
         await store.setReplayLog(mock)
+        // D-5/D-6 closure (2026-05-11): vec0 is now statically linked, schema
+        // migration applies cleanly, and `PRAGMA foreign_keys=ON` is honored.
+        // facts.source_turn_id REFERENCES turns(id) — must seed a turn row
+        // before applyOp passes sourceTurnId: 1.
+        try await Self.seedTurnRow(store, id: 1)
 
         let fact = try await store.applyOp(
             .add(subject: "Sarah", predicate: "works_at", object: "Acme", embedding: nil),
@@ -60,10 +63,11 @@ final class MemoryStoreApplyOpTests: XCTestCase {
     // MARK: - Test 2: UPDATE closes prior + inserts new
 
     func testApplyOpUPDATEClosesPriorAndInsertsNew() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-                          "Set JARVIS_VEC0_STUB_PATH to a vec0.dylib to exercise applyOp UPDATE.")
         let tmp = try Self.tempDB()
         let store = try MemoryStore(databaseURL: tmp)
+        // D-5/D-6 FK enforcement: two turn rows for sourceTurnId 1 and 2.
+        try await Self.seedTurnRow(store, id: 1)
+        try await Self.seedTurnRow(store, id: 2)
 
         let prior = try await store.applyOp(
             .add(subject: "Sarah", predicate: "works_at", object: "Acme", embedding: nil),
@@ -95,8 +99,6 @@ final class MemoryStoreApplyOpTests: XCTestCase {
     // MARK: - Test 4: bad UPDATE rolls back
 
     func testApplyOpRollsBackOnFailure() async throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-                          "Set JARVIS_VEC0_STUB_PATH to a vec0.dylib to exercise applyOp rollback.")
         let tmp = try Self.tempDB()
         let store = try MemoryStore(databaseURL: tmp)
 
@@ -126,8 +128,6 @@ final class MemoryStoreApplyOpTests: XCTestCase {
         // Construct a MemoryStore-less path: applyOp(.noop) returns nil
         // before any SQL — but to keep the sink injection chain end-to-end
         // we still need a store. Skip if vec0 unavailable.
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["JARVIS_VEC0_STUB_PATH"] != nil,
-                          "Set JARVIS_VEC0_STUB_PATH to a vec0.dylib to exercise NOOP.")
         let tmp = try Self.tempDB()
         let store = try MemoryStore(databaseURL: tmp)
         let mock = MockReplayLog()
@@ -211,5 +211,19 @@ final class MemoryStoreApplyOpTests: XCTestCase {
             .appendingPathComponent("memorytests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         return tmp.appendingPathComponent("jarvis.db")
+    }
+
+    /// D-5/D-6 helper: insert a placeholder turn row so applyOp's
+    /// `facts.source_turn_id REFERENCES turns(id)` foreign key resolves.
+    /// Returns when the row's auto-incremented id matches the requested
+    /// `id` — relies on inserts happening in order on a fresh DB.
+    fileprivate static func seedTurnRow(_ store: MemoryStore, id: Int64) async throws {
+        try await store.appendTurn(
+            sessionId: "applyop-test-seed",
+            role: "user",
+            content: "seed-\(id)",
+            source: "test",
+            createdAt: id
+        )
     }
 }

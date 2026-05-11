@@ -1,2 +1,0 @@
-# Reserved for vec0.dylib (sqlite-vec v0.1.10-alpha.3) — landed in a future ops/build plan.
-# Plan 07-01 only builds the open-and-migrate plumbing; Bundle.module.path(forResource:) lookup is exercised in 07-01 tests with a synthesized .dylib stub.

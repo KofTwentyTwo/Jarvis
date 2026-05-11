@@ -1054,35 +1054,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .deletingLastPathComponent()
             .appendingPathComponent("jarvis.db")
 
-        // 2. MemoryStore. Track-D D-1: failure no longer cascades into
-        //    extractor/coordinator construction. Today, MemoryStore.init
-        //    throws when vec0.dylib is missing (or sqlite3_load_extension is
-        //    stripped from libsqlite3) → store stays nil, search disabled,
-        //    writes route to a no-op closure. The extractor still runs so
-        //    we can observe extraction over the conversation in system log
-        //    even before the dylib bundling lands.
-        var store: MemoryStore? = nil
+        // 2. MemoryStore. **Boot policy reversed 2026-05-11 (D-5/D-6 closure).**
+        //    Track-D D-1 (commit 75a10be, 2026-05-04) made MemoryStore.init
+        //    failures non-fatal: store stayed nil, extractor ran with a no-op
+        //    sink, the app booted with dormant memory. That degradation hid
+        //    the entire B-02 / B-04 / B-05 bug class — silent failures by
+        //    construction. The 2026-05-07 API-first pivot's thesis is "no
+        //    silent failures"; this is the corresponding substrate change.
+        //
+        //    Today: vec0 is statically linked via CSQLiteVec
+        //    (jkrukowski/SQLiteVec). MemoryStore.init has only two failure
+        //    modes: (a) file-system / permission error on the DB path, (b)
+        //    extraordinarily rare SQLite-internal failure. Both are
+        //    operator-environment problems the user MUST be told about,
+        //    not papered over.
+        //
+        //    Policy: fail loud. Logger.critical + NSAlert + exit(78). The
+        //    app refuses to launch with a non-working memory store. Users
+        //    fix the underlying issue (disk permissions, corrupt DB,
+        //    missing entitlement) once and the app works thereafter.
+        let store: MemoryStore
         do {
             store = try MemoryStore(databaseURL: dbURL)
         } catch {
-            systemLogger?.warning(
-                "installMemory: store init failed (vec0.dylib missing or DB locked?): \(String(describing: error)) — extractor will run but writes will no-op"
+            // Matches the existing hard-block pattern (config malformed,
+            // entitlements missing): Logger.critical + TCCAlertService
+            // .presentHardBlock + NSApp.terminate. Uses the same banner-
+            // panel-based "hard block" UX — NOT NSAlert.runModal which is
+            // forbidden per scripts/check-no-modal-presentation.sh.
+            let description = String(describing: error)
+            systemLogger?.critical(
+                "installMemory: MemoryStore.init failed — \(description). Hard-blocking; check disk permissions or move jarvis.db aside."
             )
+            TCCAlertService.presentHardBlock(
+                title: "Jarvis can't start",
+                informativeText: "MemoryStore initialization failed: \(description). Details in ~/Library/Logs/Jarvis/system.log. Common fix: check disk permissions on \(dbURL.path), or move the file aside and relaunch to recreate it."
+            )
+            NSApp.terminate(nil)
+            return
         }
         self.memoryStore = store
-        // Today, store != nil ⟺ vec_version() succeeded ⟺ search works.
-        // When custom libsqlite3 lands, we'll be able to construct the
-        // store without vec; the flag will then split from store!=nil.
-        let searchAvailable = (store != nil)
-        self.memorySearchAvailable = searchAvailable
+        // Vec0 is statically linked via auto-extension; search is always
+        // available when the store opens. The split between "store works"
+        // and "search works" the D-1 era introduced no longer applies.
+        self.memorySearchAvailable = true
+        let searchAvailable = true
 
-        // 3. Wire the replay sink (only meaningful when store exists).
-        if let store = store {
-            if let log = replayLog {
-                await store.setReplayLog(AppDelegateMemoryReplaySink(replayLog: log))
-            } else {
-                systemLogger?.warning("installMemory: replayLog absent — memory mutation rows won't persist")
-            }
+        // 3. Wire the replay sink. After 2026-05-11 D-5/D-6 closure `store`
+        //    is non-optional (we exit(78) earlier if init failed).
+        if let log = replayLog {
+            await store.setReplayLog(AppDelegateMemoryReplaySink(replayLog: log))
+        } else {
+            systemLogger?.warning("installMemory: replayLog absent — memory mutation rows won't persist")
         }
 
         // 4. MemoryExtractor on OllamaProvider(qwen2.5-coder:32b). Always
@@ -1134,22 +1157,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //    Build adapters that bridge MCP's HybridSearchDispatching /
         //    ForgetFactDispatching protocols to the Memory.HybridSearch and
         //    MemoryStore.forgetFact actor methods.
-        var forgetDispatcher: (any ForgetFactDispatching)? = nil
+        // D-5/D-6 closure: `store` is non-optional now — we exit on init
+        // failure. No `if let` needed.
+        let forgetDispatcher: any ForgetFactDispatching = ForgetFactStoreAdapter(store: store)
         var searchDispatcher: (any HybridSearchDispatching)? = nil
-        if let store = store {
-            forgetDispatcher = ForgetFactStoreAdapter(store: store)
-            if searchAvailable {
-                do {
-                    let embedder = try OllamaEmbeddingClient(
-                        baseURL: URL(string: "http://127.0.0.1:11434")!
-                    )
-                    let hybrid = HybridSearch(store: store, embedder: embedder)
-                    searchDispatcher = HybridSearchAdapter(hybrid: hybrid)
-                } catch {
-                    systemLogger?.warning(
-                        "installMemory: embedder init failed — search_memory not registered: \(String(describing: error))"
-                    )
-                }
+        if searchAvailable {
+            do {
+                let embedder = try OllamaEmbeddingClient(
+                    baseURL: URL(string: "http://127.0.0.1:11434")!
+                )
+                let hybrid = HybridSearch(store: store, embedder: embedder)
+                searchDispatcher = HybridSearchAdapter(hybrid: hybrid)
+            } catch {
+                systemLogger?.warning(
+                    "installMemory: embedder init failed — search_memory not registered: \(String(describing: error))"
+                )
             }
         }
 
@@ -1733,6 +1755,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             wakeWordMuted: wakeWordMuted
         )
         await registry.register(GetSelfStateTool(dispatcher: selfState))
+
+        // D-5/D-6 closure follow-up: register `get_memory_stats` so the model
+        // can answer "how many turns do you have?" / "how big is your DB?"
+        // questions without us shelling out to sqlite3. After the hard-fail
+        // boot policy (this commit), `self.memoryStore` is guaranteed
+        // non-nil here — but we keep the guard since `installSelfKnowledgeTools`
+        // is reached BEFORE installMemory in the install DAG order is
+        // theoretically possible; the warning surfaces the timing bug if so.
+        if let store = self.memoryStore {
+            let dbURL = configFileURL()
+                .deletingLastPathComponent()
+                .appendingPathComponent("jarvis.db")
+            await registry.register(
+                GetMemoryStatsTool(
+                    dispatcher: MemoryStatsStoreAdapter(store: store, databaseURL: dbURL)
+                )
+            )
+        } else {
+            systemLogger?.warning(
+                "installSelfKnowledgeTools: memoryStore nil — get_memory_stats not registered (install-order bug?)"
+            )
+        }
 
         let names = await registry.registered().map(\.name).sorted()
         systemLogger?.info(
