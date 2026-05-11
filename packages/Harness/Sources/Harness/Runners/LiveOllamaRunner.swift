@@ -13,10 +13,11 @@ import OllamaProvider
 /// **D-06 preflight contract — never auto-pull:**
 /// 1. GET `http://127.0.0.1:11434/api/tags` → must be 200. Fail loud
 ///    with operator instruction (`start ollama serve`).
-/// 2. The returned `models` array must contain `qwen2.5-coder:32b`. Fail
-///    loud with operator instruction (`run ollama pull qwen2.5-coder:32b`).
+/// 2. The returned `models` array must contain `ModelID.qwen25coder32b
+///    .rawValue` (today: `qwen2.5-coder:32b-instruct-q8_0`). Fail loud
+///    with operator instruction (`run ollama pull <that-id>`).
 /// 3. **NEVER** invoke `ollama pull` from inside this runner. The model
-///    is ~20 GB; the operator must opt into the download.
+///    is ~32 GB; the operator must opt into the download.
 public actor LiveOllamaRunner {
 
     public enum LiveError: Swift.Error, Equatable, Sendable {
@@ -33,7 +34,10 @@ public actor LiveOllamaRunner {
     }
 
     public static let baseURL = URL(string: "http://127.0.0.1:11434")!
-    public static let requiredModelID = "qwen2.5-coder:32b"
+    /// Sourced from `ModelID.qwen25coder32b` so a single edit to the
+    /// canonical agent-loop fallback (in AgentCore/ModelID.swift)
+    /// propagates here automatically.
+    public static let requiredModelID = ModelID.qwen25coder32b.rawValue
 
     public init() {}
 

@@ -7,10 +7,14 @@ import Logging
 /// `LLMProvider.stream` — collects exactly one `ToolUseRequest` for
 /// `apply_memory_ops` and decodes it into `[MemoryOp]`.
 ///
-/// Per RESEARCH §5 and D-03, the model is `qwen2.5-coder:32b` (Qwen3 is
-/// banned per RESEARCH-DELTAS D3 — Ollama tool-calling broken). The
-/// extractor asks for tool-only output via a system prompt directive and
-/// uses `toolChoice .auto` so the model can also decide NOOP.
+/// Model default updated 2026-05-11: `qwen3.6:latest` after an empirical
+/// retest showed Qwen3.6 tool-calling works correctly in Ollama (see
+/// `ModelID.qwen36` doc). The original April 2026 CLAUDE.md note banning
+/// Qwen3 was correct at the time; upstream has since closed the relevant
+/// issues. The extractor's single-turn, single-tool flow is the lowest-
+/// risk place to validate the newer model — no cap recovery, no multi-
+/// turn chains. The agent loop remains pinned to `qwen2.5-coder:32b-
+/// instruct-q8_0` until streaming + cap-recovery on Qwen3.6 is verified.
 ///
 /// **Single-turn only.** No outer loop, no cap recovery, no
 /// UntrustedWrapper. If the model fails to call the tool, the extractor
@@ -23,7 +27,7 @@ public actor MemoryExtractor {
 
     public init(
         provider: any LLMProvider,
-        model: ModelID = .qwen25coder32b
+        model: ModelID = .qwen36
     ) {
         self.provider = provider
         self.model = model
