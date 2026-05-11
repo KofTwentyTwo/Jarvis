@@ -71,6 +71,15 @@ public enum MemoryQueries {
     LIMIT ?;
     """
 
+    /// B-02 turn-row writer. Single row per (role, content) pair.
+    /// Bindings (positional): session_id, role, content, source, created_at.
+    /// The schema's FTS5 trigger (MemorySchema.swift:74) mirrors `content`
+    /// into `turns_fts` automatically — no separate insert needed.
+    public static let turnInsertSQL: String = """
+    INSERT INTO turns(session_id, role, content, source, created_at)
+    VALUES (?, ?, ?, ?, ?);
+    """
+
     /// D-02 forget tool dispatch. Bindings: now, now, fact_id.
     /// `WHERE valid_to IS NULL AND forgotten_at IS NULL` makes this idempotent
     /// (second call matches 0 rows). NEVER DELETEs.

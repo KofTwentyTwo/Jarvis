@@ -1325,6 +1325,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return catalog
         }
+        // B-02 (carry-forward bug, tactical patch outside v1.0 migration):
+        // hydrate prior turn history from the `turns` table so multi-turn
+        // conversations preserve context. `recentTurnsForSession` returns
+        // rows in DESC order; reverse to chronological so the LLM sees
+        // user → assistant → user → assistant alternation. Filter to
+        // user/assistant only — tool-role rows (if any are written later)
+        // do not belong in the prior-history prefix. Cap at 10 turn rows
+        // (~5 prior user/assistant pairs) to bound prompt growth.
+        let sessionIdString = sessionId.rawValue
+        let memoryStoreRef = self.memoryStore
+        let historyLogger = self.systemLogger
+        let sessionHistoryLookup: AgentOrchestrator.SessionHistoryLookup = {
+            guard let store = memoryStoreRef else { return [] }
+            do {
+                let rows = try await store.recentTurnsForSession(
+                    sessionId: sessionIdString, limit: 10
+                )
+                let chronological = Array(rows.reversed())
+                return chronological.compactMap { row in
+                    switch row.role {
+                    case "user":
+                        return AgentOrchestrator.PriorTurn(role: .user, content: row.content)
+                    case "assistant":
+                        return AgentOrchestrator.PriorTurn(role: .assistant, content: row.content)
+                    default:
+                        return nil
+                    }
+                }
+            } catch {
+                // T-06-05-03: log the error, never the row content.
+                historyLogger?.warning("sessionHistoryLookup failed: \(error)")
+                return []
+            }
+        }
+
         let orchestrator = AgentOrchestrator(
             configStore: configStore,
             providerFactory: providerFactory,
@@ -1343,7 +1378,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             availableTools: [],
             availableToolsResolver: toolCatalogResolver,
             visionRouter: self.visionRouter,
-            presenceSnapshot: PresenceStateSnapshot.shared
+            presenceSnapshot: PresenceStateSnapshot.shared,
+            sessionHistoryLookup: sessionHistoryLookup
         )
         self.agentOrchestrator = orchestrator
 
@@ -1388,6 +1424,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         // and Plan 4's submit-time user-side append) rather
                         // than the Phase-7-era nil stub.
                         if let pair = await self?.turnTranscriptStore?.flushPair(turnId) {
+                            // B-02 (carry-forward bug, tactical patch outside
+                            // v1.0 migration): persist the completed turn pair
+                            // to the `turns` table so subsequent turns'
+                            // sessionHistoryLookup can hydrate prior context.
+                            // Persistence rides on the existing turnContent
+                            // flush path because TurnTranscriptStore.flushPair
+                            // is destructive — single-consumer invariant
+                            // preserved. Both rows share the turn's
+                            // chronological position; we offset assistant by
+                            // +1 ms so the DESC + id-tiebreaker ordering in
+                            // sessionHistorySQL reconstructs the pair in
+                            // user→assistant order.
+                            // T-06-05-03: log only the turn id hash and op
+                            // outcome; NEVER log row content.
+                            if let store = await self?.memoryStore {
+                                let sessionIdValue = sessionIdString
+                                let now = Int64(Date().timeIntervalSince1970 * 1000)
+                                do {
+                                    try await store.appendTurn(
+                                        sessionId: sessionIdValue,
+                                        role: "user",
+                                        content: pair.userText,
+                                        source: "userText",
+                                        createdAt: now
+                                    )
+                                    try await store.appendTurn(
+                                        sessionId: sessionIdValue,
+                                        role: "assistant",
+                                        content: pair.assistantText,
+                                        source: "assistant",
+                                        createdAt: now + 1
+                                    )
+                                } catch {
+                                    await self?.systemLogger?.warning(
+                                        "B-02 turn-persistence appendTurn failed: \(error)"
+                                    )
+                                }
+                            }
                             return (user: pair.userText, assistant: pair.assistantText)
                         }
                         return nil

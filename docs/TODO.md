@@ -2,30 +2,30 @@
 
 Live triage list. Higher up = higher priority. Move done items to a dated archive section if the file gets long.
 
-## ▶ TOP — Migration to v1.0 API begins (2026-05-07 evening)
+## ▶ TOP — Migration to v1.0 API in flight (2026-05-11)
 
 **v1.0 contract LOCKED** as the pair `JARVIS-API-DESIGN-v0.1.md` + `JARVIS-API-DESIGN-v0.2.md` (UQ-1..UQ-5 answered). Index: `.planning/architecture/README.md`. Migration plan: `JARVIS-API-MIGRATION-PLAN.md`. Test contract: `JARVIS-API-TEST-CONTRACT.md`. Skeleton: `Tools/jarvis-diag/` (compiles green).
 
-- [x] **2026-05-07 evening:** 6-agent design swarm executed end-to-end. v0.1 (1036 lines, 7 surfaces) + v0.2 (synthesis + UQ answers) + 3 reviews + migration plan + test contract + skeleton, all under `.planning/architecture/`.
-- [ ] **Next session — cross-AI peer review of v1.0** (GPT-5 Pro / Gemini 2.5 Pro / fresh Opus). Iterate to v1.1 only if findings warrant.
-- [ ] **After peer review — B-02 tactical patch on `develop` directly** — single commit + `streamTruncated` regression test. Specified in `JARVIS-API-MIGRATION-PLAN.md §3`.
-- [ ] **Then — M-0 (pre-migration gates) directly on `develop`** — `packages/JarvisAPI/`, lift `RealWKWebViewIntegrationTests` to public harness runner, promote 3 grep gates to behavioral, dual-version handshake. ~2.5–3.5 engineer-days.
+- [x] **2026-05-07 evening:** 6-agent design swarm executed end-to-end. All artifacts in `.planning/architecture/` (`46590cd`).
+- [x] **2026-05-11 morning:** **B-02 tactical patch on `develop`** — `MemoryStore.appendTurn` + orchestrator `sessionHistoryLookup` + AppDelegate wiring of both write and read sides. Substrate gap (turns table was unwritten) discovered and addressed in-scope: `appendTurn` now persists every turn pair to `jarvis.db`. HT-1/2/3 regression tests cover the messages array shape + Phase E `streamTruncated` gate (R-006).
+- [ ] **Next — M-0 (pre-migration gates) directly on `develop`** — `packages/JarvisAPI/`, lift `RealWKWebViewIntegrationTests` to public harness runner, promote 3 grep gates to behavioral, dual-version handshake. ~2.5–3.5 engineer-days.
 - [ ] **Then — M-1 (Self surface) on a feature branch + PR** — first surface migration; closes B-08.
 - [ ] **Then — M-2..M-7** per migration plan, each on own feature branch + PR.
+- [ ] **Optional — cross-AI peer review of v1.0** (GPT-5 Pro / Gemini 2.5 Pro / fresh Opus). Deferred unless a migration step surfaces design questions.
 
-**Until v1.0 implementation begins, DO NOT fix B-02..B-08 piecemeal** — they re-scope against the v1.0 contract per the migration plan. (B-02 has its own one-commit tactical patch path per UQ-2.)
+**Until v1.0 implementation begins, DO NOT fix B-03..B-08 piecemeal** — they re-scope against the v1.0 contract per the migration plan.
 
-## Carry-forward bugs (re-scope against new API)
+## Carry-forward bugs
 
-Live evidence collected during 2026-05-07 user testing. All re-scope against the new API contract — do NOT fix piecemeal in the next session.
+Live evidence collected during 2026-05-07 user testing.
 
-- [ ] B-02 — Conversation continuity broken (prior turn context lost across turns)
-- [ ] B-03 — HUD camera button click does nothing
-- [ ] B-04 — Voice input dead (wake-word + STT silent)
-- [ ] B-05 — TTS silent (text replies not spoken)
-- [ ] B-06 — Chat panel doesn't auto-scroll
+- [x] **B-02 — Conversation continuity** — closed by tactical patch 2026-05-11 (this commit). HT-1/2/3 regression coverage in `HistoryThreadingRegressionTests`; `AT-1..4` in `MemoryStoreAppendTurnTests` (env-gated on `JARVIS_VEC0_STUB_PATH`).
+- [ ] B-03 — HUD camera button click does nothing (lands M-5)
+- [ ] B-04 — Voice input dead (wake-word + STT silent) (lands M-6)
+- [ ] B-05 — TTS silent (text replies not spoken) (lands M-6, UQ-3 contract: `Voice.synthesizeTurn`)
+- [ ] B-06 — Chat panel doesn't auto-scroll (lands M-7; webview-DOM out of harness scope)
 - [ ] B-07 — Voice Log menu item missing (Plan 10-05 deferred)
-- [ ] B-08 — `get_self_state` correct ID but Claude paraphrases as "Opus 4.5" — minor
+- [ ] B-08 — `get_self_state` correct ID but Claude paraphrases as "Opus 4.5" — minor (lands M-1)
 
 ## Substrate fixes shipped 2026-05-07
 

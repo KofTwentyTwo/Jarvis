@@ -28,6 +28,43 @@ import Logging
 /// **SEC-06:** `turnNonce` never appears in any `OrchestratorEvent`. Only
 /// the model-facing prompt and the replay log row see it.
 public actor AgentOrchestrator {
+
+    // MARK: - B-02 history threading
+
+    /// One prior turn entry hydrated from the `turns` table (or any caller-
+    /// supplied source). Role is constrained to user/assistant — the
+    /// orchestrator's prior-history prefix never contains tool blocks
+    /// (those are reconstructed locally per current turn).
+    public struct PriorTurn: Sendable, Equatable {
+        public enum Role: String, Sendable, Equatable {
+            case user
+            case assistant
+        }
+        public let role: Role
+        public let content: String
+        public init(role: Role, content: String) {
+            self.role = role
+            self.content = content
+        }
+    }
+
+    /// B-02 (carry-forward bug, closed by tactical patch outside the v1.0
+    /// migration sequence): closure returning the most recent N prior
+    /// turn rows in CHRONOLOGICAL order (oldest first). Production
+    /// wiring lives in `App/AppDelegate.swift` and calls
+    /// `MemoryStore.recentTurnsForSession`. The default implementation
+    /// `emptySessionHistoryLookup` returns [] to preserve pre-B-02
+    /// behavior in any test setup that doesn't supply a lookup.
+    ///
+    /// Failure mode: the closure throws → orchestrator degrades to empty
+    /// history with a warning log; the turn proceeds without prior
+    /// context (same as pre-B-02 behavior). Matches the D-3
+    /// `PriorFactsLookup` resilience contract.
+    public typealias SessionHistoryLookup = @Sendable () async throws -> [PriorTurn]
+
+    public static let emptySessionHistoryLookup: SessionHistoryLookup = { [] }
+
+
     // MARK: - Injected dependencies
 
     private let configStore: ConfigStore
@@ -62,6 +99,12 @@ public actor AgentOrchestrator {
     /// the orchestrator side. VISION-03 boundary: the orchestrator only
     /// touches the `String?` return type — never the underlying PresenceEvent.
     private let presenceSnapshot: PresenceStateSnapshot?
+
+    /// B-02 history lookup closure (see `SessionHistoryLookup` doc on the
+    /// enclosing actor). Defaulted to `emptySessionHistoryLookup` so test
+    /// sites that don't care about history still compile unchanged.
+    private let sessionHistoryLookup: SessionHistoryLookup
+
     private let logger: Logger
 
     // MARK: - Outbound channel
@@ -107,7 +150,8 @@ public actor AgentOrchestrator {
         availableTools: [ToolSchema] = [],
         availableToolsResolver: (@Sendable () async -> [ToolSchema])? = nil,
         visionRouter: VisionRouter? = nil,
-        presenceSnapshot: PresenceStateSnapshot? = nil
+        presenceSnapshot: PresenceStateSnapshot? = nil,
+        sessionHistoryLookup: @escaping SessionHistoryLookup = AgentOrchestrator.emptySessionHistoryLookup
     ) {
         self.configStore = configStore
         self.providerFactory = providerFactory
@@ -119,6 +163,7 @@ public actor AgentOrchestrator {
         self.availableToolsResolver = availableToolsResolver
         self.visionRouter = visionRouter
         self.presenceSnapshot = presenceSnapshot
+        self.sessionHistoryLookup = sessionHistoryLookup
         self.logger = Logger(label: JarvisLogChannel.agent.rawValue)
         self.events = BoundedAsyncChannel<OrchestratorEvent>(capacity: 256, policy: .suspend)
     }
@@ -280,10 +325,42 @@ public actor AgentOrchestrator {
         } else {
             finalSystem = composedSystem
         }
-        let initialMessages: [LLMMessage] = [
-            LLMMessage(role: .system, content: [.text(finalSystem)]),
-            LLMMessage(role: .user, content: [.text(input.userText)]),
+        // B-02 (carry-forward bug, fixed by tactical patch outside the
+        // v1.0 migration sequence): hydrate prior turn history from the
+        // session-history lookup and prepend between system prompt and
+        // current user message. Without this, every turn looked like a
+        // first message to the model — "yes" / "why?" / pronoun
+        // resolution lost prior turn context.
+        //
+        // Failure mode: lookup throws → warning log + empty history.
+        // Matches the D-3 priorFactsLookup pattern; drain task survives.
+        //
+        // The lookup returns turns in CHRONOLOGICAL order (oldest first)
+        // so the LLM sees the natural alternation user → assistant →
+        // user → assistant → … → current user.
+        //
+        // T-06-05-03: do NOT log row content; turn text is user-bearing
+        // and may contain PII. Count only.
+        let priorTurns: [PriorTurn]
+        do {
+            priorTurns = try await sessionHistoryLookup()
+        } catch {
+            logger.warning("sessionHistoryLookup failed: \(error) — proceeding with empty history")
+            priorTurns = []
+        }
+        let priorMessages: [LLMMessage] = priorTurns.map { turn in
+            switch turn.role {
+            case .user:
+                return LLMMessage(role: .user, content: [.text(turn.content)])
+            case .assistant:
+                return LLMMessage(role: .assistant, content: [.text(turn.content)])
+            }
+        }
+        var initialMessages: [LLMMessage] = [
+            LLMMessage(role: .system, content: [.text(finalSystem)])
         ]
+        initialMessages.append(contentsOf: priorMessages)
+        initialMessages.append(LLMMessage(role: .user, content: [.text(input.userText)]))
 
         // Phase E (2026-05-03 audit fix): gate `extended1h` cache hints on
         // system-prompt size. Anthropic returns 200 OK + immediate-EOF for

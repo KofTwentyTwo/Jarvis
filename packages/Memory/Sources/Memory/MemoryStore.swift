@@ -342,6 +342,37 @@ public actor MemoryStore {
         }
     }
 
+    /// B-02 turn-row writer. Appends a single row to the `turns` table.
+    /// The schema's FTS5 trigger mirrors `content` into `turns_fts`
+    /// automatically; no separate FTS insert is needed.
+    ///
+    /// `role` is "user" | "assistant" | "tool" (matches TurnRow.role).
+    /// `source` is the TurnSource rawValue ("userText", "wakeWord",
+    /// "assistant", etc.); arbitrary string — the schema doesn't enforce
+    /// an enum and consumers treat it as informational.
+    /// `createdAt` is unix-ms; callers MUST pass distinct timestamps for
+    /// user vs assistant rows of the same turn so the DESC + id-tiebreaker
+    /// ordering in `sessionHistorySQL` reconstructs chronological order
+    /// correctly.
+    ///
+    /// T-06-05-03: this function MUST NOT log `content` — turn text is
+    /// user-bearing and may contain PII.
+    public func appendTurn(
+        sessionId: String,
+        role: String,
+        content: String,
+        source: String,
+        createdAt: Int64
+    ) throws {
+        try conn.exec(MemoryQueries.turnInsertSQL, bindings: [
+            .text(sessionId),
+            .text(role),
+            .text(content),
+            .text(source),
+            .int(createdAt),
+        ])
+    }
+
     /// TEXT-03 chat-panel hydration source. Returns the most recent `limit`
     /// turns for the given session, ordered by created_at DESC.
     public func recentTurnsForSession(sessionId: String, limit: Int) throws -> [TurnRow] {

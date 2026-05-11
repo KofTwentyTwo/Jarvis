@@ -1,19 +1,34 @@
 # Session State
 
-**Last Updated:** 2026-05-07 (evening — swarm complete; v1.0 contract locked; migration plan + test contract shipped)
+**Last Updated:** 2026-05-11 (morning — B-02 tactical patch shipped; migration M-0 next)
 
-## ▶ Next Session: Cross-AI peer review + B-02 patch + M-0 — read FIRST
+## ▶ Next Session: M-0 (pre-migration gates) — read FIRST
 
-The architectural-pivot design swarm executed end-to-end on 2026-05-07. The v1.0 API contract is **locked** as the pair `JARVIS-API-DESIGN-v0.1.md` + `JARVIS-API-DESIGN-v0.2.md` (UQ-1..UQ-5 answered in v0.2 §5). All artifacts under `.planning/architecture/`; index in `.planning/architecture/README.md`.
+The architectural-pivot design swarm executed end-to-end on 2026-05-07; B-02 tactical patch shipped 2026-05-11. The v1.0 API contract is **locked** as the pair `JARVIS-API-DESIGN-v0.1.md` + `JARVIS-API-DESIGN-v0.2.md` (UQ-1..UQ-5 answered in v0.2 §5). All artifacts under `.planning/architecture/`; index in `.planning/architecture/README.md`.
 
 **Next session's actions in order:**
-1. Cross-AI peer review of v1.0 (GPT-5 Pro / Gemini 2.5 Pro / fresh Opus). Iterate to v1.1 if findings warrant.
-2. **B-02 tactical patch on `develop` directly** — single commit + regression test for `streamTruncated`. Specified in `JARVIS-API-MIGRATION-PLAN.md §3`.
-3. **M-0** (pre-migration gates) directly on `develop`. Creates `packages/JarvisAPI/`, lifts `RealWKWebViewIntegrationTests` to a public harness runner, promotes grep gates to behavioral, dual-version handshake. ~2.5–3.5 engineer-days.
-4. **M-1** (Self surface) on its own feature branch + PR — first surface migration; closes B-08.
-5. M-2..M-7 in sequence on per-step feature branches per the migration plan.
+1. **M-0** (pre-migration gates) directly on `develop`. Creates `packages/JarvisAPI/`, lifts `RealWKWebViewIntegrationTests` to a public harness runner, promotes grep gates to behavioral, dual-version handshake. ~2.5–3.5 engineer-days.
+2. **M-1** (Self surface) on its own feature branch + PR — first surface migration; closes B-08.
+3. M-2..M-7 in sequence on per-step feature branches per the migration plan.
+4. Optional: cross-AI peer review of v1.0 (GPT-5 Pro / Gemini 2.5 Pro / fresh Opus). Deferred unless a migration step surfaces a design question.
 
-Total estimated migration: **19–26 engineer-days (~4–5.5 calendar weeks at solo pace).**
+Total estimated migration remaining: **18.5–25.5 engineer-days (~4–5.5 calendar weeks at solo pace).** B-02 closed today.
+
+## ▶ 2026-05-11 morning — B-02 tactical patch
+
+`develop` advances past `46590cd` with one commit closing B-02. Substrate gap discovered + addressed in-scope: the `turns` table was unwritten (schema present, FTS5 trigger ready, but no `INSERT` site anywhere). Patch adds `MemoryStore.appendTurn` writer and wires both sides — orchestrator `sessionHistoryLookup` closure (read) and AppDelegate `turnContent` (write piggybacked on existing memory-extraction flush path).
+
+- **Patch site (read side):** `packages/AgentCore/Sources/AgentOrchestrator/AgentOrchestrator.swift` — adds `PriorTurn` struct, `SessionHistoryLookup` typealias with `emptySessionHistoryLookup` default (preserves pre-B-02 test setups), ctor parameter, hydration logic that prepends prior turns between system prompt and current user message in chronological order.
+- **Patch site (write side):** `packages/Memory/Sources/Memory/MemoryStore.swift` `appendTurn(sessionId:role:content:source:createdAt:)` + `MemoryQueries.turnInsertSQL`. Single-row INSERT; FTS5 trigger mirrors `content` into `turns_fts` automatically.
+- **AppDelegate wiring:** `App/AppDelegate.swift` constructs `sessionHistoryLookup` closure calling `recentTurnsForSession(limit: 10)` and reversing DESC → chronological; passes it to `AgentOrchestrator` init. `turnContent` closure (existing memory-extraction path) gains a side-effect: write the flushed pair via `appendTurn` before returning. Assistant row offset by +1 ms so DESC + id-tiebreaker preserves user→assistant order.
+- **Regression coverage:**
+  - `HistoryThreadingRegressionTests.HT-1` — three-turn integration; asserts third call's messages array is `[system, user("ok"), assistant("ack"), user("yes"), assistant("ack2"), user("why?")]`.
+  - `HistoryThreadingRegressionTests.HT-2` — empty-history default produces `[system, user]` (pre-B-02 baseline preserved).
+  - `HistoryThreadingRegressionTests.HT-3` — three-turn happy path emits zero `LLMProviderError.streamTruncatedFinal` events. Pins R-006 / Phase E gate behavior — the patch grows the messages array, not the system prompt, so `CacheHints.eligibleForSystemPrompt(finalSystem)` is unchanged.
+  - `MemoryStoreAppendTurnTests.AT-1..4` — append round-trip, user/assistant pair chronological reconstruction, session scoping, FTS5 trigger fires. Env-gated on `JARVIS_VEC0_STUB_PATH` per existing MemoryStore-test convention; skip without vec0.dylib.
+- **Honesty note:** in dormant-memory mode (no vec0/no Ollama), turn persistence is also dormant — the `appendTurn` call is guarded by `memoryStore != nil`. When D-5/D-6 land and memory comes up live, persistence activates without further code changes.
+
+## ▶ 2026-05-07 evening — Design swarm output
 
 ## ▶ Earlier this session — Design swarm output (2026-05-07 evening)
 
