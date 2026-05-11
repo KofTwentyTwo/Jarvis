@@ -745,7 +745,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // re-probe) we skip registration. Inspecting `registeredNames`
         // is cheap because the actor returns an array snapshot.
         if await bootHealthOrchestrator.registeredNames().isEmpty {
-            registerBootHealthProbes()
+            await registerBootHealthProbes()
         }
         let snapshot = await bootHealthOrchestrator.runAll()
         emitBootHealthLog(snapshot: snapshot)
@@ -771,91 +771,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Constructs one probe per subsystem and registers it on the
-    /// orchestrator. Each probe captures a strong reference to the live
-    /// actor it queries — at probe-time the actor must be addressable.
+    /// orchestrator. Each register call is awaited inline so the
+    /// caller can `runAll()` immediately after and be certain every
+    /// probe is in the registry (no fire-and-forget Task race).
     /// Subsystems that never installed get a placeholder probe that
     /// honestly reports `.unknown` from the probe body itself.
     @MainActor
-    private func registerBootHealthProbes() {
+    private func registerBootHealthProbes() async {
         // Memory — uses the same MemoryStatsStoreAdapter the
         // get_memory_stats MCP tool consumes. Reconstructs the adapter
-        // here rather than caching it on AppDelegate, since the adapter
-        // is cheap and only needs MemoryStore + DB URL.
+        // here rather than caching it on AppDelegate.
         let dbURL = configFileURL().deletingLastPathComponent().appendingPathComponent("jarvis.db")
         if let memoryStore = self.memoryStore {
-            Task {
-                await bootHealthOrchestrator.register(
-                    MemoryBootHealthProbe(adapter: MemoryStatsStoreAdapter(store: memoryStore, databaseURL: dbURL))
-                )
-            }
+            await bootHealthOrchestrator.register(
+                MemoryBootHealthProbe(adapter: MemoryStatsStoreAdapter(store: memoryStore, databaseURL: dbURL))
+            )
         } else {
-            Task {
-                await bootHealthOrchestrator.register(DormantSubsystemProbe(
-                    subsystemName: "memory",
-                    reason: "MemoryStore.init failed at install (vec0 missing or DB unwritable)"
-                ))
-            }
+            await bootHealthOrchestrator.register(DormantSubsystemProbe(
+                subsystemName: "memory",
+                reason: "MemoryStore.init failed at install (vec0 missing or DB unwritable)"
+            ))
         }
 
         // Anthropic — structural keychain check. Cheap, no network.
-        Task {
-            await bootHealthOrchestrator.register(
-                AnthropicBootHealthProbe(keychain: self.keychainStore)
-            )
-        }
+        await bootHealthOrchestrator.register(
+            AnthropicBootHealthProbe(keychain: self.keychainStore)
+        )
 
         // Ollama — live /api/tags against the configured base URL.
-        // ConfigStore is an actor; `launch` is actor-isolated even though
-        // it's a `let`. Read it inside the Task and then register.
+        // ConfigStore is an actor; `launch` is actor-isolated even
+        // though it's a `let`. Read it inside the await and register.
         if let cfg = self.configStore {
-            Task {
-                let baseURL = await cfg.launch.ollama.baseURL
-                await bootHealthOrchestrator.register(OllamaBootHealthProbe(baseURL: baseURL))
-            }
+            let baseURL = await cfg.launch.ollama.baseURL
+            await bootHealthOrchestrator.register(OllamaBootHealthProbe(baseURL: baseURL))
         } else {
-            Task {
-                await bootHealthOrchestrator.register(DormantSubsystemProbe(
-                    subsystemName: "ollama",
-                    reason: "ConfigStore nil — base URL unknown"
-                ))
-            }
+            await bootHealthOrchestrator.register(DormantSubsystemProbe(
+                subsystemName: "ollama",
+                reason: "ConfigStore nil — base URL unknown"
+            ))
         }
 
         // Voice — captures AudioGraphOwner if live.
-        Task { [audioGraphOwner = self.audioGraphOwner] in
-            await bootHealthOrchestrator.register(
-                VoiceBootHealthProbe(audioGraphOwner: audioGraphOwner)
-            )
-        }
+        await bootHealthOrchestrator.register(
+            VoiceBootHealthProbe(audioGraphOwner: self.audioGraphOwner)
+        )
 
         // Vision — TCC status + device enumeration only; no captured actor.
-        Task {
-            await bootHealthOrchestrator.register(VisionBootHealthProbe())
-        }
+        await bootHealthOrchestrator.register(VisionBootHealthProbe())
 
         // MCP — captures live MCPRuntime if build succeeded.
-        Task { [mcpRuntime = self.mcpRuntime] in
-            await bootHealthOrchestrator.register(
-                MCPBootHealthProbe(mcpRuntime: mcpRuntime)
-            )
-        }
+        await bootHealthOrchestrator.register(
+            MCPBootHealthProbe(mcpRuntime: self.mcpRuntime)
+        )
 
         // Replay — captures DB URL + live ReplayLog presence flag.
-        Task { [replayLog = self.replayLog] in
-            await bootHealthOrchestrator.register(
-                ReplayBootHealthProbe(
-                    databaseURL: self.replayDatabaseURL(),
-                    replayLogPresent: replayLog != nil
-                )
+        await bootHealthOrchestrator.register(
+            ReplayBootHealthProbe(
+                databaseURL: self.replayDatabaseURL(),
+                replayLogPresent: self.replayLog != nil
             )
-        }
+        )
 
         // Webview — captures live WebviewBridge handshake state.
-        Task { [bridge = self.webviewBridge] in
-            await bootHealthOrchestrator.register(
-                WebviewBootHealthProbe(bridge: bridge)
-            )
-        }
+        await bootHealthOrchestrator.register(
+            WebviewBootHealthProbe(bridge: self.webviewBridge)
+        )
     }
 
     /// Writes one structured log line per subsystem in the snapshot, plus
