@@ -216,7 +216,7 @@ private struct SubsystemRow: View {
     private var reasonText: String? {
         switch health.status {
         case .ok: return nil
-        case .degraded(let r), .failed(let r), .unknown(let r): return r
+        case .degraded(let r, _), .failed(let r, _), .unknown(let r, _): return r
         }
     }
 

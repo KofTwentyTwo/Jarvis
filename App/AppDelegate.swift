@@ -787,9 +787,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 MemoryBootHealthProbe(adapter: MemoryStatsStoreAdapter(store: memoryStore, databaseURL: dbURL))
             )
         } else {
+            // Round 4 — memory dormant = silent forgetting. Critical so the
+            // banner is non-dismissible and the agent's preamble warns the
+            // model not to promise to remember anything.
             await bootHealthOrchestrator.register(DormantSubsystemProbe(
                 subsystemName: "memory",
-                reason: "MemoryStore.init failed at install (vec0 missing or DB unwritable)"
+                reason: "MemoryStore.init failed at install (vec0 missing or DB unwritable)",
+                severity: .critical
             ))
         }
 
@@ -865,7 +869,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func enqueueFailedBootHealthBanners(snapshot: BootHealthSnapshot) {
         for health in snapshot.failed {
             let reason: String
-            if case .failed(let r) = health.status { reason = r } else { reason = "unknown" }
+            if case .failed(let r, _) = health.status { reason = r } else { reason = "unknown" }
             bannerCoordinator?.enqueue(.bootHealthFailed(subsystem: health.name, reason: reason))
         }
     }

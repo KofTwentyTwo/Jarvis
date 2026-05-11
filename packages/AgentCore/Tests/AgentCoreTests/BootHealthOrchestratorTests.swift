@@ -117,11 +117,11 @@ final class BootHealthOrchestratorTests: XCTestCase {
         let ok = MockProbe(name: "memory", scripted: ProbeOutcome(status: .ok, evidence: "fine"))
         let dead = MockProbe(
             name: "ollama",
-            scripted: ProbeOutcome(status: .failed(reason: "connection refused"), evidence: "127.0.0.1:11434 unreachable")
+            scripted: ProbeOutcome(status: .failed(reason: "connection refused", severity: .loud), evidence: "127.0.0.1:11434 unreachable")
         )
         let degraded = MockProbe(
             name: "anthropic",
-            scripted: ProbeOutcome(status: .degraded(reason: "rate limit"), evidence: "HTTP 429")
+            scripted: ProbeOutcome(status: .degraded(reason: "rate limit", severity: .loud), evidence: "HTTP 429")
         )
 
         let orch = BootHealthOrchestrator()
@@ -133,7 +133,7 @@ final class BootHealthOrchestratorTests: XCTestCase {
 
         XCTAssertEqual(snapshot.subsystems.count, 3)
         XCTAssertEqual(snapshot.failed.map(\.name), ["ollama"])
-        XCTAssertEqual(snapshot.failed.first?.status, .failed(reason: "connection refused"))
+        XCTAssertEqual(snapshot.failed.first?.status, .failed(reason: "connection refused", severity: .loud))
         XCTAssertEqual(snapshot.failed.first?.evidence, "127.0.0.1:11434 unreachable")
     }
 
@@ -143,7 +143,7 @@ final class BootHealthOrchestratorTests: XCTestCase {
         // to .ok just because the probe didn't throw.
         let probe = MockProbe(
             name: "anthropic",
-            scripted: ProbeOutcome(status: .unknown(reason: "no API key in Keychain"), evidence: "probe skipped")
+            scripted: ProbeOutcome(status: .unknown(reason: "no API key in Keychain", severity: .critical), evidence: "probe skipped")
         )
 
         let orch = BootHealthOrchestrator()
@@ -152,8 +152,52 @@ final class BootHealthOrchestratorTests: XCTestCase {
         let snapshot = await orch.runAll()
 
         XCTAssertEqual(snapshot.subsystems.count, 1)
-        XCTAssertEqual(snapshot.subsystems[0].status, .unknown(reason: "no API key in Keychain"))
+        XCTAssertEqual(snapshot.subsystems[0].status, .unknown(reason: "no API key in Keychain", severity: .critical))
         XCTAssertTrue(snapshot.failed.isEmpty, ".unknown must not appear in .failed — banner enqueue would be wrong")
+    }
+
+    // MARK: - Round 4 — severity model
+
+    func testOverallHealthAllOkReturnsOk() async {
+        let orch = BootHealthOrchestrator()
+        await orch.register(MockProbe(name: "a", scripted: ProbeOutcome(status: .ok, evidence: "x")))
+        await orch.register(MockProbe(name: "b", scripted: ProbeOutcome(status: .ok, evidence: "y")))
+        let snapshot = await orch.runAll()
+        XCTAssertEqual(snapshot.overallHealth, .ok)
+    }
+
+    func testOverallHealthWorstSeverityWins() async {
+        // soft + loud + critical → critical
+        let orch = BootHealthOrchestrator()
+        await orch.register(MockProbe(name: "vision", scripted: ProbeOutcome(status: .unknown(reason: "TCC", severity: .soft), evidence: "")))
+        await orch.register(MockProbe(name: "ollama", scripted: ProbeOutcome(status: .degraded(reason: "missing model", severity: .loud), evidence: "")))
+        await orch.register(MockProbe(name: "memory", scripted: ProbeOutcome(status: .failed(reason: "vec0 missing", severity: .critical), evidence: "")))
+        let snap = await orch.runAll()
+        XCTAssertEqual(snap.overallHealth, .critical)
+    }
+
+    func testOverallHealthLoudWhenNoCritical() async {
+        let orch = BootHealthOrchestrator()
+        await orch.register(MockProbe(name: "vision", scripted: ProbeOutcome(status: .unknown(reason: "TCC", severity: .soft), evidence: "")))
+        await orch.register(MockProbe(name: "ollama", scripted: ProbeOutcome(status: .degraded(reason: "missing model", severity: .loud), evidence: "")))
+        await orch.register(MockProbe(name: "memory", scripted: ProbeOutcome(status: .ok, evidence: "fine")))
+        let snap = await orch.runAll()
+        XCTAssertEqual(snap.overallHealth, .loud)
+    }
+
+    func testOverallHealthSoftWhenNoLoudOrCritical() async {
+        let orch = BootHealthOrchestrator()
+        await orch.register(MockProbe(name: "vision", scripted: ProbeOutcome(status: .unknown(reason: "TCC", severity: .soft), evidence: "")))
+        await orch.register(MockProbe(name: "memory", scripted: ProbeOutcome(status: .ok, evidence: "fine")))
+        let snap = await orch.runAll()
+        XCTAssertEqual(snap.overallHealth, .soft)
+    }
+
+    func testStatusSeverityAccessor() {
+        XCTAssertNil(ProbeStatus.ok.severity)
+        XCTAssertEqual(ProbeStatus.degraded(reason: "x", severity: .loud).severity, .loud)
+        XCTAssertEqual(ProbeStatus.failed(reason: "x", severity: .critical).severity, .critical)
+        XCTAssertEqual(ProbeStatus.unknown(reason: "x", severity: .soft).severity, .soft)
     }
 
     func testInjectedClockDrivesLastProbedAtAndLatency() async {
@@ -185,9 +229,9 @@ final class BootHealthOrchestratorTests: XCTestCase {
         // every ProbeStatus variant survives encode → decode intact.
         let orch = BootHealthOrchestrator()
         await orch.register(MockProbe(name: "memory", scripted: ProbeOutcome(status: .ok, evidence: "fine")))
-        await orch.register(MockProbe(name: "ollama", scripted: ProbeOutcome(status: .degraded(reason: "missing model"), evidence: "qwen ok, nomic missing")))
-        await orch.register(MockProbe(name: "anthropic", scripted: ProbeOutcome(status: .failed(reason: "401"), evidence: "key invalid")))
-        await orch.register(MockProbe(name: "voice", scripted: ProbeOutcome(status: .unknown(reason: "skipped"), evidence: "dormant")))
+        await orch.register(MockProbe(name: "ollama", scripted: ProbeOutcome(status: .degraded(reason: "missing model", severity: .loud), evidence: "qwen ok, nomic missing")))
+        await orch.register(MockProbe(name: "anthropic", scripted: ProbeOutcome(status: .failed(reason: "401", severity: .critical), evidence: "key invalid")))
+        await orch.register(MockProbe(name: "voice", scripted: ProbeOutcome(status: .unknown(reason: "skipped", severity: .soft), evidence: "dormant")))
 
         let snapshot = await orch.runAll()
 
@@ -201,9 +245,9 @@ final class BootHealthOrchestratorTests: XCTestCase {
 
         XCTAssertEqual(decoded.subsystems.count, 4)
         XCTAssertEqual(decoded.subsystems[0].status, .ok)
-        XCTAssertEqual(decoded.subsystems[1].status, .degraded(reason: "missing model"))
-        XCTAssertEqual(decoded.subsystems[2].status, .failed(reason: "401"))
-        XCTAssertEqual(decoded.subsystems[3].status, .unknown(reason: "skipped"))
+        XCTAssertEqual(decoded.subsystems[1].status, .degraded(reason: "missing model", severity: .loud))
+        XCTAssertEqual(decoded.subsystems[2].status, .failed(reason: "401", severity: .critical))
+        XCTAssertEqual(decoded.subsystems[3].status, .unknown(reason: "skipped", severity: .soft))
     }
 }
 

@@ -43,8 +43,11 @@ public struct MemoryBootHealthProbe: BootHealthProbe {
             let evidence = "\(stats.turnsCount) turns, \(stats.factsActive)/\(stats.factsTotal) facts, vec=\(stats.vecVersion), sqlite=\(stats.sqliteVersion)"
             return ProbeOutcome(status: .ok, evidence: evidence)
         } catch {
+            // Round 4 — memory IS the agent's grounding. Failure here means
+            // facts vanish silently and the agent can lie about remembering
+            // (the Toby-the-dog scenario).
             return ProbeOutcome(
-                status: .failed(reason: String(describing: error)),
+                status: .failed(reason: String(describing: error), severity: .critical),
                 evidence: "getMemoryStats threw"
             )
         }
@@ -72,8 +75,10 @@ public struct AnthropicBootHealthProbe: BootHealthProbe {
         do {
             let key = try keychain.get(.anthropic)
             guard !key.isEmpty else {
+                // Round 4 — empty key is a critical block on the agent (the
+                // Anthropic provider can't authenticate).
                 return ProbeOutcome(
-                    status: .unknown(reason: "API key slot present but empty"),
+                    status: .unknown(reason: "API key slot present but empty", severity: .critical),
                     evidence: "key length 0"
                 )
             }
@@ -83,19 +88,20 @@ public struct AnthropicBootHealthProbe: BootHealthProbe {
         } catch let error as KeychainError {
             switch error {
             case .itemNotFound:
+                // Round 4 — missing key is critical (agent can't run).
                 return ProbeOutcome(
-                    status: .unknown(reason: "no API key in Keychain"),
+                    status: .unknown(reason: "no API key in Keychain", severity: .critical),
                     evidence: "keychain.itemNotFound"
                 )
             default:
                 return ProbeOutcome(
-                    status: .failed(reason: "keychain read failed: \(error)"),
+                    status: .failed(reason: "keychain read failed: \(error)", severity: .critical),
                     evidence: "keychain error"
                 )
             }
         } catch {
             return ProbeOutcome(
-                status: .failed(reason: String(describing: error)),
+                status: .failed(reason: String(describing: error), severity: .critical),
                 evidence: "keychain.get threw unexpected error"
             )
         }
@@ -143,8 +149,11 @@ public struct OllamaBootHealthProbe: BootHealthProbe {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                // Round 4 — Ollama unreachable means chat fallback + memory
+                // extraction + embeddings are all dead. Loud, not critical:
+                // Anthropic path can still work for primary chat.
                 return ProbeOutcome(
-                    status: .failed(reason: "Ollama /api/tags HTTP \(code)"),
+                    status: .failed(reason: "Ollama /api/tags HTTP \(code)", severity: .loud),
                     evidence: "non-200 from \(url.absoluteString)"
                 )
             }
@@ -156,13 +165,16 @@ public struct OllamaBootHealthProbe: BootHealthProbe {
                     evidence: "all \(requiredModels.count) required models present: \(requiredModels.joined(separator: ", "))"
                 )
             }
+            // Round 4 — missing models = the Toby case. Embedding step
+            // fails, no row inserted in `facts`, agent doesn't know it
+            // can't remember. Loud red banner so the user sees it.
             return ProbeOutcome(
-                status: .degraded(reason: "missing models: \(missing.joined(separator: ", "))"),
+                status: .degraded(reason: "missing models: \(missing.joined(separator: ", "))", severity: .loud),
                 evidence: "have \(tagged.count) models; missing \(missing.count)"
             )
         } catch {
             return ProbeOutcome(
-                status: .failed(reason: "Ollama unreachable: \(error.localizedDescription)"),
+                status: .failed(reason: "Ollama unreachable: \(error.localizedDescription)", severity: .loud),
                 evidence: "\(baseURL.absoluteString) — \(error.localizedDescription)"
             )
         }
@@ -198,8 +210,10 @@ public struct VoiceBootHealthProbe: BootHealthProbe {
     public func probe() async -> ProbeOutcome {
         let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         guard let owner = audioGraphOwner else {
+            // Round 4 — dormant voice install is a soft state: text input
+            // still works fine.
             return ProbeOutcome(
-                status: .unknown(reason: "voice subsystem not installed (dormantVoiceContinuation nil or wakeword/VAD weights missing)"),
+                status: .unknown(reason: "voice subsystem not installed (dormantVoiceContinuation nil or wakeword/VAD weights missing)", severity: .soft),
                 evidence: "AudioGraphOwner unavailable; mic TCC=\(authStatusName(micStatus))"
             )
         }
@@ -209,19 +223,20 @@ public struct VoiceBootHealthProbe: BootHealthProbe {
 
         switch micStatus {
         case .denied, .restricted:
+            // Round 4 — voice loop dead, but text still works. Loud.
             return ProbeOutcome(
-                status: .degraded(reason: "microphone TCC denied"),
+                status: .degraded(reason: "microphone TCC denied", severity: .loud),
                 evidence: "graph variant=\(variant.map { String(describing: $0) } ?? "nil"); mic=\(authStatusName(micStatus))"
             )
         case .notDetermined:
             return ProbeOutcome(
-                status: .unknown(reason: "microphone TCC not yet requested"),
+                status: .unknown(reason: "microphone TCC not yet requested", severity: .soft),
                 evidence: "graph variant=\(variant.map { String(describing: $0) } ?? "nil")"
             )
         case .authorized:
             guard variant != nil else {
                 return ProbeOutcome(
-                    status: .failed(reason: "AudioGraph never opened"),
+                    status: .failed(reason: "AudioGraph never opened", severity: .loud),
                     evidence: "mic authorized but currentVariant=nil"
                 )
             }
@@ -232,7 +247,7 @@ public struct VoiceBootHealthProbe: BootHealthProbe {
             )
         @unknown default:
             return ProbeOutcome(
-                status: .unknown(reason: "unknown TCC status \(micStatus.rawValue)"),
+                status: .unknown(reason: "unknown TCC status \(micStatus.rawValue)", severity: .soft),
                 evidence: "AVCaptureDevice.authorizationStatus returned unrecognized case"
             )
         }
@@ -260,19 +275,21 @@ public struct VisionBootHealthProbe: BootHealthProbe {
 
         switch camStatus {
         case .denied, .restricted:
+            // Round 4 — vision is optional. The agent works fine without
+            // it; soft severity per the slice plan.
             return ProbeOutcome(
-                status: .failed(reason: "camera TCC denied"),
+                status: .failed(reason: "camera TCC denied", severity: .soft),
                 evidence: "\(devices.count) device(s) discovered; mic TCC=\(authStatusName(camStatus))"
             )
         case .notDetermined:
             return ProbeOutcome(
-                status: .unknown(reason: "camera TCC not yet requested"),
+                status: .unknown(reason: "camera TCC not yet requested", severity: .soft),
                 evidence: "\(devices.count) device(s) discovered (read-only — no TCC prompt)"
             )
         case .authorized:
             if devices.isEmpty {
                 return ProbeOutcome(
-                    status: .degraded(reason: "no camera devices discovered"),
+                    status: .degraded(reason: "no camera devices discovered", severity: .soft),
                     evidence: "AVCaptureDevice.DiscoverySession returned 0 devices"
                 )
             }
@@ -283,7 +300,7 @@ public struct VisionBootHealthProbe: BootHealthProbe {
             )
         @unknown default:
             return ProbeOutcome(
-                status: .unknown(reason: "unknown TCC status \(camStatus.rawValue)"),
+                status: .unknown(reason: "unknown TCC status \(camStatus.rawValue)", severity: .soft),
                 evidence: "AVCaptureDevice.authorizationStatus returned unrecognized case"
             )
         }
@@ -317,8 +334,10 @@ public struct MCPBootHealthProbe: BootHealthProbe {
 
     public func probe() async -> ProbeOutcome {
         guard let runtime = mcpRuntime else {
+            // Round 4 — no MCP = no tools = agent has no leverage on the host.
+            // Critical.
             return ProbeOutcome(
-                status: .failed(reason: "MCPRuntime nil — build failed at install (helpers absent or unsigned?)"),
+                status: .failed(reason: "MCPRuntime nil — build failed at install (helpers absent or unsigned?)", severity: .critical),
                 evidence: "mcpRuntime property was nil at probe time"
             )
         }
@@ -326,13 +345,13 @@ public struct MCPBootHealthProbe: BootHealthProbe {
         let count = names.count
         if count == 0 {
             return ProbeOutcome(
-                status: .failed(reason: "no tools registered"),
+                status: .failed(reason: "no tools registered", severity: .critical),
                 evidence: "registeredToolNames().count == 0"
             )
         }
         if count < minimumExpected {
             return ProbeOutcome(
-                status: .degraded(reason: "expected ≥\(minimumExpected) tools, registry has \(count)"),
+                status: .degraded(reason: "expected ≥\(minimumExpected) tools, registry has \(count)", severity: .loud),
                 evidence: names.sorted().joined(separator: ", ")
             )
         }
@@ -360,22 +379,26 @@ public struct ReplayBootHealthProbe: BootHealthProbe {
 
     public func probe() async -> ProbeOutcome {
         guard replayLogPresent else {
+            // Round 4 — ReplayLog init failure is critical (no audit trail,
+            // no eval harness data, observability collapses).
             return ProbeOutcome(
-                status: .failed(reason: "ReplayLog nil — open() failed at install"),
+                status: .failed(reason: "ReplayLog nil — open() failed at install", severity: .critical),
                 evidence: "AppDelegate.replayLog was nil"
             )
         }
         let fm = FileManager.default
         guard fm.fileExists(atPath: databaseURL.path) else {
+            // Round 4 — missing file (existing log got moved/deleted) is loud:
+            // a fresh one would be re-created, but the old one is gone.
             return ProbeOutcome(
-                status: .failed(reason: "replay.sqlite missing at \(databaseURL.path)"),
+                status: .failed(reason: "replay.sqlite missing at \(databaseURL.path)", severity: .loud),
                 evidence: "FileManager.fileExists == false"
             )
         }
         let parent = databaseURL.deletingLastPathComponent()
         guard fm.isWritableFile(atPath: parent.path) else {
             return ProbeOutcome(
-                status: .failed(reason: "parent dir not writable: \(parent.path)"),
+                status: .failed(reason: "parent dir not writable: \(parent.path)", severity: .loud),
                 evidence: "FileManager.isWritableFile(parent) == false"
             )
         }
@@ -407,8 +430,9 @@ public struct WebviewBootHealthProbe: BootHealthProbe {
 
     public func probe() async -> ProbeOutcome {
         guard let bridge = bridge else {
+            // Round 4 — no bridge = no UI at all. Critical.
             return ProbeOutcome(
-                status: .failed(reason: "WebviewBridge nil — never constructed"),
+                status: .failed(reason: "WebviewBridge nil — never constructed", severity: .critical),
                 evidence: "webviewBridge property was nil at probe time"
             )
         }
@@ -416,12 +440,12 @@ public struct WebviewBootHealthProbe: BootHealthProbe {
         switch state {
         case .idle:
             return ProbeOutcome(
-                status: .unknown(reason: "handshake never started"),
+                status: .unknown(reason: "handshake never started", severity: .soft),
                 evidence: "HandshakeState.idle"
             )
         case .sentHello:
             return ProbeOutcome(
-                status: .unknown(reason: "handshake in flight"),
+                status: .unknown(reason: "handshake in flight", severity: .soft),
                 evidence: "HandshakeState.sentHello (awaiting JS ack)"
             )
         case .armed:
@@ -430,13 +454,14 @@ public struct WebviewBootHealthProbe: BootHealthProbe {
                 evidence: "HandshakeState.armed — JS bus live"
             )
         case .mismatched(let swift, let js):
+            // Round 4 — protocol mismatch is non-recoverable without rebuild.
             return ProbeOutcome(
-                status: .failed(reason: "protocol version mismatch — Swift=\(swift), JS=\(js); rebuild webview bundle"),
+                status: .failed(reason: "protocol version mismatch — Swift=\(swift), JS=\(js); rebuild webview bundle", severity: .critical),
                 evidence: "HandshakeState.mismatched(\(swift), \(js))"
             )
         case .timedOut:
             return ProbeOutcome(
-                status: .failed(reason: "JS never acked hello — webview bundle missing or crashed at startup"),
+                status: .failed(reason: "JS never acked hello — webview bundle missing or crashed at startup", severity: .critical),
                 evidence: "HandshakeState.timedOut after 2s"
             )
         }
@@ -452,15 +477,20 @@ public struct WebviewBootHealthProbe: BootHealthProbe {
 public struct DormantSubsystemProbe: BootHealthProbe {
     public let name: String
     private let reason: String
+    private let severity: FailureSeverity
 
-    public init(subsystemName: String, reason: String) {
+    /// Round 4 — `severity` defaults to `.soft`. Callers wiring memory or
+    /// MCP placeholders override to `.critical` so an outright-failed
+    /// install doesn't get downgraded to "couldn't probe yet."
+    public init(subsystemName: String, reason: String, severity: FailureSeverity = .soft) {
         self.name = subsystemName
         self.reason = reason
+        self.severity = severity
     }
 
     public func probe() async -> ProbeOutcome {
         ProbeOutcome(
-            status: .unknown(reason: reason),
+            status: .unknown(reason: reason, severity: severity),
             evidence: "subsystem actor unavailable at probe-registration time"
         )
     }

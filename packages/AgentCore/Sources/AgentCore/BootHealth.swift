@@ -1,5 +1,35 @@
 import Foundation
 
+// MARK: - FailureSeverity
+
+/// Round 4 — how loudly a non-ok subsystem must announce itself.
+///
+/// The Toby-the-dog incident (Jarvis said "Got it" while the embedder
+/// model was missing and the fact never persisted) motivated this: probes
+/// were already reporting `.degraded` correctly, but the banner was
+/// dismissible and the agent's system prompt didn't know, so the model
+/// confidently lied about remembering. Severity drives:
+///   * banner non-dismissibility (critical)
+///   * menu-bar icon tint (loud + critical)
+///   * the agent's system-prompt "DO NOT promise" preamble (loud + critical)
+///
+/// Soft is the default for "can't probe yet" states — not red, just a row
+/// in the Status panel.
+public enum FailureSeverity: Sendable, Equatable, Codable {
+    /// Subsystem failure prevents core agent function (e.g., memory off,
+    /// no API key, no MCP tools, webview never armed). Non-dismissible
+    /// banner; red menu-bar icon; agent system prompt warns the model.
+    case critical
+    /// Subsystem partially functional — main function works, but at least
+    /// one capability is broken (e.g., Ollama reachable but embedder
+    /// missing → chat works, fact extraction doesn't). Dismissible red
+    /// banner; red menu-bar icon; agent preamble lists the gap.
+    case loud
+    /// Subsystem can't be probed right now (TCC not yet requested, dormant
+    /// install path). Status panel shows it as `?`; no banner.
+    case soft
+}
+
 // MARK: - ProbeStatus
 
 /// Live state of a single subsystem.
@@ -8,6 +38,10 @@ import Foundation
 /// carries a reason string so a snapshot can never report `state=unknown`
 /// without explaining why. A probe that can't execute *must* return
 /// `.unknown(reason:)`, never `.ok`.
+///
+/// Round 4 — every non-ok case also carries a `FailureSeverity` so the App
+/// layer can route the failure correctly (non-dismissible banner vs. quiet
+/// Status-panel row).
 public enum ProbeStatus: Sendable, Equatable, Codable {
     /// Subsystem is healthy. Evidence on `SubsystemHealth.evidence` describes
     /// what was verified (e.g., "vec_version=v0.1.6, sqlite=3.51.0").
@@ -16,16 +50,28 @@ public enum ProbeStatus: Sendable, Equatable, Codable {
     /// Subsystem is partially functional. Used when one capability of a
     /// multi-capability subsystem is broken but the rest work — e.g.,
     /// Ollama reachable but a required model is missing.
-    case degraded(reason: String)
+    case degraded(reason: String, severity: FailureSeverity)
 
     /// Subsystem is non-functional and a critical dependency failed.
     /// Triggers banner enqueue in the App layer.
-    case failed(reason: String)
+    case failed(reason: String, severity: FailureSeverity)
 
     /// Probe could not execute. NOT a fallback for "looks okay" — only
     /// for cases like "API key not configured, so we can't probe Anthropic"
     /// or "voice never installed because dormantVoiceContinuation was nil."
-    case unknown(reason: String)
+    /// Default severity is `.soft` — a probe that can't run yet doesn't
+    /// usually warrant red.
+    case unknown(reason: String, severity: FailureSeverity)
+
+    /// Round 4 — severity of this status. `.ok` reports `nil`; every other
+    /// case returns its carried severity.
+    public var severity: FailureSeverity? {
+        switch self {
+        case .ok: return nil
+        case .degraded(_, let s), .failed(_, let s), .unknown(_, let s):
+            return s
+        }
+    }
 }
 
 // MARK: - ProbeOutcome
@@ -112,6 +158,39 @@ public struct BootHealthSnapshot: Sendable, Equatable, Codable {
             return false
         }
     }
+
+    /// Round 4 — worst severity present in the snapshot. `.ok` only if
+    /// every subsystem reported `.ok`; otherwise the worst severity wins
+    /// (`.critical` > `.loud` > `.soft`). Drives menu-bar icon tint and
+    /// agent preamble injection.
+    public var overallHealth: OverallHealth {
+        var worst: OverallHealth = .ok
+        for health in subsystems {
+            switch health.status.severity {
+            case .none:
+                continue
+            case .some(.soft):
+                if worst == .ok { worst = .soft }
+            case .some(.loud):
+                if worst == .ok || worst == .soft { worst = .loud }
+            case .some(.critical):
+                worst = .critical
+                return worst
+            }
+        }
+        return worst
+    }
+}
+
+// MARK: - OverallHealth
+
+/// Round 4 — rollup of the worst severity in a snapshot. `.ok` means every
+/// subsystem reported `.ok`; otherwise the worst non-ok severity wins.
+public enum OverallHealth: Sendable, Equatable, Codable {
+    case ok
+    case soft
+    case loud
+    case critical
 }
 
 // MARK: - BootHealthOrchestrator
