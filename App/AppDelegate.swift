@@ -750,6 +750,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let snapshot = await bootHealthOrchestrator.runAll()
         emitBootHealthLog(snapshot: snapshot)
         enqueueFailedBootHealthBanners(snapshot: snapshot)
+        // Round 4 — push the latest degradation summary into the
+        // AgentOrchestrator so the next turn's system prompt warns the
+        // model not to lie about dead capabilities (the Toby case). The
+        // orchestrator may be nil here on cold-boot if installAgent
+        // hasn't finished — the bootHealthTask awaits selfKnowledgeInstallTask
+        // which transitively awaits agentInstallTask, but defensive nil-coalesce
+        // belt-and-suspenders against future install-order changes.
+        let summary = buildDegradationSummary(snapshot: snapshot)
+        if let orchestrator = self.agentOrchestrator {
+            await orchestrator.setDegradationSummary(summary)
+        }
+    }
+
+    /// Round 4 — build the agent-facing "DO NOT promise" preamble from a
+    /// boot-health snapshot. Returns nil when everything is `.ok` so the
+    /// orchestrator's normal system prompt is used verbatim. Keeps the
+    /// string well under the 4096-char cache-eligibility boundary
+    /// (Pitfall #4) so adding it doesn't flip `cache_control` emission.
+    @MainActor
+    func buildDegradationSummary(snapshot: BootHealthSnapshot) -> String? {
+        var critical: [(name: String, reason: String)] = []
+        var loud: [(name: String, reason: String)] = []
+        for health in snapshot.subsystems {
+            guard let severity = health.status.severity else { continue }
+            let reason = reasonForBanner(health.status)
+            switch severity {
+            case .critical:
+                critical.append((name: health.name, reason: reason))
+            case .loud:
+                loud.append((name: health.name, reason: reason))
+            case .soft:
+                continue
+            }
+        }
+        if critical.isEmpty && loud.isEmpty { return nil }
+
+        var lines: [String] = ["CRITICAL — SUBSYSTEMS DEGRADED:"]
+        for entry in critical {
+            lines.append("- \(entry.name): \(entry.reason) — DO NOT promise to use \(entry.name)")
+        }
+        for entry in loud {
+            lines.append("- \(entry.name): degraded — \(entry.reason)")
+        }
+        lines.append("Be honest. Do not claim to use tools that are unavailable. Do not pretend memory works if it doesn't.")
+        return lines.joined(separator: "\n")
     }
 
     /// Round 3 — opens the Status panel (lazy-creates on first click).

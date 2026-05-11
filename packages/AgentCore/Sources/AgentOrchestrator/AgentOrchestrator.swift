@@ -105,6 +105,24 @@ public actor AgentOrchestrator {
     /// sites that don't care about history still compile unchanged.
     private let sessionHistoryLookup: SessionHistoryLookup
 
+    /// Round 4 — boot-health degradation summary. When non-nil and non-empty,
+    /// prepended VERBATIM before the system prompt on every turn so the
+    /// model can't lie about working features (the Toby-the-dog case:
+    /// embedder missing → fact never persisted → Jarvis said "Got it" anyway).
+    ///
+    /// The string is built by `AppDelegate.buildDegradationSummary` after
+    /// `runBootHealth` finishes and is updated by re-probes from the Status
+    /// panel via `setDegradationSummary(_:)`. The orchestrator treats it as
+    /// an opaque trusted prefix — no parsing, no truncation beyond the soft
+    /// 500-char ceiling enforced at build time (see CacheHints invariant:
+    /// keep below the 4096-char Anthropic cache breakpoint).
+    ///
+    /// Mutable because `installAgent` runs BEFORE `runBootHealth` in the
+    /// boot order, so we need to update the value post-construction. Reads
+    /// happen inside `runTurn` so actor isolation makes the read/write
+    /// pair safe without external locking.
+    private var degradationSummary: String?
+
     private let logger: Logger
 
     // MARK: - Outbound channel
@@ -151,7 +169,8 @@ public actor AgentOrchestrator {
         availableToolsResolver: (@Sendable () async -> [ToolSchema])? = nil,
         visionRouter: VisionRouter? = nil,
         presenceSnapshot: PresenceStateSnapshot? = nil,
-        sessionHistoryLookup: @escaping SessionHistoryLookup = AgentOrchestrator.emptySessionHistoryLookup
+        sessionHistoryLookup: @escaping SessionHistoryLookup = AgentOrchestrator.emptySessionHistoryLookup,
+        degradationSummary: String? = nil
     ) {
         self.configStore = configStore
         self.providerFactory = providerFactory
@@ -164,6 +183,7 @@ public actor AgentOrchestrator {
         self.visionRouter = visionRouter
         self.presenceSnapshot = presenceSnapshot
         self.sessionHistoryLookup = sessionHistoryLookup
+        self.degradationSummary = degradationSummary
         self.logger = Logger(label: JarvisLogChannel.agent.rawValue)
         self.events = BoundedAsyncChannel<OrchestratorEvent>(capacity: 256, policy: .suspend)
     }
@@ -190,6 +210,25 @@ public actor AgentOrchestrator {
     /// allocating the `TurnID` when `input.source == .voice`.
     private func recordVoiceTurn(_ turnId: TurnID) {
         voiceOriginatedTurns.insert(turnId)
+    }
+
+    // MARK: - Round 4 — degradation summary setter
+
+    /// Updates the boot-health degradation summary. Called from
+    /// `AppDelegate.runBootHealth()` after every probe sweep — once at
+    /// boot, then again on every Status-panel re-probe — so the agent's
+    /// system prompt reflects current subsystem health on the very next
+    /// turn. Pass `nil` (or empty string) to clear the summary when every
+    /// subsystem returns to `.ok`.
+    public func setDegradationSummary(_ summary: String?) {
+        degradationSummary = summary
+    }
+
+    /// Test introspection — read-only view of the current summary, used
+    /// by the AgentOrchestratorDegradationPreambleTests regression to
+    /// confirm AppDelegate-side updates land inside the actor.
+    public func _currentDegradationSummary() -> String? {
+        degradationSummary
     }
 
     // MARK: - Public entry points (AGENT-06)
@@ -312,6 +351,19 @@ public actor AgentOrchestrator {
         let composedSystem = UntrustedWrapper.composeSystemPrompt(
             base: systemPrompt, nonce: nonce
         )
+        // Round 4: degradation summary is the FIRST thing the model sees
+        // when any subsystem is critical/loud. Prepended outside the
+        // nonce wrapper because the string is locally rendered from a
+        // typed BootHealthSnapshot (no untrusted input), and it must
+        // outrank everything else — including the locked self-aware
+        // preamble — so the model can't promise to use a dead capability.
+        // Empty / nil → omit (no behavior change when everything is .ok).
+        let degradationLine: String?
+        if let summary = degradationSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
+            degradationLine = summary
+        } else {
+            degradationLine = nil
+        }
         // Plan 09-03 / D-13 + D-14: append presence enrichment OUTSIDE the
         // nonce-wrapped untrusted region. The presence sentence is trusted
         // (rendered locally by PresenceStateSnapshot from a typed enum), so
@@ -319,11 +371,12 @@ public actor AgentOrchestrator {
         // (D-14) is enforced inside `currentEnrichment()` — when nil we
         // omit the suffix entirely.
         let presenceLine = await presenceSnapshot?.currentEnrichment()
-        let finalSystem: String
+        var finalSystem = composedSystem
+        if let degradationLine {
+            finalSystem = "\(degradationLine)\n\n\(finalSystem)"
+        }
         if let presenceLine, !presenceLine.isEmpty {
-            finalSystem = "\(composedSystem)\n\n\(presenceLine)"
-        } else {
-            finalSystem = composedSystem
+            finalSystem = "\(finalSystem)\n\n\(presenceLine)"
         }
         // B-02 (carry-forward bug, fixed by tactical patch outside the
         // v1.0 migration sequence): hydrate prior turn history from the
