@@ -92,4 +92,19 @@ public extension BannerContent {
         body: "The camera session ended unexpectedly. Presence detection paused; frame-attach unavailable until the camera comes back.",
         action: nil
     )
+
+    /// Round 2 boot-health failure. Per-subsystem dedup id so each failing
+    /// subsystem enqueues at most one banner per launch. Lower priority
+    /// than the keychain/hotkey banners (those block specific features
+    /// the user already asked for); higher priority than ollama-rejected
+    /// so a probe-failure shadows an environment-config issue.
+    static func bootHealthFailed(subsystem: String, reason: String) -> BannerContent {
+        BannerContent(
+            id: "boot-health-failed-\(subsystem)",
+            priority: 3,
+            title: "Subsystem failed boot probe",
+            body: "\(subsystem.capitalized): \(reason). Open Status… in the menu bar for details.",
+            action: nil
+        )
+    }
 }

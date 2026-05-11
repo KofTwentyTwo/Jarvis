@@ -170,6 +170,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// downstream subscriber dormant for the process lifetime.
     private var mcpInstallTask: Task<Void, Never>?
 
+    // MARK: - Round 2 — Boot health
+
+    /// Owns the live `BootHealthSnapshot`. Round 3's Status menu reads from
+    /// here and re-probes via `runAll()` on open. Constructed eagerly so
+    /// `lastSnapshot()` is queryable even before the first probe sweep.
+    let bootHealthOrchestrator = BootHealthOrchestrator()
+
+    /// Task spawned at the end of `applicationWillFinishLaunching` — awaits
+    /// every install Task in the chain, registers concrete probes against
+    /// the now-live actors, then runs the first sweep. Subsequent sweeps
+    /// are user-driven from the Status menu.
+    private var bootHealthTask: Task<Void, Never>?
+
     /// Drain task spawned in `applicationWillFinishLaunching` — reads
     /// envelopes from `orchToReplayChannel` and forwards to `replayLog`.
     /// CR-02: production consumer for ME-04. Previously this task
@@ -687,6 +700,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await self?.voiceInstallTask?.value
             await self?.installSelfKnowledgeTools()
         }
+
+        // 16. Round 2 — Boot-phase health probes. Awaits the tail of the
+        //     install chain (selfKnowledgeInstallTask transitively awaits
+        //     every other install Task) so each probe reads the live state
+        //     of a settled subsystem. Logs structured per-subsystem lines
+        //     and enqueues a banner for any .failed result. The snapshot
+        //     is stored on `bootHealthOrchestrator` for Round 3's Status
+        //     menu to render.
+        bootHealthTask = Task { @MainActor [weak self] in
+            await self?.selfKnowledgeInstallTask?.value
+            await self?.runBootHealth()
+        }
     }
 
     /// CR-02 (REVIEW 05): on-disk replay log path. Lives next to
@@ -695,8 +720,182 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configFileURL().deletingLastPathComponent().appendingPathComponent("replay.sqlite")
     }
 
+    // MARK: - Round 2 — Boot health
+
+    /// Registers the eight concrete `BootHealthProbe`s against the
+    /// now-live subsystem actors, runs them in parallel, logs each
+    /// result as a structured line, and enqueues banners for any
+    /// `.failed` subsystem. Idempotent — safe to call again from the
+    /// Status panel's "Re-probe" button (Round 3); the orchestrator's
+    /// snapshot overwrites cleanly.
+    ///
+    /// Anti-fake-status invariant: every probe MUST report a concrete
+    /// status (`.ok`, `.degraded`, `.failed`, `.unknown`). If a
+    /// subsystem never installed, the probe still runs — it just
+    /// returns `.unknown(reason:)`. The orchestrator is not a "best
+    /// effort" surface; a missing probe is itself a bug.
+    @MainActor
+    func runBootHealth() async {
+        // Register the eight probes the first time we run. The orchestrator
+        // de-dupes via append, so on the second invocation (Round 3's
+        // re-probe) we skip registration. Inspecting `registeredNames`
+        // is cheap because the actor returns an array snapshot.
+        if await bootHealthOrchestrator.registeredNames().isEmpty {
+            registerBootHealthProbes()
+        }
+        let snapshot = await bootHealthOrchestrator.runAll()
+        emitBootHealthLog(snapshot: snapshot)
+        enqueueFailedBootHealthBanners(snapshot: snapshot)
+    }
+
+    /// Constructs one probe per subsystem and registers it on the
+    /// orchestrator. Each probe captures a strong reference to the live
+    /// actor it queries — at probe-time the actor must be addressable.
+    /// Subsystems that never installed get a placeholder probe that
+    /// honestly reports `.unknown` from the probe body itself.
+    @MainActor
+    private func registerBootHealthProbes() {
+        // Memory — uses the same MemoryStatsStoreAdapter the
+        // get_memory_stats MCP tool consumes. Reconstructs the adapter
+        // here rather than caching it on AppDelegate, since the adapter
+        // is cheap and only needs MemoryStore + DB URL.
+        let dbURL = configFileURL().deletingLastPathComponent().appendingPathComponent("jarvis.db")
+        if let memoryStore = self.memoryStore {
+            Task {
+                await bootHealthOrchestrator.register(
+                    MemoryBootHealthProbe(adapter: MemoryStatsStoreAdapter(store: memoryStore, databaseURL: dbURL))
+                )
+            }
+        } else {
+            Task {
+                await bootHealthOrchestrator.register(DormantSubsystemProbe(
+                    subsystemName: "memory",
+                    reason: "MemoryStore.init failed at install (vec0 missing or DB unwritable)"
+                ))
+            }
+        }
+
+        // Anthropic — structural keychain check. Cheap, no network.
+        Task {
+            await bootHealthOrchestrator.register(
+                AnthropicBootHealthProbe(keychain: self.keychainStore)
+            )
+        }
+
+        // Ollama — live /api/tags against the configured base URL.
+        // ConfigStore is an actor; `launch` is actor-isolated even though
+        // it's a `let`. Read it inside the Task and then register.
+        if let cfg = self.configStore {
+            Task {
+                let baseURL = await cfg.launch.ollama.baseURL
+                await bootHealthOrchestrator.register(OllamaBootHealthProbe(baseURL: baseURL))
+            }
+        } else {
+            Task {
+                await bootHealthOrchestrator.register(DormantSubsystemProbe(
+                    subsystemName: "ollama",
+                    reason: "ConfigStore nil — base URL unknown"
+                ))
+            }
+        }
+
+        // Voice — captures AudioGraphOwner if live.
+        Task { [audioGraphOwner = self.audioGraphOwner] in
+            await bootHealthOrchestrator.register(
+                VoiceBootHealthProbe(audioGraphOwner: audioGraphOwner)
+            )
+        }
+
+        // Vision — TCC status + device enumeration only; no captured actor.
+        Task {
+            await bootHealthOrchestrator.register(VisionBootHealthProbe())
+        }
+
+        // MCP — captures live MCPRuntime if build succeeded.
+        Task { [mcpRuntime = self.mcpRuntime] in
+            await bootHealthOrchestrator.register(
+                MCPBootHealthProbe(mcpRuntime: mcpRuntime)
+            )
+        }
+
+        // Replay — captures DB URL + live ReplayLog presence flag.
+        Task { [replayLog = self.replayLog] in
+            await bootHealthOrchestrator.register(
+                ReplayBootHealthProbe(
+                    databaseURL: self.replayDatabaseURL(),
+                    replayLogPresent: replayLog != nil
+                )
+            )
+        }
+
+        // Webview — captures live WebviewBridge handshake state.
+        Task { [bridge = self.webviewBridge] in
+            await bootHealthOrchestrator.register(
+                WebviewBootHealthProbe(bridge: bridge)
+            )
+        }
+    }
+
+    /// Writes one structured log line per subsystem in the snapshot, plus
+    /// a header summarising the total / .ok / .failed / .degraded / .unknown
+    /// counts. The format is parser-friendly (`key=value` pairs with
+    /// quoted values where evidence contains spaces) so a future log
+    /// scraper can extract the columns cleanly.
+    @MainActor
+    private func emitBootHealthLog(snapshot: BootHealthSnapshot) {
+        let counts = countByStatus(snapshot.subsystems)
+        systemLogger?.info(
+            "BootHealth: probed=\(snapshot.subsystems.count) ok=\(counts.ok) degraded=\(counts.degraded) failed=\(counts.failed) unknown=\(counts.unknown)"
+        )
+        for health in snapshot.subsystems {
+            let label = stateLabel(health.status)
+            let evidence = health.evidence.replacingOccurrences(of: "\"", with: "\\\"")
+            systemLogger?.info(
+                "BootHealth: subsystem=\(health.name) state=\(label) latencyMs=\(health.latencyMs) evidence=\"\(evidence)\""
+            )
+        }
+    }
+
+    /// One banner per `.failed` subsystem. `BannerContent.bootHealthFailed`
+    /// dedups internally by id so re-probing doesn't spam — the same
+    /// subsystem id won't enqueue twice in a launch.
+    @MainActor
+    private func enqueueFailedBootHealthBanners(snapshot: BootHealthSnapshot) {
+        for health in snapshot.failed {
+            let reason: String
+            if case .failed(let r) = health.status { reason = r } else { reason = "unknown" }
+            bannerCoordinator?.enqueue(.bootHealthFailed(subsystem: health.name, reason: reason))
+        }
+    }
+
+    private func stateLabel(_ status: ProbeStatus) -> String {
+        switch status {
+        case .ok: return "ok"
+        case .degraded: return "degraded"
+        case .failed: return "failed"
+        case .unknown: return "unknown"
+        }
+    }
+
+    private func countByStatus(_ subsystems: [SubsystemHealth]) -> (ok: Int, degraded: Int, failed: Int, unknown: Int) {
+        var ok = 0; var degraded = 0; var failed = 0; var unknown = 0
+        for h in subsystems {
+            switch h.status {
+            case .ok: ok += 1
+            case .degraded: degraded += 1
+            case .failed: failed += 1
+            case .unknown: unknown += 1
+            }
+        }
+        return (ok, degraded, failed, unknown)
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         hotkeyBinder?.unbind()
+        // Round 2: cancel any in-flight boot-health task. Probes are
+        // short-lived but a re-probe from Round 3's Status menu could
+        // still be mid-flight when the user quits.
+        bootHealthTask?.cancel()
         // Plan 05-05 / ME-04: tear down the orch→replay drain so the Task
         // doesn't outlive the process.
         orchToReplayDrainTask?.cancel()

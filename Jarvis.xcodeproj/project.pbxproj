@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		01787A3F29649644D0B3090D /* MCPAppleScriptMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5077B9E3E7541D72CE0EB1B /* MCPAppleScriptMain.swift */; };
+		B0010002000000000000B002 /* BootHealthProbes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0010001000000000000B001 /* BootHealthProbes.swift */; };
 		0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF0892A5DFF2AD38A93834 /* BannerContent.swift */; };
 		07E7F32B3857ED215DE59FBE /* Keychain in Frameworks */ = {isa = PBXBuildFile; productRef = 1440CCDB2CC412B099BD0310 /* Keychain */; };
 		0B1E24FF2DB306F28A36680E /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 8B5C832427B631F1F6EED6C2 /* Logging */; };
@@ -144,6 +145,7 @@
 
 /* Begin PBXFileReference section */
 		00C01D284ECCFC986C7F2E16 /* Keychain */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Keychain; path = packages/Keychain; sourceTree = SOURCE_ROOT; };
+		B0010001000000000000B001 /* BootHealthProbes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootHealthProbes.swift; sourceTree = "<group>"; };
 		024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStateTests.swift; sourceTree = "<group>"; };
 		0358E0CAC1377752398FA3C4 /* ReplayingToolResultObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplayingToolResultObserver.swift; sourceTree = "<group>"; };
 		096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBanner.swift; sourceTree = "<group>"; };
@@ -314,6 +316,7 @@
 				467AE2D19D58325D227E2F89 /* Assets.xcassets */,
 				90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */,
 				2C42ACA7552D565D9F198399 /* MCPBusGatewayAdapter.swift */,
+				B0010000000000000000B000 /* Boot */,
 				F76520C565169D7547EE9608 /* HUD */,
 				EE585F62F46C659EDFC48DE7 /* MCP */,
 				35E7CF3C8F80086AD447480E /* MenuBar */,
@@ -326,6 +329,14 @@
 				922FCD26000A64044B1FF187 /* Wizard */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		B0010000000000000000B000 /* Boot */ = {
+			isa = PBXGroup;
+			children = (
+				B0010001000000000000B001 /* BootHealthProbes.swift */,
+			);
+			path = Boot;
 			sourceTree = "<group>";
 		};
 		153D019325D521C96685E1FC /* Sources */ = {
@@ -1315,6 +1326,7 @@
 				2245DEFA1E6C3880E3C78E56 /* AppDelegateContextBuilderAdapter.swift in Sources */,
 				CCA51A998B128C9C03ED0662 /* AppDelegateFrameAttachAdapters.swift in Sources */,
 				0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */,
+				B0010002000000000000B002 /* BootHealthProbes.swift in Sources */,
 				C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */,
 				A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */,
 				E218ADC35078C6F26F0D0041 /* HUDBanner.swift in Sources */,
