@@ -2,9 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Issue tracking
+
+**GitHub Issues at https://github.com/KofTwentyTwo/Jarvis/issues is the canonical tracker for all bugs, audit findings, and feature work.** `docs/TODO.md` is retained for **historical reference only** — do NOT add new entries to it. Migration phases live as `epic` issues; bugs as `bug` issues; audit findings as `audit-finding` issues. Label conventions: `severity:<critical|high|medium|low>`, `area:<subsystem>`. New work always opens an issue; commits reference issues with `Closes #N` or `Refs #N`.
+
 ## Repository state
 
-Post-v0.12.0 audit-and-stabilize. All 9 GSD phases shipped (Foundations → Bus → HUD → Agent Core → MCP → Voice → Memory+Vision → Hardening → Orchestrator Wiring). Active workstream is closing the "wired but dead" gaps surfaced by the 2026-05-03 / 2026-05-04 audits — tracked day-to-day in `docs/SESSION-STATE.md` (handoff state) and `docs/TODO.md` (live triage). Milestone-level state lives in `.planning/STATE.md`.
+Post-v0.12.0 audit-and-stabilize. All 9 GSD phases shipped (Foundations → Bus → HUD → Agent Core → MCP → Voice → Memory+Vision → Hardening → Orchestrator Wiring). Active workstream is the v1.0 API migration (M-0..M-7 epics in GitHub Issues) plus the 2026-05-12 audit follow-ups. Day-to-day handoff narrative still lives in `docs/SESSION-STATE.md`; live triage has moved to GitHub Issues. Milestone-level state lives in `.planning/STATE.md`.
 
 **Authoritative state lives in `.planning/`:**
 - `.planning/PROJECT.md` — project context, core value, active requirements, key decisions
