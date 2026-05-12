@@ -424,6 +424,14 @@ public actor VoiceController {
         }
 
         let vad = vadFactory()
+        // Reset Silero LSTM hidden state between sessions
+        // (audit-2026-05-12 P1-3 / Issue #34). The vadFactory closure
+        // typically caches a single `SileroVAD` instance per process —
+        // without `reset()`, hidden state from session N's `.speechEnd`
+        // (encoding "we just exited speech") biases session N+1's
+        // first 1–3 windows toward `.silence`, dropping soft-spoken
+        // opening syllables from STT input.
+        vad.reset()
         let hangover = Self.vadHangoverChunks
         vadInterceptorTask = Task { [weak self] in
             await self?.runVADInterceptor(
