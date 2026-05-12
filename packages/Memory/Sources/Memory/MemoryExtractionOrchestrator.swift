@@ -119,13 +119,19 @@ public actor MemoryExtractionOrchestrator {
                 assistantText: job.assistantText,
                 priorActiveFacts: priorFacts
             )
-            // Stable, but currently best-effort: TurnID is a UUID-string
-            // wrapper; we hash it to Int64 for the DB column. Plan 07-03's
-            // search path can use the hash to correlate facts back to turns.
-            let turnIdInt: Int64 = stableHash(job.turnId.rawValue)
+            // Audit 2026-05-12 / M-4 (Issue #15): `facts.source_turn_id` is
+            // no longer derived from an FNV-1a hash of `TurnID.rawValue`.
+            // The hash was Phase-7-era and conflated two disjoint number
+            // systems (TurnID UUID strings vs. turns.id INTEGER rowid),
+            // storing a value that joined nothing. We now pass 0 as a
+            // sentinel meaning "no correlated turn rowid"; fact-to-turn
+            // correlation is best done via `valid_from` timestamp proximity
+            // until a future change threads the real `turns.id` rowid back
+            // from `appendTurn`. Schema comment was updated to match.
+            let sentinelSourceTurnId: Int64 = 0
             for op in ops {
                 do {
-                    try await applyOp(op, turnIdInt)
+                    try await applyOp(op, sentinelSourceTurnId)
                 } catch {
                     logger.error("memory applyOp failed: \(error)")
                 }
@@ -133,21 +139,5 @@ public actor MemoryExtractionOrchestrator {
         } catch {
             logger.error("memory extraction failed for turnId=\(job.turnId.rawValue): \(error)")
         }
-    }
-
-    /// Stable 64-bit hash of an arbitrary string. We use FNV-1a so the
-    /// hash is identical across process launches (Swift's built-in
-    /// `String.hashValue` is randomized per process and can't be persisted
-    /// to a SQLite column for correlation).
-    private func stableHash(_ s: String) -> Int64 {
-        var hash: UInt64 = 0xcbf29ce484222325
-        let prime: UInt64 = 0x100000001b3
-        for byte in s.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* prime
-        }
-        // Fold to signed Int64 — drop the sign bit so the value stays
-        // positive (SQLite Int64 column indexes nicer when always positive).
-        return Int64(hash & 0x7FFFFFFFFFFFFFFF)
     }
 }

@@ -32,18 +32,17 @@ public enum MemorySchema {
 
         // Facts table — temporal validity + supersede chain + soft delete.
         //
-        // `source_turn_id` is a CORRELATION TAG, NOT a foreign key. The
-        // memory-extraction writer (`MemoryExtractionOrchestrator.process`)
-        // FNV-1a-hashes the originating `TurnID` UUID to an Int64 because
-        // `TurnID` is a string-backed UUID and the writer needs an integer
-        // column. The hash space and `turns.id` (AUTOINCREMENT) never
-        // collide by design — they're disjoint number systems — so any
-        // `REFERENCES turns(id)` on this column would fail every insert
-        // with SQLITE_CONSTRAINT_FOREIGNKEY (code 19). The constraint was
-        // present in the original schema and silently broke fact persistence
-        // for the entire history of the project until the 2026-05-12 dogfood
-        // surfaced it. Reintroducing the FK without first wiring the writer
-        // to use real `turns.id` rowids would re-break persistence.
+        // `source_turn_id` is a CORRELATION TAG, NOT a foreign key, and as
+        // of audit 2026-05-12 / M-4 (Issue #15) it is effectively unused.
+        // The pre-fix writer FNV-1a-hashed the originating `TurnID` UUID to
+        // an Int64, but the hash space and `turns.id` (AUTOINCREMENT) were
+        // disjoint number systems — joining `facts.source_turn_id` against
+        // `turns.id` returned nothing on every query. Reintroducing a real
+        // `REFERENCES turns(id)` on this column would require threading the
+        // real rowid from `appendTurn` through the extraction pipeline; until
+        // that lands, the writer passes 0 as a sentinel meaning "no
+        // correlated turn rowid." Fact-to-turn correlation is via
+        // `valid_from` timestamp proximity.
         //
         // `superseded_by REFERENCES facts(id)` IS a real FK — the supersede
         // chain uses `priorFact.id` from a previous `applyOp` return value,

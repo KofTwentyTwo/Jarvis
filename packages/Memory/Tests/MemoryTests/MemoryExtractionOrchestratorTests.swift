@@ -301,6 +301,52 @@ final class MemoryExtractionOrchestratorTests: XCTestCase {
         await orchestrator.shutdown()
     }
 
+    /// Audit 2026-05-12 / M-4 (Issue #15) — `MemoryExtractionOrchestrator.process`
+    /// must NOT pass an FNV-1a hash of the TurnID UUID as `sourceTurnId`.
+    /// Pre-fix that value was a meaningless 64-bit hash that joined nothing
+    /// in the `turns` table. The sentinel 0 is the cleanest signal that
+    /// fact-to-turn correlation is "not yet wired" without storing nonsense.
+    /// (Audit option 1: drop the hash; future change may thread the real
+    /// `turns.id` rowid via `appendTurn` → `flushPair` → `ExtractionJob`.)
+    func testProcessUsesSentinelSourceTurnIdNotFNVHash() async throws {
+        let provider = TimedMockProvider()
+        provider.argsJSON = try JSONSerialization.data(withJSONObject: ["ops": [
+            ["op": "ADD", "subject": "user", "predicate": "has_dog_named", "object": "Toby"]
+        ]])
+        let extractor = MemoryExtractor(provider: provider)
+        let spy = SpyApplyOp()
+        let orchestrator = MemoryExtractionOrchestrator(
+            extractor: extractor,
+            applyOp: { op, turnId in spy.record(op, sourceTurnId: turnId) }
+        )
+        await orchestrator.start()
+
+        // A real-shape TurnID — the kind that produced
+        // `7747877241524896942` (FNV hash) in today's live DB pre-fix.
+        let realTurnId = TurnID(rawValue: "B0E2A6FC-6B0A-4F92-A3F1-D2D8AC8C0D52")
+        await orchestrator.enqueue(ExtractionJob(
+            turnId: realTurnId,
+            userText: "My dog's name is Toby.",
+            assistantText: "Got it — Toby."
+        ))
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(spy.calls.count, 1)
+        let sourceTurnId = spy.calls.first?.sourceTurnId ?? -1
+        XCTAssertEqual(
+            sourceTurnId, 0,
+            "Issue #15: orchestrator must pass sentinel 0 — not an FNV hash — as sourceTurnId."
+        )
+        // Defense in depth: the FNV-1a hash of this UUID would be a huge
+        // positive Int64; assert we never see one.
+        XCTAssertLessThan(
+            sourceTurnId, 1_000_000,
+            "Issue #15: sourceTurnId must not look like an FNV hash."
+        )
+
+        await orchestrator.shutdown()
+    }
+
     /// Process applies returned ops to the store via the callback.
     func testProcessAppliesOpsToStore() async throws {
         let provider = TimedMockProvider()
