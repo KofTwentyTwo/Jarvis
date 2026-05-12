@@ -143,4 +143,59 @@ final class HUDBannerCoordinatorTests: XCTestCase {
         }
         wait(for: [exp], timeout: 2.0)
     }
+
+    // MARK: - #88 / SHELL-06 — programmatic dismiss(id:)
+
+    /// #88: `dismiss(id:)` clears a non-dismissible banner (used by
+    /// AppDelegate's foreground re-probe when TCC was re-granted).
+    func test_dismissByIdClearsNonDismissibleBanner() {
+        let panel = HUDBannerPanel()
+        let coordinator = HUDBannerCoordinator(panel: panel)
+        coordinator.enqueue(.inputMonitoringDenied)
+        XCTAssertEqual(coordinator.currentBanner?.id, "input-monitoring-denied")
+        // User-triggered dismiss must NOT clear a non-dismissible banner.
+        coordinator.dismissCurrent()
+        XCTAssertEqual(
+            coordinator.currentBanner?.id,
+            "input-monitoring-denied",
+            "non-dismissible banner must ignore user dismissCurrent"
+        )
+        // Programmatic dismiss-by-id MUST clear it.
+        coordinator.dismiss(id: "input-monitoring-denied")
+        XCTAssertNil(
+            coordinator.currentBanner,
+            "#88: dismiss(id:) must clear a non-dismissible banner when condition resolved"
+        )
+    }
+
+    /// #88: `dismiss(id:)` must NOT mark the id as dismissed-this-launch
+    /// — the condition can recur (user revokes again) and we need to be
+    /// able to re-enqueue.
+    func test_dismissByIdAllowsReEnqueueIfConditionRecurs() {
+        let panel = HUDBannerPanel()
+        let coordinator = HUDBannerCoordinator(panel: panel)
+        coordinator.enqueue(.inputMonitoringDenied)
+        coordinator.dismiss(id: "input-monitoring-denied")
+        XCTAssertNil(coordinator.currentBanner)
+        // Condition recurs (re-probe finds denial again).
+        coordinator.enqueue(.inputMonitoringDenied)
+        XCTAssertEqual(
+            coordinator.currentBanner?.id,
+            "input-monitoring-denied",
+            "#88: programmatic dismiss must NOT poison the id — re-enqueue must work"
+        )
+    }
+
+    /// #88: `dismiss(id:)` on an unknown id is a no-op.
+    func test_dismissByIdUnknownIsNoop() {
+        let panel = HUDBannerPanel()
+        let coordinator = HUDBannerCoordinator(panel: panel)
+        coordinator.enqueue(.keychainEmpty)
+        coordinator.dismiss(id: "nonexistent")
+        XCTAssertEqual(
+            coordinator.currentBanner?.id,
+            "keychain-empty",
+            "#88: dismiss(id:) on unknown id must not affect current banner"
+        )
+    }
 }

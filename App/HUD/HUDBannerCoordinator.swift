@@ -89,6 +89,43 @@ public final class HUDBannerCoordinator {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: item)
     }
 
+    /// Programmatically dismiss a banner by id, bypassing the
+    /// `nonDismissible` flag. Use ONLY when the underlying condition was
+    /// fixed (e.g., Input Monitoring re-granted after the user opened
+    /// System Settings) — never as a way to let the user click past a
+    /// non-dismissible warning. (SHELL-06 / #88 re-probe path.)
+    ///
+    /// If the banner is currently showing, it's drained the same way
+    /// `dismissCurrent()` drains (3 0 0 ms gap before the next queued banner
+    /// renders). If it's only in the queue, it's silently removed. No-op
+    /// when no banner with `id` is known.
+    public func dismiss(id: String) {
+        // Drop a queued copy (e.g. enqueued during the 300ms drain) so it
+        // doesn't surface after we clear the current banner.
+        queue.removeAll { $0.id == id }
+        guard let c = current, c.id == id else { return }
+        // NOTE: do NOT add to `dismissedThisLaunch`. Programmatic dismiss
+        // means the condition was resolved (e.g. TCC re-granted); if it
+        // recurs (user revokes again), we need to be able to re-enqueue.
+        // The user-driven `dismissCurrent()` path remembers dismissal
+        // because the user explicitly clicked away from a banner they
+        // accepted; the programmatic path is the opposite intent.
+        current = nil
+        panel.orderOut(nil)
+        drainWorkItem?.cancel()
+        drainWorkItem = nil
+        guard !queue.isEmpty else { return }
+        let next = queue.removeFirst()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if self.current != nil { return }
+            if self.dismissedThisLaunch.contains(next.id) { return }
+            self.showBanner(next)
+        }
+        drainWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: item)
+    }
+
     /// Clear everything — used when the entire app is about to quit or when
     /// a test needs to reset the coordinator.
     public func clear() {

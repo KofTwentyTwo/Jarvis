@@ -929,6 +929,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             //     two panels don't stack on top of the wizard window.
             self?.openStartupSurfacesIfDiagnostic()
         }
+
+        // 18. Issue #88 / SHELL-06 — re-probe Input Monitoring on app
+        //     foreground. `NSEvent.addGlobalMonitorForEvents` silently
+        //     no-ops on TCC denial; if the user grants access in System
+        //     Settings (via our deep-link), we need to clear the
+        //     non-dismissible banner without forcing them to relaunch.
+        //     The query-only probe (`IOHIDCheckAccess`) reads the cached
+        //     TCC decision without prompting.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.reprobeInputMonitoring()
+            }
+        }
     }
 
     /// On-disk replay log path. Lives next to `config.json` under
@@ -2928,6 +2945,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+
     // MARK: - Menu-bar actions
 
     /// Lazily constructed on first toggle so the panel doesn't allocate
@@ -3010,6 +3028,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         systemLogger?.info("openStartupSurfacesIfDiagnostic: opened Status + DevOverlay (mode=diagnostic)")
+    }
+
+    /// Issue #88 / SHELL-06 — query-only Input Monitoring TCC probe wired
+    /// to the `NSApplication.didBecomeActiveNotification` observer set up
+    /// in `applicationWillFinishLaunching`. Two transitions are handled:
+    ///
+    ///   - Was-denied → now-granted (most common: user clicked the deep
+    ///     link, toggled access on, returned to Jarvis). Programmatically
+    ///     dismisses the non-dismissible `.inputMonitoringDenied` banner
+    ///     via `HUDBannerCoordinator.dismiss(id:)`. We also re-bind the
+    ///     existing global hotkey if one was previously configured, since
+    ///     the original bind happened under denied access and silently
+    ///     fell back to local-only.
+    ///
+    ///   - Was-granted → now-denied (rarer: user toggled access off in
+    ///     System Settings while Jarvis was background). Enqueues
+    ///     `.inputMonitoringDenied`. The coordinator dedupes by id so a
+    ///     re-probe while the banner is still showing is a no-op.
+    ///
+    /// `IOHIDCheckAccess` reads the cached TCC decision without prompting,
+    /// so this is safe to call on every foreground hop.
+    @MainActor
+    private func reprobeInputMonitoring() {
+        let granted = hidProbe.isListenEventAccessGranted()
+        if granted {
+            bannerCoordinator?.dismiss(id: BannerContent.inputMonitoringDenied.id)
+            // Rebind hotkey under fresh TCC: the previous bind installed
+            // local monitors only (global silently nil-tokened on denial).
+            // Re-running `bindHotkeyFromWizard` reinstalls global monitors.
+            if let state = wizardState, state.hotkey != nil, !state.inputMonitoringGranted {
+                state.inputMonitoringGranted = true
+                bindHotkeyFromWizard()
+            }
+        } else {
+            bannerCoordinator?.enqueue(.inputMonitoringDenied)
+        }
     }
 
     /// Copies a debug state snapshot to the system clipboard. Writes ONLY
