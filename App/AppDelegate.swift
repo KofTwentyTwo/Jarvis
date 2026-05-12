@@ -1333,9 +1333,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `.reconfiguring(reason:)` on each rebuild start; the variant flip
         // is observable via `await graphOwner.currentVariant`. We poll the
         // variant after each rebuild event.
-        audioGraphRebuildTask = Task { @MainActor [weak self] in
+        //
+        // Re-arm the wake-word DAG against the new ring on every rebuild.
+        // The `cancelInFlight` slot (set below) calls `stopFeed()` to halt
+        // the old feed task; the public `wakeWordStream` survives, but the
+        // DAG has no producer until we call `start(ring:)` again. Without
+        // this, wake-word stops working after any device-change /
+        // mic-regrant / ring-overflow event.
+        // (audit-2026-05-12 P0-1 / Issue #28.)
+        audioGraphRebuildTask = Task { @MainActor [weak self, wakeWordDAG] in
             for await _ in rebuildStream {
                 guard let self else { return }
+                if let newRing = await self.audioGraphOwner?.ringBuffer {
+                    await wakeWordDAG.start(ring: newRing)
+                }
                 let variant = await self.audioGraphOwner?.currentVariant
                 if case .aecOn = variant {
                     await self.voiceController?.handleAECRestored()
@@ -1399,8 +1410,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Cancel wake-word inference before the engine stops — otherwise
         // the detached feed Task races the ring deallocation during graph
         // rebuilds. (VOICE-10.)
+        //
+        // Use `stopFeed()` (not `cancel()`) so the public wakeWordStream
+        // survives the rebuild — `VoiceController.spawnWakeWordConsumer`
+        // keeps iterating across the boundary. The rebuild completion
+        // consumer below re-arms the DAG against the new ring.
+        // (audit-2026-05-12 P0-1 / Issue #28: cancel() permanently
+        // finished the stream, killing wake-word on first device-change /
+        // mic-regrant / ring-overflow event.)
         await graphOwner.setCancelInFlight { [wakeWordDAG] in
-            await wakeWordDAG.cancel()
+            await wakeWordDAG.stopFeed()
         }
 
         // The production adapter triad replaces the three earlier Null
