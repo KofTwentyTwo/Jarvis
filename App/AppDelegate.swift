@@ -597,6 +597,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Phase E hoist.)
     private var outboundBatcher: OutboundBatcher?
 
+    /// Drains the broadcaster's `.agentHud` priority subscription and
+    /// maps `.stateChange` / `.turnEnd` to `AgentHudIntent` values
+    /// yielded into the dormant continuation. Pre-fix, the
+    /// `dormantAgentContinuation` was constructed but never yielded —
+    /// the HUD ring stayed `.silent` during thinking and speaking.
+    /// (audit-2026-05-12 P1-5 / Issue #36.)
+    private var agentHudSubscriberTask: Task<Void, Never>?
+
     /// Filename of the HTML entry the webview loads. Production value is
     /// `"index"` (the R3F bundle); `installBus` assigns it on construction.
     /// Test seam — XCTest asserts the post-install value to confirm the
@@ -1256,6 +1264,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         frameAttachReleaseTask?.cancel()
         voiceEventTranslatorTask?.cancel()
         busSubscriberTask?.cancel()
+        agentHudSubscriberTask?.cancel()
         if let broadcaster = eventBroadcaster {
             Task { await broadcaster.stop() }
         }
@@ -2242,8 +2251,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // 5g. Agent HUD intent pump (audit-2026-05-12 P1-5 / Issue #36).
+        //     Pre-fix the `dormantAgentContinuation` was constructed but
+        //     never yielded into — `grep -rn dormantAgentContinuation App/`
+        //     returned only the declaration + assignment. Combined with
+        //     `VoiceController.hudIntentFor` mapping `.thinking` /
+        //     `.speaking` to `.silent`, the HUD ring saw `.listening` on
+        //     wake, `.reconfiguring` during rebuilds, and `.silent`
+        //     everywhere else. Thinking and speaking looked identical to
+        //     idle.
+        //
+        //     This subscriber maps the orchestrator's `.stateChange` /
+        //     `.turnEnd` to `AgentHudIntent` values yielded into the
+        //     continuation so the HUD ring reflects agent activity. The
+        //     `.agentHud` priority protects `.stateChange` / `.turnEnd` /
+        //     `.error` — the ring's lifecycle transitions can't be
+        //     tail-dropped under overload.
+        let agentHudSub = await broadcaster.subscribe(priority: .agentHud, capacity: 32)
+        self.agentHudSubscriberTask = Task { [weak self] in
+            guard let self else { return }
+            // Capture the continuation on entry; the `dormantAgentContinuation`
+            // is `@MainActor`-isolated so reads need an actor hop.
+            let cont = await MainActor.run { self.dormantAgentContinuation }
+            guard let cont else { return }
+            for await event in agentHudSub.stream {
+                if Task.isCancelled { break }
+                switch event {
+                case .stateChange(let state):
+                    // Translate TurnState → AgentHudIntent. Tier-1 TTS
+                    // (AVSpeech) emits the user-audible portion of an
+                    // assistant reply; today we don't have a distinct
+                    // `.speaking` state on the orchestrator (it stays
+                    // `.thinking` until terminal `.idle`), so map
+                    // everything non-idle/non-reconfiguring to `.thinking`.
+                    // M-6 wires a richer state machine.
+                    switch state {
+                    case .idle:                       cont.yield(.idle)
+                    case .thinking:                   cont.yield(.thinking)
+                    case .speaking:                   cont.yield(.speaking)
+                    case .booting, .listening,
+                         .awaitingConfirmation,
+                         .reconfiguring:
+                        break  // HUD owns these from other sources
+                    }
+                case .turnEnd, .error:
+                    cont.yield(.idle)
+                default:
+                    break
+                }
+            }
+        }
+
         systemLogger?.info(
-            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach + voice + bus subscribers active)"
+            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach + voice + bus + agentHud subscribers active)"
         )
     }
 

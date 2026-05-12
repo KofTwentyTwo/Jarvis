@@ -54,6 +54,18 @@ public actor OrchestratorEventBroadcaster {
         /// emitted to webview) by giving AppDelegate a canonical
         /// priority to subscribe under for bus-forwarding.
         case bus
+        /// HUD-state subscriber — drains `.stateChange` / `.turnEnd` to
+        /// the dormant `AgentHudIntent` continuation so the HUD ring
+        /// reflects agent activity (thinking / speaking / idle).
+        /// `.stateChange` / `.turnEnd` are protected; all other events
+        /// (tokenDelta / thinkingDelta / usage / toolCardUpdate / error)
+        /// are drop-eligible — the HUD doesn't render tokens itself.
+        ///
+        /// (audit-2026-05-12 P1-5 / Issue #36: prior to this priority,
+        /// the `dormantAgentContinuation` was constructed but never
+        /// yielded into — the HUD ring stayed `.silent` during
+        /// thinking and speaking.)
+        case agentHud
     }
 
     private let upstream: BoundedAsyncChannel<OrchestratorEvent>
@@ -174,6 +186,14 @@ public actor OrchestratorEventBroadcaster {
         case .voice:
             switch event {
             case .turnEnd, .error: return true
+            default: return false
+            }
+        case .agentHud:
+            // HUD-state subscriber — protect lifecycle events; tokens,
+            // thinking-text and tool cards aren't needed for ring
+            // transitions and can drop under overload.
+            switch event {
+            case .stateChange, .turnEnd, .error: return true
             default: return false
             }
         }
