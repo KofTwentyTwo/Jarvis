@@ -192,6 +192,35 @@ public actor OpenWakeWordSession {
             nextEmbStart += embStride
         }
 
+        // Rolling-window trim (audit-2026-05-12 P1-1 / Issue #32). The
+        // streaming path appended to both buffers append-only — at one
+        // mel frame per 80 ms `feed` (production cadence), 24 h of
+        // always-on listening accumulated ~130 MB of mel frames + ~50 MB
+        // of embeddings retained forever. The leak was masked today by
+        // `WakeWordDAG` cancelling on every audio-graph rebuild, but
+        // closing #28 exposes it: fix one without the other and memory
+        // grows unbounded across long sessions.
+        //
+        // Trim policy:
+        //   - Keep last `76 + embStride` mel frames so the next embedding
+        //     window has full context after the trim.
+        //   - Keep last 16 embeddings to match the classifier's
+        //     `suffix(16)` read.
+        //   - When mel frames are dropped, slide `nextEmbStart` left by
+        //     the same count so indexing remains valid (it indexes into
+        //     `melFrameBuffer`).
+        let melKeep = 76 + embStride
+        if melFrameBuffer.count > melKeep {
+            let drop = melFrameBuffer.count - melKeep
+            melFrameBuffer.removeFirst(drop)
+            // Shift `nextEmbStart` to stay aligned with the trimmed buffer.
+            // Clamp at 0 in case more was dropped than the prior index.
+            nextEmbStart = max(0, nextEmbStart - drop)
+        }
+        if embeddingBuffer.count > 16 {
+            embeddingBuffer.removeFirst(embeddingBuffer.count - 16)
+        }
+
         // Run classifier on the most recent 16 embeddings.
         guard embeddingBuffer.count >= 16 else {
             return 0  // not enough context yet — below threshold by definition
@@ -384,6 +413,45 @@ public actor OpenWakeWordSession {
     /// 96-dim embeddings accumulated across `feed()` calls. The classifier
     /// reads the most recent 16.
     private var embeddingBuffer: [[Float]] = []
+
+    // MARK: - Test seams (internal — for Issue #32 unbounded-growth tests)
+
+    /// Test seam: simulate the streaming-buffer append + trim path without
+    /// requiring real ORT models. Mirrors the post-`runMel` /
+    /// post-`runEmbedding` writes in `runORT`, then applies the same
+    /// rolling-window trim. The classifier read is skipped — the caller
+    /// is testing buffer bounds, not detection.
+    ///
+    /// Use only from tests; production must go through `feed(samples:)`.
+    internal func _testInjectFrame(
+        mels: [[Float]],
+        embeddingsToAppend: [[Float]] = []
+    ) {
+        melFrameBuffer.append(contentsOf: mels)
+        for emb in embeddingsToAppend {
+            embeddingBuffer.append(emb)
+        }
+        // Mirror `runORT`'s `nextEmbStart` advance + trim, so a stream of
+        // injected frames behaves like the production loop without ORT.
+        let embStride = 8
+        while melFrameBuffer.count >= 76 + nextEmbStart {
+            nextEmbStart += embStride
+        }
+        let melKeep = 76 + embStride
+        if melFrameBuffer.count > melKeep {
+            let drop = melFrameBuffer.count - melKeep
+            melFrameBuffer.removeFirst(drop)
+            nextEmbStart = max(0, nextEmbStart - drop)
+        }
+        if embeddingBuffer.count > 16 {
+            embeddingBuffer.removeFirst(embeddingBuffer.count - 16)
+        }
+    }
+
+    /// Test seam: read current streaming-buffer sizes for bound assertions.
+    internal var _testBufferSizes: (melFrames: Int, embeddings: Int, nextEmbStart: Int) {
+        (melFrameBuffer.count, embeddingBuffer.count, nextEmbStart)
+    }
 }
 
 // MARK: - Supporting types
