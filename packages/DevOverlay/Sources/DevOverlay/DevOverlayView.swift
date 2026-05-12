@@ -57,9 +57,13 @@ public struct DevOverlayView: View {
             HealthPane(viewModel: viewModel)
                 .tabItem { Label("Health", systemImage: "stethoscope") }
                 .tag(2)
+
+            DevOverlayLogsView()
+                .tabItem { Label("Logs", systemImage: "text.alignleft") }
+                .tag(3)
         }
         .padding(8)
-        .frame(minWidth: 520, minHeight: 480)
+        .frame(minWidth: 640, minHeight: 520)
         .background(.regularMaterial)
     }
 }

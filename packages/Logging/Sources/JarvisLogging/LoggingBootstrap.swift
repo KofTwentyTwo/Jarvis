@@ -1,3 +1,17 @@
+// LoggingBootstrap.swift
+//
+// Single entry point for `swift-log` `LoggingSystem.bootstrap`. Builds
+// the three-way MultiplexLogHandler that every Jarvis logger funnels
+// through:
+//
+//   1. FileLogHandler  — rotating disk persistence with redaction.
+//   2. OSLogHandler    — Console.app + system log streaming.
+//   3. BroadcastLogHandler — in-process fan-out to DevOverlay et al.
+//
+// The third handler was added 2026-05-12 (dev-overlay-end-to-end Slice 3)
+// so the DevOverlay can tail every log line from every module live. It is
+// additive — removing it leaves persistence + os logging intact.
+
 import Foundation
 import Logging   // swift-log
 
@@ -13,7 +27,8 @@ public enum JarvisLogHandlerFactory {
             dateProvider: SystemDateProvider()
         )
         let os = OSLogHandler(subsystem: subsystem, category: label, label: label)
-        return MultiplexLogHandler([file, os])
+        let broadcast = BroadcastLogHandler(label: label)
+        return MultiplexLogHandler([file, os, broadcast])
     }
 
     /// Call exactly ONCE at `AppDelegate.applicationWillFinishLaunching`.

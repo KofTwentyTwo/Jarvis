@@ -78,7 +78,7 @@ public final class DevOverlayWindow {
         self.bootHealthOrchestrator = bootHealthOrchestrator
         self.hudStateReader = hudStateReader
 
-        let contentRect = NSRect(x: 0, y: 0, width: 560, height: 520)
+        let contentRect = NSRect(x: 0, y: 0, width: 680, height: 560)
         let styleMask: NSWindow.StyleMask = [
             .titled,
             .closable,
