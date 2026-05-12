@@ -21,6 +21,7 @@
 // in production traffic.
 
 import Foundation
+import os.lock
 import AgentCore
 import Replay
 import JarvisMCP
@@ -32,26 +33,58 @@ import Logging
 /// AppDelegate consumes from this channel and writes to ReplayLog.
 ///
 /// The observer needs a TurnID context to correlate replay rows with the
-/// in-flight turn — the orchestrator owns that context, so the observer
-/// holds a closure resolver that the orchestrator updates per-turn. In
-/// the (current) AppDelegate boot — where AgentOrchestrator wiring lands
-/// in Phase 6 voice / Phase 7 follow-ups — the resolver returns nil and
-/// the observer logs without writing. The compile-time wiring is in
-/// place; future plans flip the resolver to read the orchestrator's
-/// active TurnID.
+/// in-flight turn — the orchestrator owns that context. Since the observer
+/// is constructed inside `MCPRuntimeWiring.build` (which runs BEFORE the
+/// orchestrator is installed, because the orchestrator consumes the
+/// dispatcher chain we return), the resolver is built with a placeholder
+/// returning `nil`. After `installAgent` constructs the orchestrator,
+/// AppDelegate calls `attach(turnIDResolver:)` to flip the resolver to a
+/// closure that reads `orchestrator.currentTurnID()`. The lock-protected
+/// holder mirrors `ConfirmationPresenterHolder.attach(_:)` — same pattern,
+/// same lifecycle invariant.
+///
+/// **#20 (audit-2026-05-12 CRIT-1):** before this fix, the resolver was a
+/// `let` set once at init to `{ nil }`. The four-seam AGENT-10 contract
+/// (SEC-07 dual-write + ME-04 channel + drain Task + ReplayLog writer) was
+/// compiled but dead — every `record(...)` returned at the guard. Closing
+/// the seam at install time is the production wiring fix.
 public final class ReplayingToolResultObserver: ToolResultObserver, @unchecked Sendable {
 
+    /// Box for the resolver closure so it can ride inside
+    /// `OSAllocatedUnfairLock`'s initialState (which requires `Sendable`,
+    /// and a bare closure type is fine; the box just shortens the type).
+    private struct ResolverBox: Sendable {
+        let resolver: @Sendable () async -> TurnID?
+    }
+
     private let replayChannel: BoundedAsyncChannel<ReplayEnvelope>
-    private let turnIDResolver: @Sendable () async -> TurnID?
-    private let logger: Logger
+    /// Lock-protected resolver slot. AppDelegate calls `attach(...)`
+    /// post-orchestrator-install to flip from the `{ nil }` placeholder to
+    /// the live closure. Uses `OSAllocatedUnfairLock` (the async-safe
+    /// scoped-locking primitive); same pattern as
+    /// `InProcessConfirmationCache` in JarvisMCP.
+    private let resolverSlot: OSAllocatedUnfairLock<ResolverBox>
+    private let logger: Logging.Logger
 
     public init(
         replayChannel: BoundedAsyncChannel<ReplayEnvelope>,
         turnIDResolver: @escaping @Sendable () async -> TurnID? = { nil }
     ) {
         self.replayChannel = replayChannel
-        self.turnIDResolver = turnIDResolver
-        self.logger = Logger(label: JarvisLogChannel.replay.rawValue)
+        self.resolverSlot = OSAllocatedUnfairLock(
+            initialState: ResolverBox(resolver: turnIDResolver)
+        )
+        self.logger = Logging.Logger(label: JarvisLogChannel.replay.rawValue)
+    }
+
+    /// Replace the TurnID resolver. Called by AppDelegate once the
+    /// `AgentOrchestrator` is constructed inside `installAgent` so the
+    /// observer can correlate replay rows with the in-flight turn.
+    /// Mirrors `ConfirmationPresenterHolder.attach(_:)` — same lifecycle
+    /// invariant (observer outlives all calls; attach happens exactly once
+    /// per process).
+    public func attach(turnIDResolver: @escaping @Sendable () async -> TurnID?) {
+        resolverSlot.withLock { $0 = ResolverBox(resolver: turnIDResolver) }
     }
 
     public func record(
@@ -61,9 +94,11 @@ public final class ReplayingToolResultObserver: ToolResultObserver, @unchecked S
         sanitizedBytes: Data
     ) async {
         // Resolve the active TurnID — production orchestrator wiring
-        // supplies this; pre-orchestrator boots return nil and the
-        // observer logs without writing (ReplayEvent requires a TurnID).
-        guard let turnId = await turnIDResolver() else {
+        // supplies this via `attach(turnIDResolver:)`; pre-attach calls
+        // return nil and the observer logs without writing (ReplayEvent
+        // requires a TurnID).
+        let resolver = resolverSlot.withLock { $0.resolver }
+        guard let turnId = await resolver() else {
             logger.debug("ToolResultObserver invoked without active TurnID — skipping replay write")
             return
         }

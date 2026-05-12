@@ -1900,6 +1900,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.agentOrchestrator = orchestrator
 
+        // #20 (audit-2026-05-12 CRIT-1): wire the live `TurnID` resolver
+        // into `ReplayingToolResultObserver`. `MCPRuntimeWiring.build`
+        // constructed the observer with the `{ nil }` placeholder back in
+        // `applicationWillFinishLaunching` because the orchestrator didn't
+        // yet exist. Now that it does, flip the resolver to read
+        // `orchestrator.currentTurnID()`. Without this attach, the SEC-07
+        // dual-write + ME-04 channel + drain Task stay dead in production
+        // (the observer's guard returns at every `record(...)` call).
+        if let observer = mcpRuntime.toolResultObserver as? ReplayingToolResultObserver {
+            observer.attach(turnIDResolver: { [weak orchestrator] in
+                await orchestrator?.currentTurnID()
+            })
+        } else {
+            systemLogger?.warning("installAgent: toolResultObserver is not ReplayingToolResultObserver — turnIDResolver not wired; SEC-07 dual-write + ME-04 channel will stay dead")
+        }
+
         // 4. Broadcaster + transcript store (D-05 / D-08 / BLOCKER-1).
         let broadcaster = OrchestratorEventBroadcaster(upstream: orchestrator.events)
         await broadcaster.start()
