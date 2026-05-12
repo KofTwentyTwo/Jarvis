@@ -2357,10 +2357,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         await self.tryPhraseAttachIfMatch(text)
         let outcome: SubmitOutcome
+        let hadImage: Bool
         if let imageBlock = await self.consumePendingFrameIfAny(userText: text) {
+            hadImage = true
             outcome = await orch.submit(.withImages(.text, text: text, images: [imageBlock]))
         } else {
+            hadImage = false
             outcome = await orch.submit(.text(text))
+        }
+        // Audit 2026-05-12 F-V2: on `.rejected` no turn is allocated, so the
+        // broadcaster's `.turnEnd` watcher will never fire
+        // `onAssistantTurnComplete()`. Release the pending frame explicitly so
+        // the JPEG bytes don't sit in actor memory past the D-15 window.
+        if hadImage, case .rejected = outcome {
+            await self.frameAttachController?.releaseAfterRejectedSubmit()
         }
         await self.appendUserTextIfRunning(outcome, text: text)
         await self.handleTextOutcome(outcome)
@@ -2382,10 +2392,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         await self.tryPhraseAttachIfMatch(text)
         let outcome: SubmitOutcome
+        let hadImage: Bool
         if let imageBlock = await self.consumePendingFrameIfAny(userText: text) {
+            hadImage = true
             outcome = await orch.cancelAndSubmit(.withImages(.text, text: text, images: [imageBlock]))
         } else {
+            hadImage = false
             outcome = await orch.cancelAndSubmit(.text(text))
+        }
+        // Audit 2026-05-12 F-V2: see handleChatSubmit — same release-on-rejected
+        // path applies to the barge-in handler.
+        if hadImage, case .rejected = outcome {
+            await self.frameAttachController?.releaseAfterRejectedSubmit()
         }
         await self.appendUserTextIfRunning(outcome, text: text)
         await self.handleTextOutcome(outcome)
