@@ -352,17 +352,11 @@ Style, commit conventions, and the GSD workflow live in
 
 ## License
 
-<!-- TODO: LICENSE — public-launch decision pending. The LICENSE file at
-     the repo root is currently MIT (added in 9b62db5; rationale doc at
-     .planning/decisions/license.md). See the public-launch PR for the
-     discussion of MIT vs Apache-2.0 vs AGPL-3.0 vs source-available vs
-     revert-and-keep-private. Do not commit a final license framing
-     until the human confirms. -->
-
-The [`LICENSE`](LICENSE) file at the repo root is currently **MIT** — see
+Jarvis is released under the [MIT License](LICENSE). See
 [`.planning/decisions/license.md`](.planning/decisions/license.md) for
-the rationale that landed it. The public-launch decision is still open;
-the open PR carries the discussion.
+the rationale (solo personal project; no patent strategy or SaaS
+surface to protect; MIT considered against Apache-2.0 / MPL-2.0 /
+AGPL-3.0 and chosen for minimum friction).
 
 ## Acknowledgments
 
