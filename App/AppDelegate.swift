@@ -1554,12 +1554,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .deletingLastPathComponent()
             .appendingPathComponent("jarvis.db")
 
-        // 2. MemoryStore. Hard-block on failure per D-5/D-6 — see method
+        // 2a. Embedder. Constructed BEFORE MemoryStore so both the writer
+        //     side (Issue #12: populating `facts_vec` after every fact
+        //     INSERT) and the reader side (HybridSearch) share one
+        //     instance. Embedder construction is permissive — only fails
+        //     on a non-loopback URL — but if the constructor somehow
+        //     throws, we proceed with a nil embedder so the store still
+        //     opens (degraded mode: FTS5-only search). Loopback host is
+        //     hardcoded; the OllamaEmbeddingClient.assertLoopback check
+        //     will never reject `127.0.0.1`.
+        let memoryEmbedder: OllamaEmbeddingClient?
+        do {
+            memoryEmbedder = try OllamaEmbeddingClient(
+                baseURL: URL(string: "http://127.0.0.1:11434")!
+            )
+        } catch {
+            systemLogger?.warning(
+                "installMemory: embedder init failed — facts_vec writes will be skipped (degraded mode): \(String(describing: error))"
+            )
+            memoryEmbedder = nil
+        }
+
+        // 2b. MemoryStore. Hard-block on failure per D-5/D-6 — see method
         //    docstring above for the policy + the prior Track-D D-1 era
         //    that this reversed.
         let store: MemoryStore
         do {
-            store = try MemoryStore(databaseURL: dbURL)
+            store = try MemoryStore(databaseURL: dbURL, embedder: memoryEmbedder)
         } catch {
             let description = String(describing: error)
             systemLogger?.critical(
@@ -1635,18 +1656,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //    `MemoryStore.forgetFact`. (audit trail: Track-D D-2.)
         let forgetDispatcher: any ForgetFactDispatching = ForgetFactStoreAdapter(store: store)
         var searchDispatcher: (any HybridSearchDispatching)? = nil
-        if searchAvailable {
-            do {
-                let embedder = try OllamaEmbeddingClient(
-                    baseURL: URL(string: "http://127.0.0.1:11434")!
-                )
-                let hybrid = HybridSearch(store: store, embedder: embedder)
-                searchDispatcher = HybridSearchAdapter(hybrid: hybrid)
-            } catch {
-                systemLogger?.warning(
-                    "installMemory: embedder init failed — search_memory not registered: \(String(describing: error))"
-                )
-            }
+        if searchAvailable, let embedder = memoryEmbedder {
+            // Audit 2026-05-12 / M-1 (Issue #12): the SAME embedder
+            // instance powers both writer-side (facts_vec inserts) and
+            // reader-side (HybridSearch.searchFacts) so the vector space
+            // stays consistent. Pre-fix this constructed a second
+            // OllamaEmbeddingClient for search only; the writer side
+            // never had one, which is why facts_vec was empty.
+            let hybrid = HybridSearch(store: store, embedder: embedder)
+            searchDispatcher = HybridSearchAdapter(hybrid: hybrid)
+        } else {
+            systemLogger?.warning(
+                "installMemory: search_memory not registered — embedder absent (degraded mode)"
+            )
         }
 
         // Register INTO the shared `inProcessToolRegistry` — never

@@ -64,10 +64,26 @@ public actor MemoryStore {
     private let conn: SQLiteConnection
     private let logger: Logger
 
+    /// Audit 2026-05-12 / M-1 (Issue #12): writer-side embedder. When
+    /// non-nil, `insertNewFact` runs the embedder against the subject/
+    /// predicate/object triple and writes a matching `facts_vec` row after
+    /// the facts row is committed. When nil, the writer skips the vec
+    /// insert entirely — degraded-but-searchable mode (FTS5 still works).
+    /// Embedder failures during the vec write are logged but never roll
+    /// back the facts row, per audit recommendation: "log + leave the FTS
+    /// row (degraded but searchable) rather than rolling back the fact row."
+    private let embedder: (any EmbeddingProviding)?
+
     /// Open jarvis.db at databaseURL. Creates parent dir if absent.
     /// Registers vec0 as auto-extension (once per process). Applies pragmas
     /// + schema migration + vec_version sanity probe. Throws on any failure.
-    public init(databaseURL: URL) throws {
+    ///
+    /// `embedder` (audit 2026-05-12 / Issue #12): optional embedding
+    /// provider used by `applyOp` to populate `facts_vec` alongside `facts`.
+    /// When nil, facts_vec is never written; hybrid search degrades to
+    /// FTS5-only ranking (no semantic recall). Production wires
+    /// `OllamaEmbeddingClient` here in `installMemory`; tests inject stubs.
+    public init(databaseURL: URL, embedder: (any EmbeddingProviding)? = nil) throws {
         // Ensure parent directory exists.
         let parent = databaseURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
@@ -81,6 +97,7 @@ public actor MemoryStore {
 
         self.conn = try SQLiteConnection.open(at: databaseURL)
         self.logger = Logger(label: Self.logChannel)
+        self.embedder = embedder
 
         // 1. Pragmas (WAL + synchronous + busy_timeout + foreign_keys + temp_store).
         for sql in MemorySchema.pragmas {
@@ -128,14 +145,18 @@ public actor MemoryStore {
 
     /// Apply a single mem0 operation. The ONLY emission site for
     /// `ReplayEvent.memoryMutation` (MEM-06).
+    ///
+    /// Audit 2026-05-12 / M-1 (Issue #12): now `async` because `insertNewFact`
+    /// awaits the optional embedder to populate `facts_vec` alongside `facts`.
+    /// Pre-fix this was sync and `facts_vec` was never written.
     @discardableResult
-    public func applyOp(_ op: MemoryOp, sourceTurnId: Int64) throws -> Fact? {
+    public func applyOp(_ op: MemoryOp, sourceTurnId: Int64) async throws -> Fact? {
         switch op {
         case .noop:
             logger.debug("memory NOOP for turnId=\(sourceTurnId)")
             return nil
         case .add(let subject, let predicate, let object, _):
-            return try insertNewFact(
+            return try await insertNewFact(
                 subject: subject,
                 predicate: predicate,
                 object: object,
@@ -143,7 +164,7 @@ public actor MemoryStore {
                 sourceTurnId: sourceTurnId
             )
         case .update(let supersedes, let subject, let predicate, let object, _):
-            return try insertNewFact(
+            return try await insertNewFact(
                 subject: subject,
                 predicate: predicate,
                 object: object,
@@ -160,7 +181,7 @@ public actor MemoryStore {
         object: String,
         supersedesFactId: Int64?,
         sourceTurnId: Int64
-    ) throws -> Fact {
+    ) async throws -> Fact {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         do {
             try conn.beginTransaction()
@@ -228,6 +249,13 @@ public actor MemoryStore {
                 createdAt: now
             )
 
+            // Audit 2026-05-12 / M-1 (Issue #12): write the matching
+            // facts_vec row so semantic search has a cohort. Done AFTER
+            // commit so embedder failure (network, model unavailable,
+            // dimension mismatch) leaves the facts row + FTS5 row intact —
+            // degraded-but-searchable per audit recommendation.
+            await writeFactsVecRow(for: fact)
+
             recordMemoryMutation(
                 op: supersedesFactId == nil ? "ADD" : "UPDATE",
                 fact: fact,
@@ -242,6 +270,38 @@ public actor MemoryStore {
         } catch {
             try? conn.rollback()
             throw MemoryError.applyOpFailed(underlying: error)
+        }
+    }
+
+    /// Audit 2026-05-12 / M-1 (Issue #12): populate `facts_vec` with the
+    /// embedding for a freshly-inserted fact. Best-effort — embedder errors
+    /// and SQLite errors are logged but never thrown; the facts row stays
+    /// (FTS5 search still works, vec cohort is empty for this fact).
+    ///
+    /// No-op when the store was constructed without an embedder (the test
+    /// surface for that path is `MemoryStoreVecWriteTests`).
+    private func writeFactsVecRow(for fact: Fact) async {
+        guard let embedder else { return }
+        let text = "\(fact.subject) \(fact.predicate) \(fact.object)"
+        let embedding: [Float]
+        do {
+            embedding = try await embedder.embed(text)
+        } catch {
+            logger.warning("writeFactsVecRow: embedder failed for factId=\(fact.id): \(error). facts_vec row absent; FTS5 row remains.")
+            return
+        }
+        guard embedding.count == MemoryConstants.embeddingDim else {
+            logger.warning("writeFactsVecRow: embedder returned wrong dim (\(embedding.count) vs expected \(MemoryConstants.embeddingDim)) for factId=\(fact.id); skipping vec insert.")
+            return
+        }
+        let blob = embedding.withUnsafeBufferPointer { Data(buffer: $0) }
+        do {
+            try conn.exec(
+                "INSERT INTO facts_vec(fact_id, embedding) VALUES (?, ?);",
+                bindings: [.int(fact.id), .blob(blob)]
+            )
+        } catch {
+            logger.warning("writeFactsVecRow: facts_vec insert failed for factId=\(fact.id): \(error). FTS5 row remains.")
         }
     }
 
