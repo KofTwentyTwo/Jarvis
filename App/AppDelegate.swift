@@ -379,8 +379,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var transcriptSubscriberTask: Task<Void, Never>?
 
     /// Drains the broadcaster's devOverlay subscription into DevSnapshotEmitter.
-    /// Lossy — the DevOverlay is observational.
+    /// Lossy — the DevOverlay is observational. Wired in `installAgent`
+    /// (2026-05-12 dev-overlay-end-to-end Slice 2).
     private var devOverlaySubscriberTask: Task<Void, Never>?
+
+    /// Aggregates `OrchestratorEvent` into `DevSnapshot`s for the DevOverlay
+    /// window. Constructed in `installAgent` once the broadcaster is alive;
+    /// `toggleDevOverlay` hands a reference to the lazy `DevOverlayWindow`
+    /// so its `DevOverlayBridge` can subscribe to `emitter.output`.
+    private var devSnapshotEmitter: DevSnapshotEmitter?
 
     /// Plan 09-04 — voice path bridge. The real adapter is constructed in
     /// installVoice() and held strongly here so the broadcaster's voice
@@ -1800,15 +1807,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 5c. DevOverlay subscriber (lossy — observational; reserved for the
-        //     DevOverlay emitter wiring in a follow-on plan). Subscribed here
-        //     so the broadcaster's three-subscriber pattern is established;
-        //     the drain task simply consumes events to keep the actor's
-        //     internal mirror flushing.
+        // 5c. DevOverlay subscriber — forwards every event into a live
+        //     `DevSnapshotEmitter` so the DevOverlay window renders the
+        //     real agent state instead of `DevSnapshot.initial`. Wired
+        //     2026-05-12 (dev-overlay-end-to-end Slice 2). The pre-fix
+        //     drain was a `for await _ in …` to `/dev/null`, which
+        //     explains why the panel had been showing zeros since P4.
+        //
+        //     Provider/model is set eagerly via the same `configStore`
+        //     read SelfStateAdapter uses. Lossy under load — DevOverlay is
+        //     observational; the emitter's output channel is .dropOldest.
+        let devEmitter = DevSnapshotEmitter()
+        self.devSnapshotEmitter = devEmitter
+        // Populate provider/model header best-effort. The orchestrator
+        // can switch providers mid-session; the emitter's setter is the
+        // hook to refresh, but for now we read once at install.
+        if let configStore = self.configStore {
+            let snap = await configStore.perTurn()
+            let providerName: String
+            let modelName: String
+            switch snap.provider {
+            case .anthropic:
+                providerName = "anthropic"
+                modelName = "claude-opus-4-7"
+            case .ollama:
+                providerName = "ollama"
+                modelName = "qwen2.5-coder:32b"
+            }
+            await devEmitter.setProvider(provider: providerName, modelId: modelName)
+        }
         let devSub = await broadcaster.subscribe(priority: .devOverlay, capacity: 32)
-        devOverlaySubscriberTask = Task {
-            for await _ in devSub.stream {
+        devOverlaySubscriberTask = Task { [devEmitter] in
+            for await event in devSub.stream {
                 if Task.isCancelled { break }
+                await devEmitter.apply(event)
             }
         }
 
@@ -2648,12 +2680,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Menu-bar actions
 
     /// Lazily constructed on first toggle so the panel doesn't allocate
-    /// resources during launch.
+    /// resources during launch. Dependencies (emitter, boot-health,
+    /// hud-state reader) are captured at construction; if the user opens
+    /// the overlay before `installAgent` has built the emitter, the panel
+    /// will still render — it just won't show agent snapshots until the
+    /// emitter exists, and the boot-health pane works regardless.
     private var devOverlayWindow: DevOverlayWindow?
 
     private func toggleDevOverlay() {
         if devOverlayWindow == nil {
-            devOverlayWindow = DevOverlayWindow()
+            let hudCoordinator = self.hudStateCoordinator
+            // HudState lives in the App target; the overlay package only
+            // gets a string. Closure-captured weak reference so the
+            // overlay never extends the coordinator's lifetime.
+            let reader: @MainActor () -> String = { [weak hudCoordinator] in
+                hudCoordinator?.currentStateForTests.rawValue ?? "—"
+            }
+            devOverlayWindow = DevOverlayWindow(
+                emitter: devSnapshotEmitter,
+                bootHealthOrchestrator: bootHealthOrchestrator,
+                hudStateReader: reader
+            )
         }
         devOverlayWindow?.toggle()
     }
