@@ -1,0 +1,35 @@
+# Dependency review on PRs that touch manifest/lockfiles for npm or SPM.
+# Fails the PR if a new dependency introduces a known high-severity vuln
+# or a forbidden license.
+
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "webview/package.json"
+      - "webview/pnpm-lock.yaml"
+      - "webview/packages/**/package.json"
+      - "**/Package.swift"
+      - "**/Package.resolved"
+      - ".github/workflows/dependency-review.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          # Default license policy: warn on copyleft, fail on nothing automatically.
+          # Tighten via `deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0` after the
+          # user reviews the existing SPM + npm graph.
+          comment-summary-in-pr: on-failure
