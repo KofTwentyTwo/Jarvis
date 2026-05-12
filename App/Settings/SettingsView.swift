@@ -23,7 +23,30 @@ struct SettingsView: View {
     let validator: AnthropicKeyValidator
     let onGrantInputMonitoring: () -> Bool
     let onHotkeyChanged: (Shell.KeyboardShortcut?) -> Void
+    /// Issue #87 — fires when the user binds, clears, or changes the PTT
+    /// hotkey. Defaults to a no-op so existing callers that don't pass
+    /// this still compile.
+    let onPTTHotkeyChanged: (Shell.KeyboardShortcut?) -> Void
+
     let onClose: () -> Void
+
+    init(
+        state: WizardState,
+        keychain: any KeychainStore,
+        validator: AnthropicKeyValidator,
+        onGrantInputMonitoring: @escaping () -> Bool,
+        onHotkeyChanged: @escaping (Shell.KeyboardShortcut?) -> Void,
+        onPTTHotkeyChanged: @escaping (Shell.KeyboardShortcut?) -> Void = { _ in },
+        onClose: @escaping () -> Void
+    ) {
+        self.state = state
+        self.keychain = keychain
+        self.validator = validator
+        self.onGrantInputMonitoring = onGrantInputMonitoring
+        self.onHotkeyChanged = onHotkeyChanged
+        self.onPTTHotkeyChanged = onPTTHotkeyChanged
+        self.onClose = onClose
+    }
 
     @State private var apiKeyDraft: String = ""
     @State private var apiKeyStatus: APIKeyStatus = .unchanged
@@ -31,6 +54,12 @@ struct SettingsView: View {
 
     @State private var hotkeyDraft: Shell.KeyboardShortcut?
     @State private var hotkeyError: String?
+
+    /// Issue #87 — PTT hotkey draft, mirrored from `state.pttHotkey` on
+    /// `onAppear`. Separate from `hotkeyDraft` so binding one doesn't
+    /// clobber the other.
+    @State private var pttHotkeyDraft: Shell.KeyboardShortcut?
+    @State private var pttHotkeyError: String?
 
     enum APIKeyStatus: Equatable {
         case unchanged
@@ -41,30 +70,35 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Settings").font(.system(size: 20, weight: .semibold))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Settings").font(.system(size: 20, weight: .semibold))
 
-            apiKeySection
-            Divider()
-            permissionsSection
-            Divider()
-            hotkeySection
+                apiKeySection
+                Divider()
+                permissionsSection
+                Divider()
+                hotkeySection
+                Divider()
+                pttHotkeySection
 
-            Spacer()
-            HStack {
                 Spacer()
-                Button("Done") { onClose() }
-                    .keyboardShortcut(.defaultAction)
+                HStack {
+                    Spacer()
+                    Button("Done") { onClose() }
+                        .keyboardShortcut(.defaultAction)
+                }
             }
+            .padding(24)
         }
-        .padding(24)
-        .frame(width: 520, height: 540)
+        .frame(width: 520, height: 620)
         .onAppear {
             // Refresh truth on each open — same reasoning as the wizard's
             // refresh on open: TCC grants and Keychain entries can change
             // between sessions.
             state.refresh()
             hotkeyDraft = state.hotkey
+            pttHotkeyDraft = state.pttHotkey
         }
     }
 
@@ -275,6 +309,66 @@ struct SettingsView: View {
             }
 
             if let warn = hotkeyDraft.flatMap(CollisionDetector.check) {
+                Label(warn.message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(NSColor.systemOrange))
+            }
+        }
+    }
+
+    // MARK: - PTT hotkey (#87 / VOICE-13)
+
+    /// Push-to-talk shortcut. Ships unbound — the user must explicitly
+    /// pick one. Independent of the summon-Jarvis hotkey above; bound to
+    /// `PushToTalk` via AppDelegate's `rebindPTTFromState`.
+    private var pttHotkeySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(
+                "Push-to-talk hotkey",
+                subtitle: "Hold to talk; release to submit. Bypasses the wake word. Ships unbound — pick a combo that doesn't collide with your other apps (Cmd+Shift+J, Option+Space are taken on most setups)."
+            )
+
+            HStack(spacing: 8) {
+                ShortcutRecorderView(
+                    shortcut: $pttHotkeyDraft,
+                    errorMessage: $pttHotkeyError
+                )
+                .frame(height: 36)
+                .frame(maxWidth: .infinity)
+                if pttHotkeyDraft != nil {
+                    Button("Save") {
+                        state.pttHotkey = pttHotkeyDraft
+                        onPTTHotkeyChanged(pttHotkeyDraft)
+                    }
+                    .disabled(pttHotkeyDraft == state.pttHotkey)
+                }
+                if state.pttHotkey != nil {
+                    Button("Clear") {
+                        state.pttHotkey = nil
+                        pttHotkeyDraft = nil
+                        onPTTHotkeyChanged(nil)
+                    }
+                    .foregroundColor(Color(NSColor.systemRed))
+                }
+            }
+
+            if let s = state.pttHotkey {
+                Text("Current: \(s.displayString)")
+                    .font(.system(size: 12).monospaced())
+                    .foregroundColor(Color(NSColor.secondaryLabelColor))
+            } else {
+                Text("No PTT hotkey bound — voice activates via wake word only.")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(NSColor.secondaryLabelColor))
+            }
+
+            if let err = pttHotkeyError {
+                Label(err, systemImage: "exclamationmark.triangle")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(NSColor.systemOrange))
+            }
+
+            if let warn = pttHotkeyDraft.flatMap(CollisionDetector.check) {
                 Label(warn.message, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 12))
                     .foregroundColor(Color(NSColor.systemOrange))

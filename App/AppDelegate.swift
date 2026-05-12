@@ -1550,9 +1550,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dormantVoiceContinuation = nil
 
         // PTT hotkey binding is deferred to the wizard / Settings UI —
-        // unbound at launch. (VOICE-13.)
+        // unbound at launch. (VOICE-13 / #87.)
         let ptt = PushToTalk(controller: vc)
         pushToTalk = ptt
+
+        // Issue #87: if `WizardState.pttHotkey` was loaded from
+        // UserDefaults during launch, bind it now that the controller is
+        // live. No-op if the user has never bound a PTT key.
+        rebindPTTFromState()
 
         // Menu-bar wake-word mute toggle. (VOICE-12.)
         if let menu = menuBarController?.contextMenu {
@@ -2925,6 +2930,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // monitor so the new shortcut takes effect immediately
                 // without requiring a relaunch.
                 self?.bindHotkeyFromWizard()
+            },
+            onPTTHotkeyChanged: { [weak self] _ in
+                // Issue #87: same pattern as the summon-Jarvis hotkey —
+                // `WizardState.pttHotkey` is already persisted; rebind
+                // PushToTalk so the new shortcut takes effect immediately.
+                self?.rebindPTTFromState()
             }
         )
     }
@@ -2943,6 +2954,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] in
             Task { @MainActor [weak self] in self?.toggleHUD() }
         }
+    }
+
+    /// Issue #87 / VOICE-13 — bind the configured push-to-talk hotkey to
+    /// the live `PushToTalk` instance. Reads `WizardState.pttHotkey` and
+    /// `inputMonitoringGranted`, unbinds first, then re-installs the
+    /// global+local monitors. Idempotent: safe to call when nothing has
+    /// changed (PushToTalk.bind always unbinds first).
+    ///
+    /// No-op when:
+    ///   - `pushToTalk` is nil (voice subsystem still installing — the
+    ///     install tail calls this method once `pushToTalk` is live).
+    ///   - `WizardState.pttHotkey` is nil (user hasn't bound a PTT key
+    ///     yet — default ships unbound to avoid colliding with
+    ///     Cmd+Shift+J or Option+Space, which Chrome/Slack/Alfred/Raycast
+    ///     own in different combinations).
+    ///
+    /// Audio-graph isolation: binding monitors does NOT touch the audio
+    /// graph — `NSEvent.addGlobalMonitorForEvents` just installs key
+    /// callbacks. The press path routes through `VoiceController.pttDown`,
+    /// which uses the same audio graph the wake-word DAG already owns;
+    /// so rebinding is safe regardless of voice subsystem state.
+    @MainActor
+    private func rebindPTTFromState() {
+        guard let ptt = pushToTalk else { return }
+        guard let state = wizardState, let shortcut = state.pttHotkey else {
+            ptt.unbind()
+            return
+        }
+        ptt.bind(
+            keyCode: shortcut.keyCode,
+            modifiers: shortcut.modifierFlags,
+            inputMonitoringGranted: state.inputMonitoringGranted
+        )
     }
 
 
@@ -3057,9 +3101,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Rebind hotkey under fresh TCC: the previous bind installed
             // local monitors only (global silently nil-tokened on denial).
             // Re-running `bindHotkeyFromWizard` reinstalls global monitors.
-            if let state = wizardState, state.hotkey != nil, !state.inputMonitoringGranted {
+            if let state = wizardState, !state.inputMonitoringGranted {
                 state.inputMonitoringGranted = true
-                bindHotkeyFromWizard()
+                if state.hotkey != nil { bindHotkeyFromWizard() }
+                // Issue #87: same reason as the global hotkey — the
+                // initial PTT bind (if any) installed local monitors
+                // only. Rebind so the global monitor token is acquired
+                // under fresh TCC.
+                rebindPTTFromState()
             }
         } else {
             bannerCoordinator?.enqueue(.inputMonitoringDenied)

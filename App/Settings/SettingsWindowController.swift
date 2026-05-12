@@ -30,7 +30,8 @@ public final class SettingsWindowController {
         keychain: any KeychainStore,
         validator: AnthropicKeyValidator,
         onGrantInputMonitoring: @escaping () -> Bool,
-        onHotkeyChanged: @escaping (Shell.KeyboardShortcut?) -> Void
+        onHotkeyChanged: @escaping (Shell.KeyboardShortcut?) -> Void,
+        onPTTHotkeyChanged: @escaping (Shell.KeyboardShortcut?) -> Void = { _ in }
     ) {
         // Refresh truth before view creation: TCC grants and Keychain entries
         // can change between sessions, same reasoning as the wizard's
@@ -49,6 +50,7 @@ public final class SettingsWindowController {
             validator: validator,
             onGrantInputMonitoring: onGrantInputMonitoring,
             onHotkeyChanged: onHotkeyChanged,
+            onPTTHotkeyChanged: onPTTHotkeyChanged,
             onClose: { [weak self] in self?.close() }
         )
         let hosting = NSHostingController(rootView: rootView)
