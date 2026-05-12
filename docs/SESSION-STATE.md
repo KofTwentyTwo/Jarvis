@@ -1,22 +1,36 @@
 # Session State
 
-**Last Updated:** 2026-05-12 (issues migrated to GitHub)
+**Last Updated:** 2026-05-12 end-of-day (Rounds 2/3/4 + audits + tracking migration + roadmap + branding)
 
 > **Live state lives in GitHub Issues:** https://github.com/KofTwentyTwo/Jarvis/issues
 >
 > This file preserves session-handoff narrative. The bullet-list pending-work sections have been replaced with crosswalks to issue numbers. Read narrative paragraphs for historical context; check GitHub for current state of any item.
 
-## ▶ Next Session: M-0 (pre-migration gates) — read FIRST
+## ▶ Next Session: read `docs/HANDOFF-2026-05-12-end-of-day.md` FIRST
 
-The architectural-pivot design swarm executed end-to-end on 2026-05-07; B-02 tactical patch shipped 2026-05-11. The v1.0 API contract is **locked** as the pair `JARVIS-API-DESIGN-v0.1.md` + `JARVIS-API-DESIGN-v0.2.md` (UQ-1..UQ-5 answered in v0.2 §5). All artifacts under `.planning/architecture/`; index in `.planning/architecture/README.md`.
+`develop` HEAD: `0cc94c6`. 141 open issues across 6 milestones. PR [#149](https://github.com/KofTwentyTwo/Jarvis/pull/149) is draft and is **first action** for next session (BUILDING.md + README MIT cleanup).
 
-**Next session's actions in order:**
-1. **M-0** (pre-migration gates) directly on `develop`. Creates `packages/JarvisAPI/`, lifts `RealWKWebViewIntegrationTests` to a public harness runner, promotes grep gates to behavioral, dual-version handshake. ~2.5–3.5 engineer-days.
-2. **M-1** (Self surface) on its own feature branch + PR — first surface migration; closes B-08.
-3. M-2..M-7 in sequence on per-step feature branches per the migration plan.
-4. Optional: cross-AI peer review of v1.0 (GPT-5 Pro / Gemini 2.5 Pro / fresh Opus). Deferred unless a migration step surfaces a design question.
+**Shipped today (delta since this file last said "▶ Next Session: M-0"):**
+- **Rounds 2 + 3 + 4 strict-mode arc** — Round 2 boot-phase health probes (NOT FAKED, `687b80b`), Round 3 Status… NSPanel (`67748f5`), Round 4 severity model + non-dismissible banners + agent self-awareness preamble + red menu-bar icon (`cfd469f`, `79955b6`, `23b4ca7`, `a9531e6`). The "Toby fix" — agent refuses to lie about remembering when memory is degraded — validated mid-dogfood.
+- **Latent fact-persistence FK fix** (`a5999e2`) — facts.source_turn_id FK incompatible with FNV-hash strategy; dropped FK; facts now persist.
+- **Xcode 26 build race fix** (`1557302`) — ProcessInfoPlistFile scheduled after pre-codesign verify, silently reverting `JarvisEntitlementsVerified`. Declared Info.plist as input.
+- **Full audit pass** (`.planning/audit-2026-05-12/`) — 5 parallel agents, ~37 findings filed as issues.
+- **Dev Overlay built** (`8d94c1c` → `50c2783` → `6ea2852`) — 4-tab AppKit NSPanel + live log stream via `LogBroadcaster` / `BroadcastLogHandler`.
+- **Tracking migration to GitHub Issues** — 141 issues filed; `docs/TODO.md` deprecated; CLAUDE.md declares Issues canonical.
+- **Code-commenting style guide** (`b763273`, 583 lines) + AppDelegate exemplar (`281b909`).
+- **User-outcome milestone roadmap** at `.planning/ROADMAP-2026-05-12.md` (v0.1 / v0.2 / v0.5 / v0.8 / v1.0 / v1.1).
+- **MIT license confirmed** (`.planning/decisions/license.md`) + standard repo files (LICENSE, SECURITY, CHANGELOG, issue/PR templates, dependabot, branding).
 
-Total estimated migration remaining: **18.5–25.5 engineer-days (~4–5.5 calendar weeks at solo pace).** B-02 closed today.
+**Next session actions in order:**
+1. Read `docs/HANDOFF-2026-05-12-end-of-day.md` + `.planning/ROADMAP-2026-05-12.md` to orient.
+2. Merge PR #149 (BUILDING.md + README MIT cleanup).
+3. Decide repo visibility (still PRIVATE; marketing pass assumed public).
+4. Start v0.1 fan-out: Voice CRIT (#28–#36), Memory CRIT (#12–#16), MCP CRIT (#20–#22), Bus/HUD S1 (#40–#42), Vision (#1–#3), B-06 (#51), v1-hole PTT/InputMonitoring/startup (#87/#88/#89).
+5. After v0.1 lands, M-0 starts on its own feature branch.
+
+The pre-existing M-0..M-7 migration plan is unchanged — still locked at `.planning/architecture/JARVIS-API-DESIGN-v0.1.md` + `v0.2.md`; epics #4–#11; M-0 directly on `develop`, M-1+ on feature branches; ~18.5–25.5 engineer-days remaining.
+
+Repo caveats: 5 stashes accumulated (#63), 2 Dependabot moderate vulns flagged, repo still PRIVATE.
 
 ## ▶ 2026-05-11 morning — B-02 tactical patch
 
