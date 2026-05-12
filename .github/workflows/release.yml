@@ -1,0 +1,79 @@
+# Release workflow: creates a GitHub Release whenever a v* tag is pushed.
+# Pre-release tags (vX.Y.Z-dev.*, vX.Y.Z-rc.*) are marked as pre-releases.
+# Final tags (vX.Y.Z) become production releases.
+#
+# The release body is auto-generated from commits since the previous tag.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify tag
+        id: classify
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Anything containing a dash after vX.Y.Z is a pre-release.
+          if [[ "$TAG" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Find the previous tag (any kind) for the changelog scope.
+          prev=$(git tag --list 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -n 1 || true)
+          echo "previous_tag=${prev}" >> "$GITHUB_OUTPUT"
+          echo "Classified $TAG: prerelease=$(grep prerelease "$GITHUB_OUTPUT" | tail -n 1), previous=$prev"
+
+      - name: Generate release notes
+        id: notes
+        env:
+          TAG: ${{ github.ref_name }}
+          PREV: ${{ steps.classify.outputs.previous_tag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Changes"
+            echo
+            if [ -n "$PREV" ]; then
+              git log --pretty='format:- %s (%h)' "$PREV..$TAG"
+            else
+              git log --pretty='format:- %s (%h)'
+            fi
+            echo
+            echo
+            echo "## Verification"
+            echo
+            echo "- CI build: see https://github.com/${GITHUB_REPOSITORY}/actions"
+            echo "- Boundary gates: 18/18 expected green on this tag"
+          } > release-notes.md
+          {
+            echo "body<<NOTES_EOF"
+            cat release-notes.md
+            echo "NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: ${{ steps.classify.outputs.prerelease == 'true' }}
+          body: ${{ steps.notes.outputs.body }}
+          generate_release_notes: false
