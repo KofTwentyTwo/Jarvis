@@ -92,7 +92,7 @@ final class OllamaRequestBodyTests: XCTestCase {
             messages: [LLMMessage(role: .user, content: [.text("hi")])],
             toolChoice: .auto
         )
-        XCTAssertEqual(dict["model"] as? String, "qwen2.5-coder:32b")
+        XCTAssertEqual(dict["model"] as? String, "qwen2.5-coder:32b-instruct-q8_0")
     }
 
     // MARK: - R5: stream:true

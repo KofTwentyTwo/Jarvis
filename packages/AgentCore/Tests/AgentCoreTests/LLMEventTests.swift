@@ -53,7 +53,7 @@ final class LLMEventTests: XCTestCase {
     /// Test 4: ModelID literals match RESEARCH-DELTAS D1 + D3.
     func testModelIDLiterals() {
         XCTAssertEqual(ModelID.opus47.rawValue, "claude-opus-4-7")
-        XCTAssertEqual(ModelID.qwen25coder32b.rawValue, "qwen2.5-coder:32b")
+        XCTAssertEqual(ModelID.qwen25coder32b.rawValue, "qwen2.5-coder:32b-instruct-q8_0")
     }
 
     func testModelIDEquality() {
