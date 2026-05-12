@@ -1,0 +1,291 @@
+# Main CI: build + test + boundary gates for every PR and push to long-lived branches.
+#
+# Branch strategy (defaults — override by editing the branches: lists):
+#   - feature/*, fix/*       PR-only checks, no tagging
+#   - develop                full CI + pre-release tag v0.X.Y-dev.<run_number>
+#   - rc/*, release/*        full CI + tag v0.X.Y-rc.N (N auto-increments)
+#   - main                   full CI + tag v0.X.Y + GitHub Release (release.yml)
+#
+# Versioning: read commits since previous tag, bump per Conventional Commits
+# (feat -> minor, fix -> patch, feat! / BREAKING CHANGE -> major). Defaults to
+# v0.1.0 when no tags exist.
+#
+# Untrusted input handling: this workflow does NOT consume PR titles, bodies,
+# issue text, or commit-author fields directly in run: blocks. The only
+# external inputs are github.ref (controlled) and the constrained
+# workflow_dispatch choice. github.run_number is GitHub-provided.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main, "rc/*", "release/*"]
+  push:
+    branches: [develop, main, "rc/*", "release/*"]
+  workflow_dispatch:
+    inputs:
+      run_real_hardware:
+        description: "Run JARVIS_REAL_MODELS / JARVIS_REAL_CAMERA suites (self-hosted only)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: read
+  checks: write
+
+jobs:
+  boundary-gates:
+    name: Boundary gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run all scripts/check-*.sh (excluding app-builds)
+        run: |
+          fail=0
+          for s in scripts/check-*.sh; do
+            name="$(basename "$s")"
+            if [ "$name" = "check-app-builds.sh" ]; then
+              echo "::group::SKIP $name (needs xcodebuild)"
+              echo "::endgroup::"
+              continue
+            fi
+            echo "::group::$name"
+            if bash "$s"; then
+              echo "PASS: $name"
+            else
+              echo "::error::FAIL: $name"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$fail"
+
+  webview:
+    name: Webview (pnpm test + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: webview/pnpm-lock.yaml
+      - name: pnpm install
+        working-directory: webview
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        working-directory: webview
+        run: pnpm -r typecheck
+      - name: Test (vitest)
+        working-directory: webview
+        run: pnpm -r test
+      - name: Build HUD bundle
+        working-directory: webview
+        run: pnpm -r build
+      - name: Upload HUD dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: webview-dist
+          path: webview/packages/hud/dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  swift-packages:
+    name: SPM ${{ matrix.package }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - AgentCore
+          - Bus
+          - Config
+          - DevOverlay
+          - Harness
+          - Keychain
+          - Logging
+          - MCP
+          - Memory
+          - Replay
+          - Shell
+          - Vision
+          - Voice
+          - VoiceLog
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+      - name: Show Swift toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+      - name: Cache SPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/${{ matrix.package }}/.build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ matrix.package }}-${{ runner.os }}-${{ hashFiles(format('packages/{0}/Package.resolved', matrix.package), format('packages/{0}/Package.swift', matrix.package)) }}
+          restore-keys: |
+            spm-${{ matrix.package }}-${{ runner.os }}-
+      - name: swift test
+        run: swift test --package-path packages/${{ matrix.package }}
+
+  app-build:
+    name: App target (xcodebuild)
+    runs-on: macos-15
+    needs: [boundary-gates, webview]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: webview/pnpm-lock.yaml
+      - name: Install xcodegen
+        run: brew install xcodegen
+      - name: Build webview (produces App/Resources/webview/)
+        run: bash scripts/build-webview.sh
+      - name: check-app-builds.sh
+        run: bash scripts/check-app-builds.sh
+      - name: verify-codesign-settings.sh
+        run: bash scripts/verify-codesign-settings.sh
+      - name: Upload Jarvis.app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jarvis-app-debug
+          path: build/Build/Products/Debug/Jarvis.app
+          retention-days: 7
+          if-no-files-found: warn
+
+  real-hardware:
+    name: Real-hardware tests (opt-in)
+    runs-on: [self-hosted, macOS]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_real_hardware == 'true'
+    needs: [swift-packages]
+    steps:
+      - uses: actions/checkout@v4
+      - name: JARVIS_REAL_MODELS Memory regression corpus
+        env:
+          JARVIS_REAL_MODELS: "1"
+        run: swift test --package-path packages/Memory --filter MemoryRegressionCorpusTests
+      - name: JARVIS_REAL_CAMERA capture suite
+        env:
+          JARVIS_REAL_CAMERA: "1"
+        run: swift test --package-path packages/Vision --filter CameraCaptureRealHardwareTests
+      - name: JARVIS_REAL_MODELS Orpheus TTFA
+        env:
+          JARVIS_REAL_MODELS: "1"
+        run: swift test --package-path packages/Voice --filter OrpheusTTFATests
+
+  publish-tag:
+    name: Publish tag
+    runs-on: ubuntu-latest
+    needs: [boundary-gates, webview, swift-packages, app-build]
+    if: |
+      github.event_name == 'push' && (
+        github.ref == 'refs/heads/develop' ||
+        github.ref == 'refs/heads/main' ||
+        startsWith(github.ref, 'refs/heads/rc/') ||
+        startsWith(github.ref, 'refs/heads/release/')
+      )
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute next version
+        id: version
+        env:
+          GH_REF: ${{ github.ref }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          git fetch --tags --force --quiet
+          last_tag=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' \
+            | grep -Ev -- '-(dev|rc|alpha|beta)' \
+            | sort -V | tail -n 1 || true)
+          if [ -z "$last_tag" ]; then
+            base="v0.1.0"
+            from="$(git rev-list --max-parents=0 HEAD | tail -n 1)"
+            echo "No prior tag; defaulting base=$base, scanning all history."
+          else
+            base="$last_tag"
+            from="$last_tag"
+            echo "Last final tag: $last_tag"
+          fi
+          version="${base#v}"
+          IFS='.' read -r major minor patch <<< "$version"
+          bump="patch"
+          if git log "$from"..HEAD --pretty=%B 2>/dev/null | grep -qE '(^|\n)BREAKING CHANGE:|^[a-zA-Z]+(\([^)]+\))?!:'; then
+            bump="major"
+          elif git log "$from"..HEAD --pretty=%B 2>/dev/null | grep -qE '^feat(\([^)]+\))?:'; then
+            bump="minor"
+          elif git log "$from"..HEAD --pretty=%B 2>/dev/null | grep -qE '^fix(\([^)]+\))?:'; then
+            bump="patch"
+          fi
+          if [ -n "$last_tag" ]; then
+            case "$bump" in
+              major) major=$((major+1)); minor=0; patch=0 ;;
+              minor) minor=$((minor+1)); patch=0 ;;
+              patch) patch=$((patch+1)) ;;
+            esac
+          fi
+          next="${major}.${minor}.${patch}"
+          case "$GH_REF" in
+            refs/heads/develop)
+              tag="v${next}-dev.${RUN_NUMBER}"
+              prerelease=true
+              ;;
+            refs/heads/rc/*|refs/heads/release/*)
+              existing_rc=$(git tag --list "v${next}-rc.*" | sed -E "s/.*-rc\.([0-9]+)/\1/" | sort -n | tail -n 1)
+              n=$(( ${existing_rc:-0} + 1 ))
+              tag="v${next}-rc.${n}"
+              prerelease=true
+              ;;
+            refs/heads/main)
+              tag="v${next}"
+              prerelease=false
+              ;;
+            *)
+              echo "Unexpected ref: $GH_REF" >&2
+              exit 1
+              ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Next tag: $tag (prerelease=$prerelease)"
+      - name: Create + push tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          GH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; skipping."
+            exit 0
+          fi
+          git tag -a "$TAG" -m "Automated tag from CI for $GH_REF"
+          git push origin "$TAG"
