@@ -352,10 +352,17 @@ Style, commit conventions, and the GSD workflow live in
 
 ## License
 
-Released under the [MIT License](LICENSE) — © 2026 James Maes /
-KofTwentyTwo. Use it, fork it, ship something better with it. The
-rationale and the alternatives that were considered live in
-[`.planning/decisions/license.md`](.planning/decisions/license.md).
+<!-- TODO: LICENSE — public-launch decision pending. The LICENSE file at
+     the repo root is currently MIT (added in 9b62db5; rationale doc at
+     .planning/decisions/license.md). See the public-launch PR for the
+     discussion of MIT vs Apache-2.0 vs AGPL-3.0 vs source-available vs
+     revert-and-keep-private. Do not commit a final license framing
+     until the human confirms. -->
+
+The [`LICENSE`](LICENSE) file at the repo root is currently **MIT** — see
+[`.planning/decisions/license.md`](.planning/decisions/license.md) for
+the rationale that landed it. The public-launch decision is still open;
+the open PR carries the discussion.
 
 ## Acknowledgments
 
