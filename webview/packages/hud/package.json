@@ -13,7 +13,7 @@
     "@jarvis/bus": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@react-three/fiber": "^9.6.0",
+    "@react-three/fiber": "^9.6.1",
     "@react-three/drei": "^10.7.0",
     "three": "^0.184.0",
     "zustand": "^5.0.0"
