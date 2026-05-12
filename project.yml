@@ -346,11 +346,38 @@ targets:
           done
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
+      # Pre-codesign declares the bundle's Info.plist as an inputFile.
+      # Why: Xcode's built-in `ProcessInfoPlistFile` task (which copies
+      # App/Info.plist into Contents/Info.plist) has no implicit ordering vs.
+      # postBuildScripts. With the new build system on Xcode 26, an
+      # incremental build with no Swift compile work would schedule
+      # `ProcessInfoPlistFile` AFTER every PhaseScriptExecution — including
+      # codesign — silently clobbering the bundle Info.plist with the source
+      # one (which carries `<key>JarvisEntitlementsVerified</key><false/>` by
+      # design as the static-state default). The app then hard-blocks at boot
+      # via the AppDelegate marker check. Declaring the bundle plist as an
+      # inputFile forces Xcode to schedule `ProcessInfoPlistFile` before this
+      # phase. We also emit a stamp file as the outputFile so the new build
+      # system can build a clean dependency edge — declaring Info.plist as
+      # both input and output trips Xcode 26's "mutable output but no other
+      # virtual output node" check. The stamp file is the virtual output that
+      # downstream phases (codesign, post-codesign) chain off via their own
+      # inputFile, locking the rest of the postBuildScript chain behind us.
       - name: Verify entitlements (pre-codesign)
         script: |
           "${SRCROOT}/scripts/verify-entitlements.sh" --pre-codesign
+          # Stamp file for build-graph ordering (see comment above). The
+          # script's real side effect is on Info.plist, but we expose this
+          # stamp as the virtual output so Xcode 26 can sequence later
+          # phases (codesign, post-codesign) behind us deterministically.
+          mkdir -p "${DERIVED_FILE_DIR}"
+          /usr/bin/touch "${DERIVED_FILE_DIR}/pre-codesign.stamp"
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
+        outputFiles:
+          - $(DERIVED_FILE_DIR)/pre-codesign.stamp
       - name: Codesign bundle (deepest-first)
         script: |
           # Fall back to CODE_SIGN_IDENTITY (then ad-hoc "-") when CODE_SIGNING_ALLOWED=NO,
@@ -359,6 +386,8 @@ targets:
           "${SRCROOT}/scripts/codesign.sh"
         runOnlyWhenInstalling: false
         basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(DERIVED_FILE_DIR)/pre-codesign.stamp
       - name: Verify entitlements (post-codesign)
         script: |
           "${SRCROOT}/scripts/verify-entitlements.sh" --post-codesign

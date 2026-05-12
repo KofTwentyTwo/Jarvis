@@ -8,8 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		01787A3F29649644D0B3090D /* MCPAppleScriptMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5077B9E3E7541D72CE0EB1B /* MCPAppleScriptMain.swift */; };
-		B0010002000000000000B002 /* BootHealthProbes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0010001000000000000B001 /* BootHealthProbes.swift */; };
-		B0020002000000000000B002 /* StatusPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0020001000000000000B001 /* StatusPanel.swift */; };
 		0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96BF0892A5DFF2AD38A93834 /* BannerContent.swift */; };
 		07E7F32B3857ED215DE59FBE /* Keychain in Frameworks */ = {isa = PBXBuildFile; productRef = 1440CCDB2CC412B099BD0310 /* Keychain */; };
 		0B1E24FF2DB306F28A36680E /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = 8B5C832427B631F1F6EED6C2 /* Logging */; };
@@ -25,6 +23,7 @@
 		3649FFF2495A8C4DDDB3B65B /* Voice in Frameworks */ = {isa = PBXBuildFile; productRef = 254100776001B345FD91877C /* Voice */; };
 		38E9EAF5506E27D6D47B1F52 /* VoiceOutputWiring.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24DBC3C9C1B4A6BE1326CB2 /* VoiceOutputWiring.swift */; };
 		3A6BFB4974C5891335CD12D5 /* Voice in Frameworks */ = {isa = PBXBuildFile; productRef = F8C32F1B64110815E54CFE4F /* Voice */; };
+		3CB366DAB60188FE8DCCDCFD /* BootHealthProbes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B2C24637464D380D4450AF /* BootHealthProbes.swift */; };
 		461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */; };
 		4DF8C0C925F0D09AE39F3380 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = B97DB4370CDF8433823F370C /* MCP */; };
 		50C095E6F675D26E9C399179 /* AnthropicKeyValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77C5BF4E4B659B0A3325E647 /* AnthropicKeyValidator.swift */; };
@@ -55,6 +54,7 @@
 		8E4590089A7955545E2146D3 /* HudStateCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */; };
 		8EF7109838AD91E95506BD1B /* MCPRuntimeWiring.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF3EF4CDCC653EF50D99AF7 /* MCPRuntimeWiring.swift */; };
 		8F0E066DCBA697FB0A2E59EA /* DevOverlay in Frameworks */ = {isa = PBXBuildFile; productRef = C50C1F6C67DE7D3A738845BD /* DevOverlay */; };
+		8FE2F607ABF836C4727C372E /* StatusPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4688BCCE58DB54DE910F9844 /* StatusPanel.swift */; };
 		925998B6DF1DB8263B4A6280 /* AppBusForwarderSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528FED2A364DE6BD1F2BA20F /* AppBusForwarderSink.swift */; };
 		92BBF98C9A7B9B7835FC0949 /* Replay in Frameworks */ = {isa = PBXBuildFile; productRef = 8E74C5DEAD36FEDB6342A54D /* Replay */; };
 		93FDBFFCCEFC0848F1C5E630 /* AppDelegateBusWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6BA7673B5FD73B588D9084 /* AppDelegateBusWiringTests.swift */; };
@@ -146,8 +146,6 @@
 
 /* Begin PBXFileReference section */
 		00C01D284ECCFC986C7F2E16 /* Keychain */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Keychain; path = packages/Keychain; sourceTree = SOURCE_ROOT; };
-		B0010001000000000000B001 /* BootHealthProbes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootHealthProbes.swift; sourceTree = "<group>"; };
-		B0020001000000000000B001 /* StatusPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanel.swift; sourceTree = "<group>"; };
 		024EE01ED6CC98A61A5CD96C /* WizardStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStateTests.swift; sourceTree = "<group>"; };
 		0358E0CAC1377752398FA3C4 /* ReplayingToolResultObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplayingToolResultObserver.swift; sourceTree = "<group>"; };
 		096AD64E7DB48B0F1EE47F89 /* HUDBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDBanner.swift; sourceTree = "<group>"; };
@@ -174,6 +172,7 @@
 		43886353ECED823D4CB689D3 /* WizardStageTCCView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStageTCCView.swift; sourceTree = "<group>"; };
 		4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisHUDPanel.swift; sourceTree = "<group>"; };
 		467AE2D19D58325D227E2F89 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4688BCCE58DB54DE910F9844 /* StatusPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanel.swift; sourceTree = "<group>"; };
 		46CB8B7693CEA625D7331C3E /* HudStateCoordinatorBusWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateCoordinatorBusWiringTests.swift; sourceTree = "<group>"; };
 		4AE91F0E707C480DE5724510 /* MemoryInstallWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryInstallWiringTests.swift; sourceTree = "<group>"; };
 		4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandColors.swift; sourceTree = "<group>"; };
@@ -181,6 +180,7 @@
 		510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateEnumTests.swift; sourceTree = "<group>"; };
 		511D7B2406F485ED0D4B9E0D /* HudStateIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateIntent.swift; sourceTree = "<group>"; };
 		528FED2A364DE6BD1F2BA20F /* AppBusForwarderSink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBusForwarderSink.swift; sourceTree = "<group>"; };
+		54B2C24637464D380D4450AF /* BootHealthProbes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootHealthProbes.swift; sourceTree = "<group>"; };
 		590D5A359A5C3E915D274436 /* VoiceOrchestratorAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceOrchestratorAdapter.swift; sourceTree = "<group>"; };
 		5DE981947E40847F9BAF5641 /* Logging */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Logging; path = packages/Logging; sourceTree = SOURCE_ROOT; };
 		604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAAnimationFactory.swift; sourceTree = "<group>"; };
@@ -318,7 +318,7 @@
 				467AE2D19D58325D227E2F89 /* Assets.xcassets */,
 				90D238B5CF4BD07EB47F84F0 /* JarvisApp.swift */,
 				2C42ACA7552D565D9F198399 /* MCPBusGatewayAdapter.swift */,
-				B0010000000000000000B000 /* Boot */,
+				9583B00B0B1611E34589592F /* Boot */,
 				F76520C565169D7547EE9608 /* HUD */,
 				EE585F62F46C659EDFC48DE7 /* MCP */,
 				35E7CF3C8F80086AD447480E /* MenuBar */,
@@ -331,14 +331,6 @@
 				922FCD26000A64044B1FF187 /* Wizard */,
 			);
 			path = App;
-			sourceTree = "<group>";
-		};
-		B0010000000000000000B000 /* Boot */ = {
-			isa = PBXGroup;
-			children = (
-				B0010001000000000000B001 /* BootHealthProbes.swift */,
-			);
-			path = Boot;
 			sourceTree = "<group>";
 		};
 		153D019325D521C96685E1FC /* Sources */ = {
@@ -372,7 +364,7 @@
 				604976A6CA41878D67AF7B71 /* CAAnimationFactory.swift */,
 				B5540C076C8C87A8060B8881 /* MenuBarContextMenu.swift */,
 				4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */,
-				B0020001000000000000B001 /* StatusPanel.swift */,
+				4688BCCE58DB54DE910F9844 /* StatusPanel.swift */,
 			);
 			path = MenuBar;
 			sourceTree = "<group>";
@@ -489,6 +481,14 @@
 				A33A1960A6404CD790036C46 /* WizardView.swift */,
 			);
 			path = Wizard;
+			sourceTree = "<group>";
+		};
+		9583B00B0B1611E34589592F /* Boot */ = {
+			isa = PBXGroup;
+			children = (
+				54B2C24637464D380D4450AF /* BootHealthProbes.swift */,
+			);
+			path = Boot;
 			sourceTree = "<group>";
 		};
 		A7065AE59E83DE43BF345747 /* mcp-time */ = {
@@ -918,15 +918,17 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "Verify entitlements (pre-codesign)";
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(DERIVED_FILE_DIR)/pre-codesign.stamp",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/scripts/verify-entitlements.sh\" --pre-codesign\n";
+			shellScript = "\"${SRCROOT}/scripts/verify-entitlements.sh\" --pre-codesign\n# Stamp file for build-graph ordering (see comment above). The\n# script's real side effect is on Info.plist, but we expose this\n# stamp as the virtual output so Xcode 26 can sequence later\n# phases (codesign, post-codesign) behind us deterministically.\nmkdir -p \"${DERIVED_FILE_DIR}\"\n/usr/bin/touch \"${DERIVED_FILE_DIR}/pre-codesign.stamp\"\n";
 		};
 		45D1C390727A1C150595B1D8 /* Copy MCP helpers into Contents/Helpers/ */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1053,6 +1055,7 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(DERIVED_FILE_DIR)/pre-codesign.stamp",
 			);
 			name = "Codesign bundle (deepest-first)";
 			outputFileListPaths = (
@@ -1329,7 +1332,7 @@
 				2245DEFA1E6C3880E3C78E56 /* AppDelegateContextBuilderAdapter.swift in Sources */,
 				CCA51A998B128C9C03ED0662 /* AppDelegateFrameAttachAdapters.swift in Sources */,
 				0288ABA48E6EC8450BE4BC5F /* BannerContent.swift in Sources */,
-				B0010002000000000000B002 /* BootHealthProbes.swift in Sources */,
+				3CB366DAB60188FE8DCCDCFD /* BootHealthProbes.swift in Sources */,
 				C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */,
 				A8F96FFF1766D44AA16665A3 /* CAAnimationFactory.swift in Sources */,
 				E218ADC35078C6F26F0D0041 /* HUDBanner.swift in Sources */,
@@ -1347,13 +1350,13 @@
 				8EF7109838AD91E95506BD1B /* MCPRuntimeWiring.swift in Sources */,
 				A20E24D0AB73FFBBE4AB9B9B /* MenuBarContextMenu.swift in Sources */,
 				9933987292A1035BB048D0B9 /* MenuBarIconController.swift in Sources */,
-				B0020002000000000000B002 /* StatusPanel.swift in Sources */,
 				7EFA9CFF57B04C03347D3174 /* OnboardingWizardController.swift in Sources */,
 				EF9A869A3403AF044999784F /* ProductionChunkPump.swift in Sources */,
 				63C78894699F60D1DE3A6715 /* RejectReasonCopy.swift in Sources */,
 				A30C09AE5D98B07A92945E1F /* ReplayingToolResultObserver.swift in Sources */,
 				DB7800734578396AA72EADAF /* SettingsView.swift in Sources */,
 				2C4F2BE06A3AC37B492486DD /* SettingsWindowController.swift in Sources */,
+				8FE2F607ABF836C4727C372E /* StatusPanel.swift in Sources */,
 				8684EF1EAC5D350C2CCAB3CF /* VoiceBusEmitterAdapter.swift in Sources */,
 				B8F411ADE70402B71887E377 /* VoiceOrchestratorAdapter.swift in Sources */,
 				38E9EAF5506E27D6D47B1F52 /* VoiceOutputWiring.swift in Sources */,
