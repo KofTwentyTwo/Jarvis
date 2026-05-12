@@ -1,108 +1,117 @@
-# TODO
+# TODO — DEPRECATED 2026-05-12
 
-Live triage list. Higher up = higher priority. Move done items to a dated archive section if the file gets long.
+**All open work has migrated to GitHub Issues: https://github.com/KofTwentyTwo/Jarvis/issues**
 
-## ▶ TOP — Migration to v1.0 API in flight (2026-05-11)
+New work: file an issue. New audit findings: file with label `audit-finding`. Migration phases: see `epic` issues.
 
-**v1.0 contract LOCKED** as the pair `JARVIS-API-DESIGN-v0.1.md` + `JARVIS-API-DESIGN-v0.2.md` (UQ-1..UQ-5 answered). Index: `.planning/architecture/README.md`. Migration plan: `JARVIS-API-MIGRATION-PLAN.md`. Test contract: `JARVIS-API-TEST-CONTRACT.md`. Skeleton: `Tools/jarvis-diag/` (compiles green).
+Historical content of this file is preserved in git history (see `docs/TODO.md` at commit `8d94c1c` or earlier).
 
-- [x] **2026-05-07 evening:** 6-agent design swarm executed end-to-end. All artifacts in `.planning/architecture/` (`46590cd`).
-- [x] **2026-05-11 morning:** **B-02 tactical patch on `develop`** — `MemoryStore.appendTurn` + orchestrator `sessionHistoryLookup` + AppDelegate wiring of both write and read sides. Substrate gap (turns table was unwritten) discovered and addressed in-scope: `appendTurn` now persists every turn pair to `jarvis.db`. HT-1/2/3 regression tests cover the messages array shape + Phase E `streamTruncated` gate (R-006).
-- [ ] **Next — M-0 (pre-migration gates) directly on `develop`** — `packages/JarvisAPI/`, lift `RealWKWebViewIntegrationTests` to public harness runner, promote 3 grep gates to behavioral, dual-version handshake. ~2.5–3.5 engineer-days.
-- [ ] **Then — M-1 (Self surface) on a feature branch + PR** — first surface migration; closes B-08.
-- [ ] **Then — M-2..M-7** per migration plan, each on own feature branch + PR.
-- [ ] **Optional — cross-AI peer review of v1.0** (GPT-5 Pro / Gemini 2.5 Pro / fresh Opus). Deferred unless a migration step surfaces design questions.
+## Crosswalk — where former sections moved
 
-**Until v1.0 implementation begins, DO NOT fix B-03..B-08 piecemeal** — they re-scope against the v1.0 contract per the migration plan.
+### Migration to v1.0 API (M-0 .. M-7)
 
-## Carry-forward bugs
+- M-0 (pre-migration gates) — [#4](https://github.com/KofTwentyTwo/Jarvis/issues/4)
+- M-1 (Self surface) — [#5](https://github.com/KofTwentyTwo/Jarvis/issues/5)
+- M-2 (Settings surface) — [#6](https://github.com/KofTwentyTwo/Jarvis/issues/6)
+- M-3 (Diagnostics surface) — [#7](https://github.com/KofTwentyTwo/Jarvis/issues/7)
+- M-4 (Memory surface) — [#8](https://github.com/KofTwentyTwo/Jarvis/issues/8)
+- M-5 (Vision surface) — [#9](https://github.com/KofTwentyTwo/Jarvis/issues/9)
+- M-6 (Voice surface) — [#10](https://github.com/KofTwentyTwo/Jarvis/issues/10)
+- M-7 (Turn surface keystone) — [#11](https://github.com/KofTwentyTwo/Jarvis/issues/11)
 
-Live evidence collected during 2026-05-07 user testing.
+### Carry-forward bugs
 
-- [x] **B-02 — Conversation continuity** — closed by tactical patch 2026-05-11 (this commit). HT-1/2/3 regression coverage in `HistoryThreadingRegressionTests`; `AT-1..4` in `MemoryStoreAppendTurnTests` (env-gated on `JARVIS_VEC0_STUB_PATH`).
-- [ ] B-03 — HUD camera button click does nothing (lands M-5)
-- [ ] B-04 — Voice input dead (wake-word + STT silent) (lands M-6)
-- [ ] B-05 — TTS silent (text replies not spoken) (lands M-6, UQ-3 contract: `Voice.synthesizeTurn`)
-- [ ] B-06 — Chat panel doesn't auto-scroll (lands M-7; webview-DOM out of harness scope)
-- [ ] B-07 — Voice Log menu item missing (Plan 10-05 deferred)
-- [ ] B-08 — `get_self_state` correct ID but Claude paraphrases as "Opus 4.5" — minor (lands M-1)
+- B-01a, B-01b — CLOSED 2026-05-07 (substrate fixes shipped)
+- B-02 — CLOSED 2026-05-11 (tactical patch `48ad8d6`)
+- B-03 (HUD camera button) — [#48](https://github.com/KofTwentyTwo/Jarvis/issues/48)
+- B-04 (voice input dead) — [#49](https://github.com/KofTwentyTwo/Jarvis/issues/49)
+- B-05 (TTS silent) — [#50](https://github.com/KofTwentyTwo/Jarvis/issues/50)
+- B-06 (chat auto-scroll) — [#51](https://github.com/KofTwentyTwo/Jarvis/issues/51)
+- B-07 (Voice Log menu) — [#52](https://github.com/KofTwentyTwo/Jarvis/issues/52)
+- B-08 (model paraphrase) — [#53](https://github.com/KofTwentyTwo/Jarvis/issues/53)
 
-## Substrate fixes shipped 2026-05-07
+### Voice follow-ups
 
-- [x] B-01a (Plan 10-02b): tool catalog enumeration — `availableTools:` no longer hardcoded `[]` (`e0c0310`)
-- [x] B-01b (Plan 10-02c): dispatch routing — `InProcessAwareToolDispatcher` composite routes in-process tools (`1b7fb81`)
-- [x] Live-verified at HEAD `1b7fb81`: real device names + real `tool_use`/`tool_result` round-trips for `get_active_audio_route` / `get_time` / `get_self_state`
+- B-7-followup (AudioLevelEmitter wiring) — [#54](https://github.com/KofTwentyTwo/Jarvis/issues/54)
+- TTSInterruptTests.testI3 flake — [#55](https://github.com/KofTwentyTwo/Jarvis/issues/55)
+- B-8 (Orpheus tier-2) — DEFERRED v1.1 per migration plan §10
 
-## Phase 10 status at handoff
+### Track D (memory) — environment work
 
-- [x] 10-01: 4 self-knowledge MCP tools — AC-01..04 PASS
-- [~] 10-02: system prompt preamble — AC-06 PASS; AC-05 retroactively PASS via 10-02b/c live verification (SUMMARY flip pending)
-- [x] 10-02b: B-01a substrate fix
-- [~] 10-02c: B-01b substrate fix shipped; SUMMARY missing
-- [ ] 10-03 / 10-04 / 10-05: DEFERRED — re-scope against new API after design lock
+- D-5 (libsqlite3.dylib build) — [#56](https://github.com/KofTwentyTwo/Jarvis/issues/56)
+- D-6 (vec0.dylib bundle) — [#57](https://github.com/KofTwentyTwo/Jarvis/issues/57) (likely closed via static linkage)
+- D-7 (Ollama model baseline reconcile) — [#58](https://github.com/KofTwentyTwo/Jarvis/issues/58) (`nomic-embed-text` + `qwen3.6` already present)
 
-## Loose ends (housekeeping; not blockers for swarm)
+### Audit findings — 2026-05-12 round
 
-- [ ] Flip Plan 10-02 AC-05 from FAIL → PASS in `10-02-SUMMARY.md` (live evidence: HEAD `1b7fb81`)
-- [ ] Author `10-02c-SUMMARY.md` (only PLAN exists)
-- [ ] `stash@{0}` triage — Voice Log / camera / DevOverlay scaffolding from 2026-05-06; defer until Plan 10-05 re-scoped
+**Memory audit (8 findings):**
+- M-1 facts_vec never written (CRITICAL) — [#12](https://github.com/KofTwentyTwo/Jarvis/issues/12)
+- M-2 replay log poisoned (CRITICAL) — [#13](https://github.com/KofTwentyTwo/Jarvis/issues/13)
+- M-3 search_memory missing from preamble (CRITICAL) — [#14](https://github.com/KofTwentyTwo/Jarvis/issues/14)
+- M-4 source_turn_id stores FNV hash (HIGH) — [#15](https://github.com/KofTwentyTwo/Jarvis/issues/15)
+- M-5 FTS5 punctuation crashes (HIGH) — [#16](https://github.com/KofTwentyTwo/Jarvis/issues/16)
+- M-6 BootHealth probe misleading (MEDIUM) — [#17](https://github.com/KofTwentyTwo/Jarvis/issues/17)
+- M-7 stale doc-comments (LOW) — [#19](https://github.com/KofTwentyTwo/Jarvis/issues/19)
+- M-8 MemoryReplaySink fire-and-forget (LOW) — [#18](https://github.com/KofTwentyTwo/Jarvis/issues/18)
 
----
+**MCP / agent audit (7 findings):**
+- CRIT-1 turnIDResolver permanently nil — [#20](https://github.com/KofTwentyTwo/Jarvis/issues/20)
+- CRIT-2 tool-result double-capped — [#21](https://github.com/KofTwentyTwo/Jarvis/issues/21)
+- CRIT-3 MCPRuntime tools-count log undercounts — [#22](https://github.com/KofTwentyTwo/Jarvis/issues/22)
+- HIGH-1 cache hints never trigger — [#23](https://github.com/KofTwentyTwo/Jarvis/issues/23)
+- HIGH-2 assistant text dropped alongside tool_use — [#24](https://github.com/KofTwentyTwo/Jarvis/issues/24)
+- MED-1 get_active_audio_route conditional registration — [#25](https://github.com/KofTwentyTwo/Jarvis/issues/25)
+- MED-2 confirmation panel cross-Space — [#26](https://github.com/KofTwentyTwo/Jarvis/issues/26)
+- LOW-1 toolCall args-revealed event — [#27](https://github.com/KofTwentyTwo/Jarvis/issues/27)
 
-## Demo path (one working modality)
+**Voice audit (12 findings):**
+- P0-1 wake-word dies on rebuild — [#28](https://github.com/KofTwentyTwo/Jarvis/issues/28)
+- P0-2 STT backend hard-coded — [#29](https://github.com/KofTwentyTwo/Jarvis/issues/29)
+- P0-3 .ttsStopped only on barge-in — [#30](https://github.com/KofTwentyTwo/Jarvis/issues/30)
+- P0-4 VoiceTTSAdapter.tierResolver dead — [#31](https://github.com/KofTwentyTwo/Jarvis/issues/31)
+- P1-1 OpenWakeWordSession buffers unbounded — [#32](https://github.com/KofTwentyTwo/Jarvis/issues/32)
+- P1-2 VoiceBootHealthProbe shallow — [#33](https://github.com/KofTwentyTwo/Jarvis/issues/33)
+- P1-3 SileroVAD hidden state persists — [#34](https://github.com/KofTwentyTwo/Jarvis/issues/34)
+- P1-4 voiceHudCont.finish() one-way — [#35](https://github.com/KofTwentyTwo/Jarvis/issues/35)
+- P1-5 AgentHudIntent dormant — [#36](https://github.com/KofTwentyTwo/Jarvis/issues/36)
+- P2-1 STTBackendSelector string mismatch — [#37](https://github.com/KofTwentyTwo/Jarvis/issues/37)
+- P2-2 SpeechSynthDelegate overwrites continuation — [#38](https://github.com/KofTwentyTwo/Jarvis/issues/38)
+- P2-3 whisperKitFallback dead — [#39](https://github.com/KofTwentyTwo/Jarvis/issues/39)
 
-- [x] Track A: text turn + animated rings (`1f8e03e`)
-- [ ] Re-launch app, verify CacheHints fix actually unblocks streaming. Read `system.log` for the new `AnthropicProvider stream outcome:` line — it now classifies 200+0bytes / 200+frames+EOF / complete.
+**Bus / HUD audit (8 findings):**
+- S1 BridgeNavigationDelegate no didFail — [#40](https://github.com/KofTwentyTwo/Jarvis/issues/40)
+- S1 MenuBarIconController.transition production-dead — [#41](https://github.com/KofTwentyTwo/Jarvis/issues/41)
+- S1 DevOverlay hollow shell — [#42](https://github.com/KofTwentyTwo/Jarvis/issues/42)
+- S2 sessionHistory dead-letter — [#43](https://github.com/KofTwentyTwo/Jarvis/issues/43)
+- S2 audioLevel consumer no-op — [#44](https://github.com/KofTwentyTwo/Jarvis/issues/44)
+- S2 JarvisBusWorld doc drift — [#45](https://github.com/KofTwentyTwo/Jarvis/issues/45)
+- S3 stale webview bundle artifacts — [#46](https://github.com/KofTwentyTwo/Jarvis/issues/46)
+- S3 audioLevel NaN encoding — [#47](https://github.com/KofTwentyTwo/Jarvis/issues/47)
 
-## Track B — voice (B-1..7 done)
+**Vision audit (already filed 2026-05-12):**
+- Vision T2 escalation always dies — [#1](https://github.com/KofTwentyTwo/Jarvis/issues/1)
+- FrameAttachController leaks pendingFrame — [#2](https://github.com/KofTwentyTwo/Jarvis/issues/2)
+- Mid-session camera TCC revoke not observed — [#3](https://github.com/KofTwentyTwo/Jarvis/issues/3)
 
-- [x] B-1: bundle ONNX models at `Contents/Resources/Models/{openWakeWord,silero}/`
-- [x] B-2: WakeWordDAG.swift:93 typo (production was calling test seam)
-- [x] B-3: tier-1 TTS engine (AVSpeechSynthesizer) wired in `installVoice`
-- [x] B-4: `AudioGraphOwner` construction in `installVoice`; `AVAudioEngine.start()`; mic taps → wake-word DAG (`e9c0a34`)
-- [x] B-4: replace `LiveSpeechAnalyzerBridge.feed()` body (`_ = chunk`) with macOS 26 SpeechAnalyzer wiring (`e9c0a34`)
-- [x] B-5: VoiceController chunkPump + voice-loop e2e proof (`61aed20`). 3 new tests prove the chain: preset chunks → STT → orchestrator.submit. AppDelegate wires the production pump reading from `audioGraphOwner.ringBuffer`.
-- [x] B-6: VAD-gated session end (`c7f9ece`). Per-session VAD interceptor in `VoiceController.startSTTSession` — slices pump output into 512-sample windows, runs Silero VAD, triggers `endSTTSession()` on `.speechEnd` + 5-chunk hangover. 4 new tests (VAD-1/2/4/5).
-- [x] B-7: BufferBroadcaster fan-out for multi-consumer audio ring (`bce725b`). New `BufferBroadcaster` at the AudioGraph tap; chunk pump now subscribes per-session via `AudioGraphOwner.subscribe()`; legacy `ringBuffer` still works for WakeWordDAG. 5 new BufferBroadcasterTests (BB-1..5 incl. concurrent stress).
-- [ ] B-7-followup: AudioLevelEmitter production wiring. The emitter is constructed only in tests today — when wired in AppDelegate it MUST call `audioGraphOwner.subscribe()`, not reuse `audioGraphOwner.ringBuffer`.
-- [ ] B-8 (stretch): TTS tier-2 Orpheus — gated on ~6GB HuggingFace weight download; currently degrades to tier-1.
+### Loose ends / docs hygiene
 
-## Track C — vision (closed 2026-05-04)
+- Flip Plan 10-02 AC-05 + author 10-02c-SUMMARY — [#59](https://github.com/KofTwentyTwo/Jarvis/issues/59)
+- REQUIREMENTS.md traceability reconcile — [#60](https://github.com/KofTwentyTwo/Jarvis/issues/60)
+- /gsd-validate-phase 1..9 retroactive sweep — [#61](https://github.com/KofTwentyTwo/Jarvis/issues/61)
+- streamTruncated live verify — [#62](https://github.com/KofTwentyTwo/Jarvis/issues/62)
+- stash@{0} triage — [#63](https://github.com/KofTwentyTwo/Jarvis/issues/63)
 
-- [x] C-1: `CameraCapture` `AVCapturePhotoCaptureDelegate` conformance + real `capturePhoto(...)` call (`7a5543a`)
-- [x] C-2: `frameStream(forPresence:)` delegate-yielded continuation via `VideoSampleDelegate` fan-out (`ea09fd4`)
-- [x] C-3: HUD camera button emits `BusInbound.frameAttachRequested` (`4159d44`)
-- [x] C-4: explicit `MissingT2Provider` replaces silent `t2Provider: t1` fallback (`df6a4d2`)
-- [x] C-5: `FrameAttachController.confirmSend(...)` wired into `handleChatSubmit` / `handleChatCancelAndSubmit` (`eac16c9`)
-- [x] C-6: real-hardware vision integration test, gated by `JARVIS_REAL_CAMERA=1` + TCC authorized (`19362f6`)
+### Closed / shipped (no migration needed)
 
-## Track D — memory (code-work closed 2026-05-04)
-
-- [ ] D-5 (deferred — needs user environment work): build custom `libsqlite3.dylib` with `SQLITE_ENABLE_LOAD_EXTENSION=1`. Skeleton at `scripts/build-sqlite-with-extensions.sh`; pin SQLite version + SHA256 + codesign identity, then run.
-- [ ] D-6 (deferred — needs user environment work): bundle `vec0.dylib`. Skeleton at `scripts/fetch-sqlite-vec.sh`; pin sqlite-vec tag + SHA256, then run.
-- [x] D-1: Remove `installMemory` early-return cascade so coordinator + extractor construct even on vec init failure (`75a10be`)
-- [x] D-2: Register `SearchMemoryTool` + `ForgetFactTool` with `mcpRuntime` (`707c45b`)
-- [x] D-3: Fix `MemoryExtractionOrchestrator` `priorFacts: []` hardcode — UPDATE/supersede now fires (`51750c1`)
-- [ ] D-7 (deferred — needs user environment work): pull local Ollama models — `ollama pull nomic-embed-text` + `ollama pull qwen2.5-coder:32b`.
-- [x] D-4: End-to-end "remember Brutus" regression scenario with fakes (`c3bd0a5`)
-
-## Cross-cutting
-
-- [x] **BLOCKER-INT-1** — replace `NoopBusGateway` at `AppDelegate.swift:467` so tool-call cards reach HUD (`ad93dac`)
-- [x] **F-A2-01** — `WebviewBridgeOutboundTests:80` stale `JarvisBusWorld` assertion fixed; now asserts `WKContentWorld.page` (`6f6617e`)
-- [x] **Test pyramid health** — 5 `XCTAssertTrue(true)` tautologies removed/fixed per `.planning/audit-2026-05-03/tests-audit.md` (`08125a4`). HudStateEnumTests rubber-stamps left as-is (a11y labels are load-bearing).
-- [ ] Phase F1 — top-level IntegrationTests target (the structural fix; one cold-launch e2e test would catch INT-1/2/3 + F-E-RACE-1/FK-1/WIRE-1)
-- [x] Phase F2 — `scripts/check-no-leftover-stubs.sh` linter (catches "Replaced in 0X-0Y" rot) (`5cd46c9`)
-
-## Audit-2026-05-04 P0-P2 closure (2026-05-04 afternoon)
-
-- [x] P0 sweep (small fixes + 3 doc rewrites) (`14cff7b`, `6ce94a7`, `7a72ee6`, `26f5ae3`)
-- [x] P1+P2 fixes — Voice correctness + cross-cutting cleanup (`f19657a`, `81357ca`, `e606c63`, `e8bbbcf`, `11cb659`, `a4f7666`, `263705d`)
-- [x] P2-14 — test seam visibility cleanup (Voice 4 seams `public`→`internal`, MCP 2 seams `public`→`@_spi(Testing) public`) (`57847f2`)
-- [x] P2-15 — Mock/Fake/Stub naming convention documented in CLAUDE.md §"Test naming conventions" + 15 worst-mismatch stragglers renamed (`f9cd25d`)
-- [x] P3-18 / security LOW-3 — `scripts/check-applescript-confirmation.sh` defense-in-depth grep gate (verified catches regression) (`2d9a25a`)
-
-## Knowledge graph / docs hygiene
-
-- [ ] REQUIREMENTS.md traceability table is all `[ ]` despite ~70 of 79 being satisfied per phase SUMMARY frontmatters. Reconcile in one sweep at milestone close.
-- [ ] `.planning/AUDIT-AND-FIX-PLAN.md` — Phase B3 (`/gsd-validate-phase 1..9`) still deferred
+- B-01a, B-01b substrate fixes (2026-05-07)
+- Track A text turn + animated rings (2026-05-04)
+- Track B-1..7 voice foundations (2026-05-04)
+- Track C-1..6 vision (2026-05-04)
+- Track D-1..4 memory code-work (2026-05-04)
+- Audit-2026-05-03 SYNTHESIS (closed)
+- Audit-2026-05-04 P0-P2 + P3-18 closure (2026-05-04)
+- Phase F2 linter (2026-05-04)
+- Documentation sweep — README/ARCHITECTURE/CONTRIBUTING/per-package READMEs (2026-05-04)
+- B-02 history-threading tactical patch (2026-05-11)
+- Memory database real (vec0 static link, hard-fail boot, stats tool) (2026-05-11)
+- Memory extractor model swap to qwen3.6 (2026-05-11)
