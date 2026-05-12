@@ -157,8 +157,19 @@ public struct OllamaBootHealthProbe: BootHealthProbe {
                     evidence: "non-200 from \(url.absoluteString)"
                 )
             }
+            // Tag-agnostic match — Ollama returns names with `:latest` /
+            // `:32b` etc. suffixes. A required model `"nomic-embed-text"`
+            // matches against `"nomic-embed-text:latest"` because the user
+            // pulled the default tag; explicit `"qwen3.6:latest"` matches
+            // only that exact tag. Strip ":<tag>" from EACH side only when
+            // the required name has no tag itself.
             let tagged = parseModelNames(from: data)
-            let missing = requiredModels.filter { !tagged.contains($0) }
+            let missing = requiredModels.filter { required in
+                if required.contains(":") {
+                    return !tagged.contains(required)
+                }
+                return !tagged.contains(where: { $0 == required || $0.hasPrefix(required + ":") })
+            }
             if missing.isEmpty {
                 return ProbeOutcome(
                     status: .ok,
@@ -325,10 +336,16 @@ public struct VisionBootHealthProbe: BootHealthProbe {
 public struct MCPBootHealthProbe: BootHealthProbe {
     public let name = "mcp"
     private let mcpRuntime: MCPRuntime?
+    private let inProcessRegistry: InProcessToolRegistry?
     private let minimumExpected: Int
 
-    public init(mcpRuntime: MCPRuntime?, minimumExpected: Int = 8) {
+    public init(
+        mcpRuntime: MCPRuntime?,
+        inProcessRegistry: InProcessToolRegistry? = nil,
+        minimumExpected: Int = 8
+    ) {
         self.mcpRuntime = mcpRuntime
+        self.inProcessRegistry = inProcessRegistry
         self.minimumExpected = minimumExpected
     }
 
@@ -341,23 +358,34 @@ public struct MCPBootHealthProbe: BootHealthProbe {
                 evidence: "mcpRuntime property was nil at probe time"
             )
         }
-        let names = await runtime.client.registeredToolNames()
+        // Stdio helpers + in-process tools live in separate registries.
+        // The composite dispatcher routes both. The agent uses both.
+        // Probe must count both.
+        let stdioNames = await runtime.client.registeredToolNames()
+        let inProcessNames: [String]
+        if let registry = inProcessRegistry {
+            let tools = await registry.registered()
+            inProcessNames = tools.map(\.name)
+        } else {
+            inProcessNames = []
+        }
+        let names = Array(Set(stdioNames + inProcessNames)).sorted()
         let count = names.count
         if count == 0 {
             return ProbeOutcome(
                 status: .failed(reason: "no tools registered", severity: .critical),
-                evidence: "registeredToolNames().count == 0"
+                evidence: "no stdio + no in-process tools"
             )
         }
         if count < minimumExpected {
             return ProbeOutcome(
                 status: .degraded(reason: "expected ≥\(minimumExpected) tools, registry has \(count)", severity: .loud),
-                evidence: names.sorted().joined(separator: ", ")
+                evidence: "stdio: \(stdioNames.count); in-process: \(inProcessNames.count); names: \(names.joined(separator: ", "))"
             )
         }
         return ProbeOutcome(
             status: .ok,
-            evidence: "\(count) tools: \(names.sorted().joined(separator: ", "))"
+            evidence: "\(count) tools (\(stdioNames.count) stdio + \(inProcessNames.count) in-process): \(names.joined(separator: ", "))"
         )
     }
 }

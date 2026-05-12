@@ -873,9 +873,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Vision — TCC status + device enumeration only; no captured actor.
         await bootHealthOrchestrator.register(VisionBootHealthProbe())
 
-        // MCP — captures live MCPRuntime if build succeeded.
+        // MCP — captures live MCPRuntime + in-process registry. The
+        // composite dispatcher routes both, so the probe must count both
+        // (stdio helpers + in-process self-knowledge/memory tools).
         await bootHealthOrchestrator.register(
-            MCPBootHealthProbe(mcpRuntime: self.mcpRuntime)
+            MCPBootHealthProbe(
+                mcpRuntime: self.mcpRuntime,
+                inProcessRegistry: self.inProcessToolRegistry
+            )
         )
 
         // Replay — captures DB URL + live ReplayLog presence flag.
