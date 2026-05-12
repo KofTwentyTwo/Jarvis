@@ -234,14 +234,22 @@ final class OrchestratorSubmitTests: XCTestCase {
 
     // MARK: - OS6
 
-    /// OS6: ReplayLog gets a `.toolResultFull` with the FULL bytes (not the
-    /// 8KB-capped model-facing string). We assert this by sending a 16 KB blob
-    /// from the dispatcher and checking the model-facing message in the second
-    /// provider call has the truncation marker (proving cap was applied) AND
-    /// the full bytes are still preserved in `Packed.fullBytes`.
-    func test_OS6_replayGetsFullBlobModelGetsCapped() async throws {
+    /// OS6 (post-#21 / audit-2026-05-12 CRIT-2): the 8 KB cap is the MCP
+    /// dispatcher's responsibility (`SanitizeForModel.prepareForBoundary`).
+    /// `ToolResultPacker.pack` is now a pass-through. The orchestrator
+    /// writes the dispatcher's prepared bytes to ReplayLog as
+    /// `.toolResultFull` and embeds them in the model-facing tool_result.
+    /// This test simulates a dispatcher that has already applied the cap
+    /// (returns exactly 8 KB) and asserts both the replay-bound bytes and
+    /// the model-facing message are sized at the cap — NOT 4 KB (which a
+    /// remnant per-line cap would produce) and NOT 16 KB (which would
+    /// indicate the cap was bypassed entirely).
+    func test_OS6_replayAndModelSeeDispatcherPreparedBytes() async throws {
         let toolReq = ToolUseRequest(id: "tu1", name: "big", argsJSON: Data("{}".utf8))
-        let bigBlob = Data(repeating: UInt8(ascii: "X"), count: 16 * 1024)
+        // Dispatcher returns exactly 8 KB — matching the contract that the
+        // MCP boundary applies `prepareForBoundary(_, capBytes: 8192)`
+        // upstream of the orchestrator.
+        let preparedBlob = Data(repeating: UInt8(ascii: "X"), count: 8 * 1024)
 
         let mock = MockLLMProvider(scripts: [
             .init(events: [
@@ -256,7 +264,7 @@ final class OrchestratorSubmitTests: XCTestCase {
                 .messageStop,
             ]),
         ])
-        let dispatcher = StubToolDispatcher(dispatch: { _ in bigBlob })
+        let dispatcher = StubToolDispatcher(dispatch: { _ in preparedBlob })
 
         let (orch, _, _) = try await buildOrchestrator(provider: mock, dispatcher: dispatcher)
 
@@ -271,12 +279,85 @@ final class OrchestratorSubmitTests: XCTestCase {
         guard case .toolResult(_, let content) = secondCallToolMsg.content[0] else {
             return XCTFail("expected toolResult content")
         }
-        XCTAssertTrue(content.contains("[TRUNCATED:"),
-                      "model-facing tool result must be capped + carry truncation marker")
-        // Model-facing is wrapped in nonce envelope; total length is wrapper +
-        // 8192 bytes + marker text. Assert it's far smaller than 16 KB.
-        XCTAssertLessThan(content.utf8.count, 9000,
-                          "model-facing must be < 9 KB (8 KB cap + small marker + envelope)")
+        // The packer no longer adds a `[TRUNCATED: …]` marker — the
+        // dispatcher's `…[tool-result-truncated at 8192 bytes]` marker is
+        // the only one a downstream consumer should ever see. The
+        // dispatcher stub in this test does NOT add one (its job is to
+        // simulate already-prepared bytes), so the model-facing string
+        // should not contain either marker.
+        XCTAssertFalse(content.contains("[TRUNCATED:"),
+                       "packer must not double-mark — dispatcher owns the truncation marker")
+        // The 8 KB cap bytes flow through; the model-facing content is the
+        // dispatcher payload wrapped in the SEC-06 nonce envelope. Assert
+        // the payload byte count is preserved (>= 8 KB, accounting for the
+        // wrapper text; NOT 4 KB or less).
+        XCTAssertGreaterThanOrEqual(content.utf8.count, 8 * 1024,
+                                    "model-facing must carry the full 8 KB dispatcher payload — not 4 KB or less")
+    }
+
+    /// OS6b (#21 regression — audit-2026-05-12 CRIT-2): the persisted
+    /// ReplayLog row for `.toolResultFull` is keyed to exactly the bytes
+    /// the dispatcher returned (no second cap, no per-line strip applied
+    /// on top). A dispatcher that returns 8 KB → replay row contains
+    /// exactly 8 KB of payload. Pre-fix, `ToolResultPacker.pack`'s redundant
+    /// inner cap re-truncated already-capped bytes (no-op for size but the
+    /// design was wrong); a per-line variant could have dropped to 4 KB
+    /// under different inputs. This test pins the post-fix invariant by
+    /// driving end-to-end through the orchestrator and reading the
+    /// `payload_bytes` BLOB from the SQLite `events` table.
+    func test_OS6b_replayRowMatchesDispatcherBytesNoSecondCap() async throws {
+        let toolReq = ToolUseRequest(id: "tu-21", name: "big", argsJSON: Data("{}".utf8))
+        // Exactly 8 KB — what a real dispatcher emits after
+        // `SanitizeForModel.prepareForBoundary(_, capBytes: 8192)`.
+        let preparedBlob = Data(repeating: UInt8(ascii: "X"), count: 8 * 1024)
+
+        let mock = MockLLMProvider(scripts: [
+            .init(events: [
+                .messageStart(LLMMessageStart(messageId: "m1", model: "x", usagePrefix: nil)),
+                .toolUseRequested(toolReq),
+                .stopReason(.toolUse),
+                .messageStop,
+            ]),
+            .init(events: [
+                .messageStart(LLMMessageStart(messageId: "m2", model: "x", usagePrefix: nil)),
+                .stopReason(.endTurn),
+                .messageStop,
+            ]),
+        ])
+        let dispatcher = StubToolDispatcher(dispatch: { _ in preparedBlob })
+
+        let (orch, replay, _) = try await buildOrchestrator(provider: mock, dispatcher: dispatcher)
+
+        _ = await orch.submit(.text("fetch"))
+        _ = await collectUntil(orch: orch) { ev in
+            if case .stateChange(.idle) = ev { return true }; return false
+        }
+
+        // Flush + close so the row is on disk before we open a competing
+        // connection.
+        await replay.flush()
+        try await replay.close()
+
+        let conn = try SQLiteConnection.open(at: tempHome.dbURL)
+        defer { try? conn.close() }
+        let blob: Data? = try conn.query(
+            "SELECT payload_bytes FROM events WHERE kind='tool_result_full';",
+            map: { $0.columnBlob(at: 0) }
+        ).first ?? nil
+
+        XCTAssertNotNil(blob, "must find a tool_result_full row")
+        guard let blob else { return }
+        // The envelope is `{"tool_use_id": "...", "bytes": "<base64>"}`.
+        let json = try JSONSerialization.jsonObject(with: blob) as? [String: String]
+        XCTAssertEqual(json?["tool_use_id"], "tu-21")
+        let recovered = Data(base64Encoded: json?["bytes"] ?? "") ?? Data()
+        // #21 invariant: the replay row carries EXACTLY the dispatcher's
+        // 8 KB payload — not 4 KB (which a residual per-line strip would
+        // produce) and not less.
+        XCTAssertEqual(recovered.count, 8 * 1024,
+                       "replay row must be exactly 8 KB — not 4 KB or less (#21)")
+        XCTAssertEqual(recovered, preparedBlob,
+                       "replay row must be byte-for-byte identical to the dispatcher payload")
     }
 
     // MARK: - OS7
