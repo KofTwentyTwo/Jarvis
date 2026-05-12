@@ -1457,7 +1457,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // wires alone here; tier-2 (Orpheus) is gated behind the ~6 GB
         // weight download and degrades to tier-1 transparently.
         // (audit trail: 2026-05-03 voice audit / Track B-3.)
-        let ttsAdapter = VoiceTTSAdapter(engine: VoiceOutputWiring.makeTier1Engine())
+        // Resolve TTS tier from PerTurnSnapshot per synthesis. Defaults
+        // to `.tier1` when configStore is nil or `tts.tier` is anything
+        // other than "tier2". Today this is decorative — Orpheus weights
+        // aren't shipped, so the engine resolves tier-2 back to tier-1
+        // inside `synthesize` — but the moment weights arrive, this
+        // closure becomes the user-facing tier switch.
+        // (audit-2026-05-12 P0-4 / Issue #31: was unwired; the default
+        // `{ .tier1 }` constant masked any `tts.tier = "tier2"` config.)
+        let ttsAdapter = VoiceTTSAdapter(
+            engine: VoiceOutputWiring.makeTier1Engine(),
+            tierResolver: { [configStore = self.configStore] in
+                guard let configStore else { return .tier1 }
+                let snap = await configStore.perTurn()
+                return snap.tts.tier == "tier2" ? .tier2 : .tier1
+            }
+        )
 
         // Reuse the `OutboundBatcher` constructed by `installAgent`. The
         // batcher coalesces high-frequency audio-level RMS at ~30 Hz

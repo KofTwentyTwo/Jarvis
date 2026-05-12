@@ -102,6 +102,54 @@ final class VoiceOrchestratorAdapterTests: XCTestCase {
         await adapter.cancelTTS()
     }
 
+    // MARK: - VoiceTTSAdapter tierResolver wiring (Issue #31)
+
+    /// Regression for audit-2026-05-12 P0-4 / Issue #31: AppDelegate
+    /// constructed the adapter with `engine:` only, leaving
+    /// `tierResolver` at the default `{ .tier1 }` constant. Setting
+    /// `tts.tier = "tier2"` in config did nothing for real synthesis.
+    /// The fix wires a closure that reads `PerTurnSnapshot.tts.tier`.
+    ///
+    /// This test asserts the adapter calls its resolver on every
+    /// `synthesize` call, so a config flip on the next synthesis lands.
+    /// The engine is nil (no real synthesis runs); we just measure that
+    /// `synthesize` *would have* asked the resolver before routing.
+    ///
+    /// With `engine: nil` the adapter no-ops before invoking the
+    /// resolver, so we use a non-nil engine sentinel. The simplest
+    /// stand-in is `TTSEngineActor(orpheus: nil, tier1: AVSpeechSynth(),
+    /// fallback: nil)` — a real tier-1 engine. We synthesize an empty
+    /// string to keep the test fast.
+    func testVoiceTTSAdapterTierResolverIsInvokedPerSynthesis() async throws {
+        actor ResolverCallCount {
+            var count = 0
+            func tick() { count += 1 }
+        }
+        let counter = ResolverCallCount()
+
+        let engine = TTSEngineActor(
+            orpheus: nil,
+            tier1: AVSpeechSynth(),
+            fallback: nil
+        )
+        let adapter = VoiceTTSAdapter(
+            engine: engine,
+            tierResolver: {
+                await counter.tick()
+                return .tier1
+            }
+        )
+
+        await adapter.synthesize("a")
+        await adapter.synthesize("b")
+
+        let calls = await counter.count
+        XCTAssertEqual(
+            calls, 2,
+            "tierResolver must be invoked once per `synthesize` call (Issue #31). Got \(calls)."
+        )
+    }
+
     // MARK: - VoiceBusEmitterAdapter (forwards to batcher)
 
     func testVoiceBusEmitterAdapterForwardsRMSToBatcher() async throws {
