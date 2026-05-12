@@ -225,6 +225,45 @@ final class STTBackendSelectorTests: XCTestCase {
         XCTAssertTrue(stt is SpeechAnalyzerSTT,
                       "Empty backend string should return SpeechAnalyzerSTT (default)")
     }
+
+    // MARK: - B5 (Issue #29): canonical constants round-trip through `make`
+
+    /// Regression: the canonical constants exported by `STTBackendSelector`
+    /// (snake_case `speech_analyzer` / `whisperkit`) must round-trip
+    /// through `make(backend:)` without falling into the unknown-backend
+    /// default branch. The 2026-05-12 audit found `get_self_state`
+    /// returning camelCase strings (`"speechAnalyzer"` / `"whisperKit"`),
+    /// which DO match the constants here only when callers use the
+    /// constants — string-literal mismatches landed in the default
+    /// branch silently. This test pins the contract.
+    func testB5_canonicalConstantsRoundTripThroughMake() {
+        let logger1 = TestWarningLogger()
+        let s1 = STTBackendSelector.make(
+            backend: STTBackendSelector.backendSpeechAnalyzer,
+            warningLogger: logger1
+        )
+        XCTAssertTrue(s1 is SpeechAnalyzerSTT)
+        XCTAssertNil(logger1.lastWarning,
+                     "canonical 'speech_analyzer' constant must not log unknown-backend warning")
+
+        let logger2 = TestWarningLogger()
+        let s2 = STTBackendSelector.make(
+            backend: STTBackendSelector.backendWhisperKit,
+            warningLogger: logger2
+        )
+        XCTAssertTrue(s2 is WhisperKitSTT)
+        XCTAssertNil(logger2.lastWarning,
+                     "canonical 'whisperkit' constant must not log unknown-backend warning")
+
+        // Anti-pattern: camelCase strings (the pre-fix `get_self_state`
+        // shape) must land in the default branch and emit a warning.
+        let logger3 = TestWarningLogger()
+        let s3 = STTBackendSelector.make(backend: "whisperKit", warningLogger: logger3)
+        XCTAssertTrue(s3 is SpeechAnalyzerSTT,
+                      "camelCase 'whisperKit' must fall through to default")
+        XCTAssertNotNil(logger3.lastWarning,
+                        "camelCase 'whisperKit' must produce an unknown-backend warning (lock against silent drift)")
+    }
 }
 
 // MARK: - Test doubles

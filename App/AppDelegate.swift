@@ -1492,7 +1492,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let vc = VoiceController(
             wakeWordStream: wakeWordDAG.wakeWordStream,
             vadFactory: { sileroVAD },
-            sttFactory: { STTBackendSelector.make(backend: "speech_analyzer") },
+            sttFactory: { [configStore = self.configStore] in
+                // Read STT backend from PerTurnSnapshot. Defaults to
+                // SpeechAnalyzer when the snapshot disables WhisperKit
+                // fallback (today's default) or when configStore is nil.
+                // (audit-2026-05-12 P0-2 / Issue #29: was hard-coded to
+                // "speech_analyzer", making `stt.whisperKitFallback`
+                // unreachable from config.)
+                let backend: String
+                if let configStore {
+                    let snap = await configStore.perTurn()
+                    backend = snap.stt.whisperKitFallback
+                        ? STTBackendSelector.backendWhisperKit
+                        : STTBackendSelector.backendSpeechAnalyzer
+                } else {
+                    backend = STTBackendSelector.backendSpeechAnalyzer
+                }
+                return STTBackendSelector.make(backend: backend)
+            },
             tts: ttsAdapter,
             orchestrator: orchAdapter,
             bannerCoordinator: bannerAdapter,
@@ -2281,9 +2298,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return snap.tts.tier
         }
         let sttBackend: @Sendable () async -> String = {
-            guard let configStore else { return "speechAnalyzer" }
+            // Returns the canonical backend identifier matching
+            // `STTBackendSelector.backendSpeechAnalyzer` /
+            // `STTBackendSelector.backendWhisperKit` (snake_case). The
+            // pre-2026-05-12 strings ("speechAnalyzer" / "whisperKit"
+            // camelCase) did not match the selector's accepted values —
+            // any consumer routing through `STTBackendSelector.make`
+            // landed in the `unknown backend` default branch.
+            // (audit-2026-05-12 P0-2 / P2-1 / Issue #29.)
+            guard let configStore else { return STTBackendSelector.backendSpeechAnalyzer }
             let snap = await configStore.perTurn()
-            return snap.stt.whisperKitFallback ? "whisperKit" : "speechAnalyzer"
+            return snap.stt.whisperKitFallback
+                ? STTBackendSelector.backendWhisperKit
+                : STTBackendSelector.backendSpeechAnalyzer
         }
         let wakeWordMuted: @Sendable () async -> Bool = {
             UserDefaults.standard.bool(forKey: "features.voice.wakeWordMuted")
