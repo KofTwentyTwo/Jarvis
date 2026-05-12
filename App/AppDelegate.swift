@@ -2733,11 +2733,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // closure bridges App.HudState → Bus.HudState (rawValue round-trip)
         // and dispatches to the webview bridge on the MainActor. `[weak
         // bridge]` avoids a retain cycle with `self` via the bridge.
-        let coordinator = HudStateCoordinator(emit: { [weak bridge] appState in
-            guard let bridge else { return }
-            Task { @MainActor in
-                try? await bridge.send(.hudState(busHudState(from: appState)))
+        //
+        // Audit-2026-05-12 S1 / #41 — the emit closure ALSO fans state to
+        // `MenuBarIconController.transition(to:)` so the menu-bar icon
+        // animates per agent state (breath/rotate/shimmer/glow). Before
+        // this fan-out, `transition(to:)` was production-dead: the method
+        // existed and was unit-tested, but no production call site invoked
+        // it, so the icon stayed in `.idle` for the whole app lifetime
+        // regardless of agent activity. This is NOT a HUD-08 single-writer
+        // violation — `transition(to:)` writes the icon's `currentState`,
+        // not `BusOutbound.hudState`, which has only one constructor
+        // (`bridge.send(.hudState(...))` below).
+        let coordinator = HudStateCoordinator(emit: { [weak bridge, weak self] appState in
+            if let bridge {
+                Task { @MainActor in
+                    try? await bridge.send(.hudState(busHudState(from: appState)))
+                }
             }
+            self?.menuBarController?.transition(to: appState)
         })
 
         // Dormant producer streams. Phase 4 replaces `agentStream` with the
