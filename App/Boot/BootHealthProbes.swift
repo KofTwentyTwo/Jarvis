@@ -492,6 +492,14 @@ public struct WebviewBootHealthProbe: BootHealthProbe {
                 status: .failed(reason: "JS never acked hello — webview bundle missing or crashed at startup", severity: .critical),
                 evidence: "HandshakeState.timedOut after 2s"
             )
+        case .loadFailed(let reason):
+            // Audit-2026-05-12 S1 / #40 — bundle navigation failed before
+            // `didFinish` could fire. Same severity as `.timedOut`: the
+            // user sees no HUD until the bundle is rebuilt.
+            return ProbeOutcome(
+                status: .failed(reason: "webview bundle load failed: \(reason); rebuild webview bundle", severity: .critical),
+                evidence: "HandshakeState.loadFailed(\(reason))"
+            )
         }
     }
 }

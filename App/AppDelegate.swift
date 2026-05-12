@@ -2706,10 +2706,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // Navigation delegate: fires handshake on first didFinish.
-        let navDelegate = BridgeNavigationDelegate { [weak self] in
-            self?.webviewBridge?.startHandshake()
-        }
+        // Navigation delegate: fires handshake on first didFinish; surfaces
+        // load failures (audit-2026-05-12 S1 / #40) via the bus + a critical
+        // banner so a missing/stale bundle is never a silent black HUD.
+        let navDelegate = BridgeNavigationDelegate(
+            onDidFinish: { [weak self] in
+                self?.webviewBridge?.startHandshake()
+            },
+            onDidFail: { [weak self] error in
+                self?.handleWebviewLoadFailure(error)
+            }
+        )
         bridgeNavigationDelegate = navDelegate
         panel.webView.navigationDelegate = navDelegate
 
@@ -2814,6 +2821,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let resourcesDir = entryURL.deletingLastPathComponent()
         panel.webView.loadFileURL(entryURL, allowingReadAccessTo: resourcesDir)
+    }
+
+    /// Audit-2026-05-12 S1 / #40 — webview navigation failure handler.
+    /// Routes `didFailProvisionalNavigation` and `didFail` from
+    /// `BridgeNavigationDelegate` into:
+    ///
+    ///   1. `WebviewBridge.failHandshake(reason:)` — transitions the
+    ///      handshake state machine to `.loadFailed` and fires the same
+    ///      `alertPresenter` (TCCAlertService.presentHardBlock) the
+    ///      `.timedOut` and `.mismatched` paths already use.
+    ///   2. A critical-severity banner via `HUDBannerCoordinator` so the
+    ///      user sees a HUD-native error surface (matching the pattern
+    ///      `.bootHealthCritical` uses for memory-off / no-API-key /
+    ///      no-MCP-tools / webview-never-armed failures).
+    ///
+    /// Both surfaces fire — the alert is the hard-block path that already
+    /// terminates the app on handshake-mismatch / timeout; the banner is
+    /// a defense-in-depth render path that survives even if the alert is
+    /// suppressed (e.g., AppDelegate test seam with a silent
+    /// `alertPresenter`).
+    @MainActor
+    func handleWebviewLoadFailure(_ error: Error) {
+        let nsError = error as NSError
+        let reason = "\(nsError.domain) \(nsError.code): \(nsError.localizedDescription)"
+        systemLogger?.critical("webview navigation failed — surfacing as load-failed: \(reason)")
+        webviewBridge?.failHandshake(reason: reason)
+        bannerCoordinator?.enqueue(.bootHealthCritical(
+            subsystem: "webview",
+            reason: "HUD bundle failed to load (\(reason))"
+        ))
     }
 
     // MARK: - Wizard
@@ -2984,13 +3021,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// the main actor via `MainActor.assumeIsolated` — the same Swift 6 pattern
 /// `WebviewBridge` uses for `WKScriptMessageHandlerWithReply`.
 @MainActor
-private final class BridgeNavigationDelegate: NSObject, WKNavigationDelegate {
+final class BridgeNavigationDelegate: NSObject, WKNavigationDelegate {
     let onDidFinish: @MainActor () -> Void
-    init(onDidFinish: @escaping @MainActor () -> Void) {
+    /// Audit-2026-05-12 S1 / #40 — invoked on either
+    /// `didFailProvisionalNavigation` or `didFail`. Without this hook the
+    /// 2s handshake timeout never arms (it's scheduled inside
+    /// `startHandshake`, which only runs on `didFinish`), so a bundle-404
+    /// or JS-parse-error before mount left the HUD a silent black square.
+    let onDidFail: @MainActor (Error) -> Void
+    init(
+        onDidFinish: @escaping @MainActor () -> Void,
+        onDidFail: @escaping @MainActor (Error) -> Void
+    ) {
         self.onDidFinish = onDidFinish
+        self.onDidFail = onDidFail
     }
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         MainActor.assumeIsolated { onDidFinish() }
+    }
+    /// Provisional navigation = "the server / file URL didn't even start
+    /// loading" (404 on `file://`, missing index.html, DNS / sandbox
+    /// rejection). The WKError comes via `error`.
+    nonisolated func webView(
+        _ webView: WKWebView,
+        didFailProvisionalNavigation navigation: WKNavigation!,
+        withError error: Error
+    ) {
+        MainActor.assumeIsolated { onDidFail(error) }
+    }
+    /// Post-provisional navigation failure — the page started loading and
+    /// then errored (subresource 404 mid-stream, decode error after a 200).
+    nonisolated func webView(
+        _ webView: WKWebView,
+        didFail navigation: WKNavigation!,
+        withError error: Error
+    ) {
+        MainActor.assumeIsolated { onDidFail(error) }
     }
 }
 
