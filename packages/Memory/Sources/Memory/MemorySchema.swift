@@ -30,14 +30,31 @@ public enum MemorySchema {
         """,
         "CREATE INDEX IF NOT EXISTS idx_turns_session ON turns(session_id, created_at);",
 
-        // RESEARCH section 1 + D-02: facts table with temporal validity + forgotten_at.
+        // Facts table — temporal validity + supersede chain + soft delete.
+        //
+        // `source_turn_id` is a CORRELATION TAG, NOT a foreign key. The
+        // memory-extraction writer (`MemoryExtractionOrchestrator.process`)
+        // FNV-1a-hashes the originating `TurnID` UUID to an Int64 because
+        // `TurnID` is a string-backed UUID and the writer needs an integer
+        // column. The hash space and `turns.id` (AUTOINCREMENT) never
+        // collide by design — they're disjoint number systems — so any
+        // `REFERENCES turns(id)` on this column would fail every insert
+        // with SQLITE_CONSTRAINT_FOREIGNKEY (code 19). The constraint was
+        // present in the original schema and silently broke fact persistence
+        // for the entire history of the project until the 2026-05-12 dogfood
+        // surfaced it. Reintroducing the FK without first wiring the writer
+        // to use real `turns.id` rowids would re-break persistence.
+        //
+        // `superseded_by REFERENCES facts(id)` IS a real FK — the supersede
+        // chain uses `priorFact.id` from a previous `applyOp` return value,
+        // which is the actual AUTOINCREMENT rowid.
         """
         CREATE TABLE IF NOT EXISTS facts (
           id INTEGER PRIMARY KEY,
           subject TEXT NOT NULL,
           predicate TEXT NOT NULL,
           object TEXT NOT NULL,
-          source_turn_id INTEGER REFERENCES turns(id),
+          source_turn_id INTEGER,
           valid_from INTEGER NOT NULL,
           valid_to INTEGER,
           superseded_by INTEGER REFERENCES facts(id),
