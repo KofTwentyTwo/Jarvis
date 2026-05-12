@@ -1,3 +1,21 @@
+// AppDelegate.swift
+//
+// Composition root of the Jarvis host. Owns every system-level surface (menu
+// bar, HUD panel, banner panel, hotkey monitor) plus the install entry points
+// that wire AgentOrchestrator + MCP runtime + voice/vision/memory subsystems +
+// the Bus bridge + the boot-health probe set.
+//
+// This is the file every new contributor opens first. The class docstring
+// below carries the install-order DAG + the "Before you edit" invariant list;
+// read both before touching anything in here.
+//
+// See also: App/HUD/HudStateCoordinator.swift (single HudState writer),
+//           App/MCP/MCPRuntimeWiring.swift (MCP composite construction),
+//           packages/AgentCore/Sources/AgentOrchestrator/AgentOrchestrator.swift
+//           (the LLM turn loop this file owns the lifetime of).
+// (audit trail: Plans 03–10 wired this file end-to-end; audit-2026-05-04
+//  P3-16 flagged it for a `+Voice` / `+Vision` / `+Memory` / `+Agent` split.)
+
 import AppKit
 import AVFoundation
 import Bus
@@ -6,27 +24,30 @@ import DevOverlay
 import Keychain
 import JarvisLogging
 import Shell
-import Voice           // Plan 06-05: VoiceController + PTT + MuteWakeWord
+import Voice                 // VoiceController + PushToTalk + MuteWakeWord.
 import WebKit
-import Logging   // swift-log — `Logger` here is `Logging.Logger`
-import AgentCore       // Plan 05-05: BoundedAsyncChannel for ME-04 closure
-import AgentOrchestrator // Plan 07-06: OrchestratorEvent type for installMemory's coordinator wiring
-import Replay          // Plan 05-05: ReplayEvent type for the orch→replay channel
-import JarvisMCP       // CR-02 (REVIEW 05): MCPRuntimeWiring.build for end-to-end ME-04 closure
-import Memory          // Plan 07-06: MemoryStore + MemoryExtractionOrchestrator + MemoryExtractionCoordinator
-import JarvisVision    // Plan 07-06: CameraCapture + PresenceMonitor + VisionRouter
-import OllamaProvider  // Plan 07-06: T1 vision provider + memory extractor backbone
-import AnthropicProvider // Plan 07-06: T3 cloud-escape vision provider
+import Logging               // swift-log; `Logger` here resolves to `Logging.Logger`.
+import AgentCore             // BoundedAsyncChannel (ME-04 closure).
+import AgentOrchestrator     // OrchestratorEvent type for memory-coordinator wiring.
+import Replay                // ReplayEvent + ReplayLog for the orch→replay channel.
+import JarvisMCP             // MCPRuntimeWiring.build for end-to-end ME-04 closure.
+import Memory                // MemoryStore + MemoryExtraction{Orchestrator,Coordinator}.
+import JarvisVision          // CameraCapture + PresenceMonitor + VisionRouter.
+import OllamaProvider        // Local provider — T1 vision + memory extractor backbone.
+import AnthropicProvider     // Cloud provider — T3 vision escape hatch.
 
-/// Abstract the Info.plist `JarvisEntitlementsVerified` read so tests can inject
-/// a mock that returns false without touching the running binary's Info.plist.
+/// Abstracts the `JarvisEntitlementsVerified` Info.plist read so tests can
+/// inject a stub probe instead of mutating the running binary's Info.plist.
+/// The key itself is flipped to `true` by `scripts/verify-entitlements.sh
+/// --pre-codesign` after every required entitlement passes its grep.
 public protocol EntitlementGateProbe: Sendable {
     func isVerified() -> Bool
 }
 
-/// Production probe — reads the Info.plist key that Plan 05's
-/// `verify-entitlements.sh --pre-codesign` flips to `true` after the signed
-/// entitlements pass all greps.
+/// Production probe — reads `JarvisEntitlementsVerified` straight from
+/// `Bundle.main`. Missing key (e.g. an ad-hoc local build that skipped the
+/// verify script) reads as `false`, which hard-blocks launch with the
+/// "Jarvis can't start" modal.
 public struct InfoPlistEntitlementGateProbe: EntitlementGateProbe {
     public init() {}
     public func isVerified() -> Bool {
@@ -34,73 +55,150 @@ public struct InfoPlistEntitlementGateProbe: EntitlementGateProbe {
     }
 }
 
-/// Composition root of the Jarvis host. Owns the menu bar item, HUD window,
+/// Composition root of the Jarvis host. Owns the menu bar item, HUD panel,
 /// banner panel, hotkey monitor, agent orchestrator, MCP runtime, voice/vision/
-/// memory subsystems, and the Bus bridge. This is where every package gets
-/// wired together; almost everything else is leaf code reachable from here.
+/// memory subsystems, the Bus bridge, and the boot-health probe set.
 ///
-/// `@MainActor` because every AppKit surface this touches (NSStatusItem,
-/// NSPanel, NSAlert) is main-thread-only per S-2.
+/// ## Where this fits
+/// AppKit ──▶ this file ──▶ {WKWebView (HUD), agent orchestrator, MCP runtime,
+/// voice/vision/memory subsystems}. Almost everything else is leaf code
+/// reachable from here.
 ///
-/// ## Lifecycle
-/// `applicationDidFinishLaunching` runs the bootstrap chain below in order;
-/// each step is fail-soft (degrades + banner) except entitlement verification
-/// which is fail-hard (presents `TCCAlertService` modal and terminates).
-/// Subsystems install via dedicated methods (`installVoice`, `installMemory`,
-/// `installVision`) called near the end of bootstrap. Teardown on
-/// `applicationWillTerminate` cancels in-flight tasks and closes file handles.
+/// ## Install order (lifecycle, top of `applicationWillFinishLaunching`)
+///
+///     1. loggingBootstrap()           — multiplex (file + os + broadcast)
+///     2. entitlement verification     — hard-block if marker missing
+///     3. config load                  — hard-block on malformed
+///     4. installMenuBar / installHUDPanel / installBannerPanel
+///     4.5 installBus                  — WKWebView + HudStateCoordinator wired
+///     5. keychain probe               — banner if API key absent
+///     6. input-monitoring probe       — banner if TCC denied
+///     7. HotkeyBinder constructor     — unbound at launch
+///     8. first-launch wizard          — if Keychain empty
+///     9. orch→replay channel + log    — ME-04 closure (drain task spawned)
+///    10. mcpInstallTask     (parallel) ──┐
+///    11. memoryInstallTask  (parallel) ──┤
+///    12. visionInstallTask  (parallel) ──┤
+///                                        ├──▶ agentInstallTask
+///                                        │           │
+///                                        │           ▼
+///                                        │   voiceInstallTask
+///                                        │           │
+///                                        │           ▼
+///                                        │   selfKnowledgeInstallTask
+///                                        │           │
+///                                        │           ▼
+///                                        └──▶ bootHealthTask
+///
+/// Every install Task is fail-soft (degrades + banner) except entitlement
+/// verification, config-load malformed, and MemoryStore.init failure — those
+/// three call `TCCAlertService.presentHardBlock` and `NSApp.terminate`.
+///
+/// ## Threading
+/// `@MainActor` because every AppKit surface this touches (`NSStatusItem`,
+/// `NSPanel`, alert presenter) is main-thread-only. Subsystems live behind
+/// their own actors; we hop into them with `await`. The single `@MainActor`
+/// guarantee on this class is what lets every install method read mutable
+/// properties without locks.
+///
+/// ## Before you edit
+/// - **Single-writer HudState** (`scripts/check-single-writer-hudstate.sh`) —
+///   only `HudStateCoordinator` mutates `HudState`. AppDelegate is allowlisted
+///   solely as the wiring-layer emit closure inside `installBus`; do not
+///   construct `.hudState(_:)` anywhere else in this file.
+/// - **Install order is locked** (`scripts/check-install-order.sh`) — vision →
+///   agent → voice. Reordering the Task spawn lines breaks `installAgent`'s
+///   dependency on `visionRouter` + `frameAttachController`, and breaks
+///   `installVoice`'s dependency on `agentOrchestrator` + `turnTranscriptStore`.
+///   The gate also enforces `await self?.agentInstallTask?.value` inside the
+///   voice spawn.
+/// - **Shared `inProcessToolRegistry`** — three install sites (`installMCP`,
+///   `installMemory`, `installSelfKnowledgeTools`) register tools INTO the
+///   same instance. The property is eagerly default-initialized so all three
+///   see the same actor regardless of who wins the parallel-spawn race.
+///   Don't construct a fresh `InProcessToolRegistry()` in any installer.
+/// - **JIT entitlement** — `com.apple.security.cs.allow-jit` is mandatory on
+///   Apple Silicon for WKWebView's JavaScriptCore JIT. Without it Release
+///   builds crash on first navigation; Debug builds are silent.
+/// - **No modal presentation** (`scripts/check-no-modal-presentation.sh`) —
+///   never call `runModal`, `beginModalSession`, `NSApp.run` from this file;
+///   hard-blocks route through `TCCAlertService.presentHardBlock` (NSPanel
+///   beginSheet).
+/// - **No `evaluateJavaScript`** (`scripts/check-no-evaluate-javascript.sh`) —
+///   the only path from Swift into the webview is `WebviewBridge.send(_:)`.
+///   `copyStateDump` writes a presence boolean for the API key, never the
+///   value — SEC-01 / T-04-02 defense in depth.
 ///
 /// ## Note on size
-/// 2089 LOC at the time of this docstring. Flagged for an
-/// `AppDelegate+Voice.swift` / `+Vision.swift` / `+Memory.swift` / `+Agent.swift`
-/// split (audit-2026-05-04 P3-16). Until then, navigate by `// MARK:` headers.
+/// 2089 LOC at the audit-2026-05-04 baseline; the docstring rewrite has
+/// nudged it up. Flagged for an `AppDelegate+Voice.swift` / `+Vision.swift` /
+/// `+Memory.swift` / `+Agent.swift` split (audit-2026-05-04 P3-16). Until
+/// then, navigate by `// MARK:` headers.
 ///
-/// ## See also
-/// - `App/MCP/MCPRuntimeWiring.swift` — MCP composition
-/// - `App/Voice/Voice*Adapter.swift` — voice adapters that this delegate constructs
-/// - `App/MCPBusGatewayAdapter.swift` — tool-call card forwarding to the HUD
-///
-/// Bootstrap chain (Plan 04 — full wiring):
-///
-///  1. `JarvisLogHandlerFactory.bootstrap()` — S-8, exactly one call site.
-///  2. Entitlement hard-block — `JarvisEntitlementsVerified`; `TCCAlertService`
-///     presents the "Jarvis can't start" modal and terminates.
-///  3. `ConfigLoader.loadSnapshots` (writing defaults on first launch) — on
-///     `ConfigError.malformed` present `TCCAlertService.presentHardBlock` +
-///     terminate per D-19 / S-6.
-///  4. Menu bar + HUD panel + banner panel install.
-///  5. Keychain fetch of `.anthropic` — `.itemNotFound` → enqueue
-///     `BannerContent.keychainEmpty` (priority 1).
-///  6. `InputMonitoringProbe` via `SystemHIDAccessProbe` — denial enqueues
-///     `BannerContent.inputMonitoringDenied` (priority 2, SHELL-06).
-///  7. `HotkeyBinder` install (empty — wizard binds a shortcut later).
-///  8. First-launch wizard if Keychain is empty; otherwise the wizard sleeps
-///     behind the Setup… menu item.
-///
-/// `copyStateDump` never writes the API key VALUE — only a boolean presence
-/// indicator (`apiKeyStored`). T-04-02 / SEC-01 defense-in-depth.
+/// ## See Also
+/// - ``AgentOrchestrator`` — the LLM turn loop
+/// - ``MCPRuntime`` — tool dispatch composite (stdio helpers + in-process)
+/// - ``HudStateCoordinator`` — single-writer HUD state
+/// - ``BootHealthOrchestrator`` — Round 2/3/4 probe set + Status panel feed
+/// - ``WebviewBridge`` — Swift↔JS bus
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Test-injectable seams
+    //
+    // Production defaults are real adapters; XCTest hosts override these
+    // before calling `applicationWillFinishLaunching` directly. Every seam
+    // here is a hot path the bootstrap chain reads exactly once.
 
+    /// Probes `JarvisEntitlementsVerified` at boot. Production reads the
+    /// Info.plist key flipped by `verify-entitlements.sh --pre-codesign`;
+    /// tests inject a stub that returns `false` to drive the hard-block
+    /// path without rewriting the signed binary.
     var entitlementProbe: EntitlementGateProbe = InfoPlistEntitlementGateProbe()
+
+    /// Invoked when `entitlementProbe.isVerified()` returns false.
+    /// Production presents the "Jarvis can't start" modal and terminates;
+    /// the XCTest-host override is a silent no-op so the test bundle loads.
     var onEntitlementFailure: @MainActor () -> Void = AppDelegate.defaultOnEntitlementFailure
+
+    /// One-shot logging bootstrap. The default calls
+    /// `JarvisLogHandlerFactory.bootstrap()`; injecting a no-op here keeps
+    /// repeated XCTest runs from tripping S-8's "exactly one bootstrap"
+    /// invariant inside the swift-log machinery.
     var loggingBootstrap: () -> Void = { JarvisLogHandlerFactory.bootstrap() }
+
+    /// Reads config.json. Default: `ConfigLoader.loadSnapshots`. Tests
+    /// inject closures that return canned snapshots without touching disk.
     var configLoader: (URL) throws -> (LaunchSnapshot, PerTurnSnapshot) = ConfigLoader.loadSnapshots(from:)
+
+    /// First-launch path — writes defaults then re-reads. Same injection
+    /// rationale as `configLoader`.
     var configWriter: (URL) throws -> (LaunchSnapshot, PerTurnSnapshot) = ConfigLoader.writeDefaultAndReload(to:)
+
+    /// Keychain interface for the Anthropic API key + wizard's secret
+    /// writes. `SystemKeychainStore` is the production adapter; tests use
+    /// `FakeKeychain` (an in-memory dictionary).
     var keychainStore: any KeychainStore = SystemKeychainStore()
+
+    /// Input-Monitoring TCC probe (SHELL-06). `IOHIDCheckAccess` is
+    /// query-only; the probe never prompts at boot — the wizard's TCC
+    /// stage owns the prompt.
     var hidProbe: any HIDAccessProbe = SystemHIDAccessProbe()
 
-    /// Called when the bus handshake resolves in a mismatch or timeout.
-    /// Production default terminates the app after `TCCAlertService` shows
-    /// the hard-block modal. Tests inject a recording closure instead.
+    /// Fires when the bus handshake resolves to a mismatch or timeout.
+    /// Production terminates the app after `TCCAlertService` shows the
+    /// hard-block modal — a broken handshake means the HUD can never
+    /// render, so there is no recovery path. Tests inject a recording
+    /// closure instead of terminating the XCTest process.
     var onHandshakeMismatch: @MainActor () -> Void = { NSApp.terminate(nil) }
 
     /// Fires after `WebviewBridge.onHandshakeArmed`. Default is a no-op;
-    /// tests set this to observe armed transitions.
+    /// tests set this to observe armed transitions without polling.
     var onBusArmed: (@MainActor () -> Void)?
 
-    // MARK: - Installed components
+    // MARK: - AppKit surfaces
+    //
+    // Status item, panels, hotkey monitor, wizard/settings windows. All
+    // strong, all `@MainActor` because AppKit demands it.
 
     var statusItem: NSStatusItem?
     var menuBarController: MenuBarIconController?
@@ -113,310 +211,385 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var wizardState: WizardState?
     var webviewBridge: WebviewBridge?
 
-    /// HUD-08 single-writer coordinator (Plan 03-01 author; Plan 03-05 wiring).
-    /// Emit closure bridges App.HudState → Bus.HudState and calls
-    /// `webviewBridge.send(.hudState(...))` on MainActor. `markReady()` fires
-    /// from `onHandshakeArmed` so the HUD promotes `.booting` → `.idle` as
-    /// soon as the webview handshake completes.
+    // MARK: - HUD state coordinator + bus producer continuations
+
+    /// Single Swift-side writer of `HudState`. The emit closure (installed
+    /// in `installBus`) bridges `App.HudState` → `Bus.HudState` and posts
+    /// `.hudState(_:)` through `WebviewBridge.send`. `markReady()` fires
+    /// from `onHandshakeArmed` so the HUD promotes `.booting` → `.idle`
+    /// the instant the webview handshake completes.
+    ///
+    /// Enforced single-writer by `scripts/check-single-writer-hudstate.sh`;
+    /// only this coordinator (and the AppDelegate emit closure that wires
+    /// it) may construct `.hudState(_:)` payloads.
     var hudStateCoordinator: HudStateCoordinator?
 
-    /// Dormant producer-stream continuations held by the delegate so the
-    /// coordinator's three for-await Tasks don't drain immediately. Swift 6
-    /// terminates `for await` when the matching continuation deinits; keeping
-    /// them alive on the delegate preserves the subscriber tasks until
-    /// Phase 4 (agent) / Phase 5 (confirmation) / Phase 6 (voice) replace
-    /// them with real producers.
+    /// Producer-side continuations for the coordinator's three input
+    /// streams (agent / voice / confirmation). Held strongly on the
+    /// delegate because Swift 6 terminates a `for await` the instant the
+    /// matching continuation deinits — and the coordinator's subscriber
+    /// Tasks must survive until the real producers (AgentOrchestrator,
+    /// VoiceController, ConfirmationBroker) take over.
+    ///
+    /// `installVoice` swaps the voice slot to `nil` when `VoiceController`
+    /// becomes the live producer. The agent + confirm slots stay dormant
+    /// because the orchestrator/broker do not yet emit through these
+    /// streams — they drive HudState via the broadcaster fan-out.
     var dormantAgentContinuation: AsyncStream<AgentHudIntent>.Continuation?
     var dormantVoiceContinuation: AsyncStream<VoiceHudIntent>.Continuation?
     var dormantConfirmContinuation: AsyncStream<ConfirmHudIntent>.Continuation?
 
-    /// Plan 05-05 / ME-04 closure (CR-02 REVIEW 05 — wired end-to-end).
+    // MARK: - Orch→replay seam + MCP runtime
+
+    /// Bounded fan-in channel carrying `ReplayEnvelope`s from the MCP
+    /// observer (producer) to the on-disk `ReplayLog` (consumer).
+    /// Capacity 2048 + `.dropOldest` matches AGENT-10's tokenDelta-class
+    /// policy: lossy under saturation, freshness > completeness.
     ///
-    /// Production instance of the orch→replay 2048-capacity .dropOldest
-    /// `BoundedAsyncChannel<ReplayEnvelope>`. Plan 04-03 created the
-    /// primitive; Plan 04-05's ChannelTopologyTests CT2 verified the
-    /// contract; CR-02 wires the producer (`ReplayingToolResultObserver`)
-    /// AND the consumer (`orchToReplayDrainTask`) so the channel actually
-    /// carries traffic. The 2048 capacity + .dropOldest policy is the
-    /// AGENT-10 spec for tokenDelta-class events: lossy on saturation,
-    /// freshness > completeness.
-    ///
-    /// Held strongly here so it doesn't deinit before consumers attach;
-    /// the orch→replay seam consumes it via a `for await` drain Task.
+    /// Held strongly so it doesn't deinit before either side attaches —
+    /// the producer is created lazily inside `MCPRuntimeWiring.build`
+    /// (step 10 of the bootstrap chain) and the consumer is the drain
+    /// Task in `applicationWillFinishLaunching` step 9.
+    /// (audit trail: Plan 05-05 / ME-04; CR-02 REVIEW 05 wired
+    /// producer + consumer end-to-end.)
     var orchToReplayChannel: BoundedAsyncChannel<ReplayEnvelope>?
 
-    /// CR-02 (REVIEW 05): the on-disk audit log opened at boot. The
-    /// drain task writes drained ReplayEvents here. Held strongly so it
-    /// outlives the drain task. Pre-CR-02, AppDelegate had no ReplayLog
-    /// instance — the observer wrote directly to a ReplayLog that
-    /// MCPRuntimeWiring.build constructed and threw away on return.
+    /// On-disk audit log opened at boot. The orch→replay drain Task writes
+    /// `ReplayEvent`s here; held strongly so it outlives the drain Task.
+    /// Pre-CR-02, the observer wrote into a `ReplayLog` that
+    /// `MCPRuntimeWiring.build` constructed and dropped on return — the
+    /// log was effectively write-only-to-`/dev/null`.
+    /// (audit trail: CR-02 REVIEW 05.)
     var replayLog: ReplayLog?
 
-    /// CR-02 (REVIEW 05): the MCPRuntime returned by
-    /// `MCPRuntimeWiring.build(...)`. Held strongly so the broker /
-    /// presenter / observer / dispatcher chain stays alive for the
-    /// lifetime of the process.
+    /// Live MCP composite (broker + presenter + observer + dispatcher).
+    /// Held strongly so the full dispatch chain stays alive for the
+    /// process lifetime. Constructed inside `mcpInstallTask`.
+    /// (audit trail: CR-02 REVIEW 05.)
     var mcpRuntime: MCPRuntime?
 
-    /// Task spawned in `applicationWillFinishLaunching` that builds the
-    /// MCPRuntime. Held so `agentInstallTask` can await it before
-    /// `installAgent()` runs — without this, MCPRuntime build (which is
-    /// ~1s due to helper child-process spawn) consistently loses the
-    /// race against `installAgent`'s `mcpRuntime != nil` precondition,
-    /// silently skipping orchestrator install on every launch. Verified
-    /// via system log: `installAgent: deps not ready (mcp/replay/config)
-    /// — skipping` precedes `MCPRuntime built — N tools` by ~900 ms
-    /// every cold launch, leaving the orchestrator + broadcaster + every
-    /// downstream subscriber dormant for the process lifetime.
+    /// Builds the `MCPRuntime`. Spawned at the top of the install chain so
+    /// `agentInstallTask` can `await` it before `installAgent` runs — MCP
+    /// runtime build is ~1s because each helper (`mcp-time`,
+    /// `mcp-clipboard`, `mcp-applescript`) spawns a child process. Pre-gate
+    /// every cold launch showed `installAgent: deps not ready — skipping`
+    /// arriving ~900 ms before `MCPRuntime built`, leaving the orchestrator
+    /// + broadcaster + every downstream subscriber dormant for the rest of
+    /// the process. The gate (Phase E follow-up) closes that race.
     private var mcpInstallTask: Task<Void, Never>?
 
-    // MARK: - Round 2 — Boot health
+    // MARK: - Boot health (Round 2/3/4)
 
     /// Owns the live `BootHealthSnapshot`. Round 3's Status menu reads from
     /// here and re-probes via `runAll()` on open. Constructed eagerly so
-    /// `lastSnapshot()` is queryable even before the first probe sweep.
+    /// `lastSnapshot()` is queryable even before the first probe sweep —
+    /// the menu can render `.unknown` rows instead of crashing on nil.
     let bootHealthOrchestrator = BootHealthOrchestrator()
 
-    /// Task spawned at the end of `applicationWillFinishLaunching` — awaits
-    /// every install Task in the chain, registers concrete probes against
-    /// the now-live actors, then runs the first sweep. Subsequent sweeps
-    /// are user-driven from the Status menu.
+    /// Tail of the install chain. Awaits every other install Task
+    /// (transitively, via `selfKnowledgeInstallTask`), registers concrete
+    /// probes against the now-live actors, then runs the first sweep.
+    /// Subsequent sweeps are user-driven from the Status menu.
     private var bootHealthTask: Task<Void, Never>?
 
-    /// Round 3 — lazy `StatusPanel`. Constructed on first menu click;
-    /// kept alive across closes via `isReleasedWhenClosed = false`.
+    /// Lazy `StatusPanel` — Round 3 surface. Constructed on first menu
+    /// click; kept alive across closes via `isReleasedWhenClosed = false`
+    /// so the SwiftUI model state survives the panel cycling.
     private var statusPanel: StatusPanel?
 
-    /// Drain task spawned in `applicationWillFinishLaunching` — reads
-    /// envelopes from `orchToReplayChannel` and forwards to `replayLog`.
-    /// CR-02: production consumer for ME-04. Previously this task
-    /// `for await _ in channel` discarded everything; the channel had
-    /// no producer either, so ME-04's contract was structurally
-    /// unverifiable in production code.
+    /// Drains `orchToReplayChannel` into `replayLog`. Pre-CR-02 this Task
+    /// `for await _ in channel`'d into `/dev/null` and the channel had no
+    /// producer either — ME-04's contract was structurally unverifiable
+    /// in production code.
+    /// (audit trail: Plan 05-05 / CR-02 REVIEW 05.)
     var orchToReplayDrainTask: Task<Void, Never>?
 
-    // MARK: - Voice subsystem (Plan 06-05)
+    // MARK: - Voice subsystem
     //
-    // Strong properties ensure voice subsystem outlives `applicationWillFinishLaunching`.
-    // `voiceController` is wired in `installVoice()` which runs on the async background
-    // after launch. The `dormantVoiceContinuation` is replaced with the real producer
-    // once VoiceController is live.
+    // Wake-word DAG, VAD, STT, TTS, mic graph. Every property here is held
+    // strongly so the subsystem outlives `applicationWillFinishLaunching`.
+    // `voiceController` is wired in `installVoice` which runs on a
+    // background Task after launch (gated behind `agentInstallTask`).
+    // The `dormantVoiceContinuation` slot above is swapped to `nil` once
+    // `VoiceController` becomes the live producer.
 
-    /// The end-to-end voice pipeline actor (Plan 06-05).
+    /// End-to-end voice pipeline actor — owns the wake-word → VAD → STT →
+    /// orchestrator → TTS loop and the HUD state it implies. Nil until
+    /// `installVoice` runs and finds models + mic permission.
     var voiceController: VoiceController?
 
-    /// Push-to-talk hotkey binding (Plan 06-05 / VOICE-13).
+    /// Push-to-talk hotkey binding. Unbound at launch; the wizard /
+    /// settings UI rebinds it when the user sets a shortcut. (VOICE-13.)
     var pushToTalk: PushToTalk?
 
-    /// Menu-bar wake-word mute toggle (Plan 06-05 / VOICE-12).
+    /// Menu-bar wake-word mute toggle. Mirrors the `disablePresence`
+    /// toggle on the same context menu. (VOICE-12.)
     var muteWakeWord: MuteWakeWord?
 
-    /// Owns the live `AVAudioEngine` audio graph (Plan 06-01) — opened in
-    /// `installVoice()` so mic samples flow into the wake-word DAG. Held
-    /// strongly because the actor's tap closures retain the ring buffer.
-    /// Track B-4 (2026-05-03 voice audit fix): production was never
-    /// constructing this, so wake-word inference ran against an empty ring.
+    /// Owns the live `AVAudioEngine` audio graph — opened in `installVoice`
+    /// so mic samples flow into the wake-word DAG. Held strongly because
+    /// the actor's tap closures retain the ring buffer; if this property
+    /// goes nil, wake-word inference reads an empty ring forever.
+    /// (audit trail: 2026-05-03 voice audit fix / Track B-4 — production
+    /// was never constructing this, so wake word never fired.)
     var audioGraphOwner: AudioGraphOwner?
 
     /// Drains `AudioGraphOwner.degradationStream` into
-    /// `voiceController.handleAECUnavailable()` so VOICE-09 fallback banners
-    /// surface natively. Cancelled on shutdown.
+    /// `voiceController.handleAECUnavailable()` so VOICE-09 fallback
+    /// banners surface natively. Cancelled on shutdown.
     var audioGraphDegradationTask: Task<Void, Never>?
 
-    /// Drains `AudioGraphOwner.rebuildStream` to dismiss the AEC banner
-    /// once an aec=on rebuild succeeds.
+    /// Drains `AudioGraphOwner.rebuildStream`; when an `aec=on` rebuild
+    /// succeeds, asks the controller to dismiss the AEC banner.
     var audioGraphRebuildTask: Task<Void, Never>?
 
-    /// Task spawned in `applicationWillFinishLaunching` that constructs and
-    /// starts the voice subsystem. Held strongly so the async setup isn't
-    /// cancelled prematurely.
+    /// Constructs + starts the voice subsystem. Held strongly so the
+    /// async setup isn't cancelled prematurely. Awaits
+    /// `agentInstallTask?.value` first (WARNING-5 — `installVoice`'s
+    /// adapters require the live `agentOrchestrator` and
+    /// `turnTranscriptStore`).
     var voiceInstallTask: Task<Void, Never>?
 
-    /// Plan 10-01: registers the four self-knowledge MCP tools
-    /// (`list_audio_devices`, `get_active_audio_route`, `get_self_state`,
-    /// `list_camera_devices`) into the existing
-    /// `inProcessToolRegistry`. Spawned AFTER voiceInstallTask so the live
-    /// `audioGraphOwner` reference is available for `AudioGraphRouteAdapter`.
+    /// Registers the four self-knowledge MCP tools (`list_audio_devices`,
+    /// `get_active_audio_route`, `get_self_state`, `list_camera_devices`)
+    /// into the shared `inProcessToolRegistry`. Spawned AFTER
+    /// `voiceInstallTask` because `AudioGraphRouteAdapter` needs the live
+    /// `audioGraphOwner`. (Plan 10-01.)
     var selfKnowledgeInstallTask: Task<Void, Never>?
 
-    /// Plan 10-01 / D-11: captured at app start so `get_self_state` can
-    /// report APP uptime (NOT host uptime via `ProcessInfo.systemUptime`).
+    /// Process-start timestamp captured at object construction. `get_self_state`
+    /// reports APP uptime against this instant — NOT host uptime via
+    /// `ProcessInfo.systemUptime`, which would lie after a sleep/wake cycle.
+    /// (Plan 10-01 / D-11.)
     let launchInstant: Date = Date()
 
-    // MARK: - Memory subsystem (Plan 07-01..07-02 wired in 07-06)
+    // MARK: - Memory subsystem
 
-    /// MemoryStore opened against ~/Library/Application Support/Jarvis/jarvis.db.
-    /// nil if vec0.dylib is missing or the open path failed — memory degrades
-    /// gracefully (no retrieval; extraction still runs but writes are dropped).
+    /// `MemoryStore` opened against
+    /// `~/Library/Application Support/Jarvis/jarvis.db`. After the
+    /// 2026-05-11 D-5/D-6 closure this property is effectively non-nil at
+    /// runtime — `installMemory` calls `NSApp.terminate(nil)` if
+    /// `MemoryStore.init` throws. The optional remains for the
+    /// pre-`installMemory` window and for XCTest hosts that skip install.
     var memoryStore: MemoryStore?
 
-    /// Track-D D-1: distinguishes "store unavailable" (no writes, no search)
-    /// from "store ok, search degraded" (writes ok, search disabled). Today
-    /// MemoryStore.init throws on vec failure → store nil → both flags false.
-    /// When a future ops plan ships custom libsqlite3 with extension loading
-    /// but vec0.dylib is still missing, we'll be able to construct MemoryStore
-    /// without vec — at that point this flag splits from `memoryStore != nil`.
+    /// Flag splitting "store unavailable" from "store ok, search degraded".
+    /// Vec0 is statically linked today via `CSQLiteVec`, so search is
+    /// always available when the store opens — this flag stays `true` for
+    /// the lifetime of a healthy boot. Kept on the type because a future
+    /// ops plan may ship a custom libsqlite3 with runtime extension
+    /// loading; under that variant, MemoryStore can open without vec0 and
+    /// this flag splits from `memoryStore != nil`.
+    /// (audit trail: Track-D D-1; semantics unchanged after D-5/D-6.)
     var memorySearchAvailable: Bool = false
 
-    /// Background extraction orchestrator (Plan 07-02). Drains the bounded
-    /// AsyncChannel(capacity: 32, dropOldest) one job at a time so a stalled
-    /// 32B-model extraction never blocks turnEnd (MEM-06).
+    /// Background memory-extraction orchestrator. Drains a bounded
+    /// `AsyncChannel(capacity: 32, .dropOldest)` one job at a time so a
+    /// stalled 32B-model extraction never back-pressures `.turnEnd`
+    /// (MEM-06).
     ///
-    /// Track-D D-1: now constructed even when memoryStore is nil. The applyOp
-    /// closure no-ops when there's no store, so the extractor → coordinator
-    /// chain runs (LLM still sees the conversation, decides ADD/UPDATE/NOOP)
-    /// — visible via system log instead of the Phase-7-era silent dormancy.
+    /// Constructed even when `memoryStore` is nil. The `applyOp` closure
+    /// no-ops on writes when there's no store, so the extractor →
+    /// coordinator chain still runs end-to-end (the LLM still sees the
+    /// conversation, decides ADD/UPDATE/NOOP) — visible via system log
+    /// rather than Phase-7-era silent dormancy.
+    /// (audit trail: Plan 07-02 / Track-D D-1.)
     var memoryExtractionOrchestrator: MemoryExtractionOrchestrator?
 
-    /// Subscribes to AgentOrchestrator.events; on .turnEnd(.endTurn) enqueues
-    /// an ExtractionJob into memoryExtractionOrchestrator. Held strongly so
-    /// the subscriber Task it spawns isn't cancelled prematurely.
-    ///
-    /// Track-D D-1: now constructed even when memoryStore is nil — see
-    /// `memoryExtractionOrchestrator` doc above.
+    /// Subscribes to `AgentOrchestrator.events`; on `.turnEnd(.endTurn)`
+    /// enqueues an `ExtractionJob` into `memoryExtractionOrchestrator`.
+    /// Held strongly so the subscriber Task it spawns isn't cancelled
+    /// prematurely. Constructed even when `memoryStore` is nil — see
+    /// `memoryExtractionOrchestrator` for rationale.
     var memoryExtractionCoordinator: MemoryExtractionCoordinator?
 
-    /// Track-D D-2: registry of in-process MCP tools (`search_memory`,
-    /// `forget_fact`). nil until installMemory runs.
-    /// Registration is gated:
-    ///   - `forget_fact` registers when `memoryStore != nil` (writes need DB)
+    /// Shared in-process tool registry. Three install sites must register
+    /// tools INTO the same instance:
+    ///   1. `installMCP` — hands it to `MCPRuntimeWiring.build` so the
+    ///      dispatch composite knows where to route in-process tool calls.
+    ///   2. `installMemory` — registers `search_memory` + `forget_fact`.
+    ///   3. `installSelfKnowledgeTools` — registers `get_self_state`,
+    ///      `list_audio_devices`, `get_active_audio_route`,
+    ///      `list_camera_devices`, `get_memory_stats`.
+    ///
+    /// Eagerly default-initialized at declaration (never nil after the
+    /// delegate is constructed) so all three Tasks see the same actor
+    /// reference regardless of who wins the parallel-spawn race. Without
+    /// this, `installMemory` would build a second registry that the
+    /// orchestrator's dispatch composite never sees.
+    ///
+    /// Registration is gated per dispatcher availability:
+    ///   - `forget_fact` registers when `memoryStore != nil` (writes need DB).
     ///   - `search_memory` registers when `memorySearchAvailable == true`
-    ///     (reads need both DB and vec0)
-    /// Future work: wrap `mcpRuntime.dispatcher` so the agent can dispatch
-    /// these tools by name. Until then, the registry is the destination of
-    /// the registration but the dispatch path is not yet hooked. The audit
-    /// gap "tools exist but unregistered" is closed by this ivar; the
-    /// "tools exposed to LLM" gap is independent and tracked separately.
-    /// Plan 10-02c (B-01b): default-init eagerly so the SAME registry instance
-    /// is shared between `installMCP` (passes it to MCPRuntimeWiring.build for
-    /// the dispatch routing composite) and `installMemory` /
-    /// `installSelfKnowledgeTools` (register tools into it). All three tasks
-    /// run in parallel; pre-construction guarantees they all see the same
-    /// actor reference regardless of who wins the race.
+    ///     (reads need both DB and vec0).
+    ///
+    /// (audit trail: Plan 10-02c / B-01b — dispatch routing bug; before
+    /// this, `installMemory` was building a second registry that the
+    /// orchestrator never saw.)
     var inProcessToolRegistry: InProcessToolRegistry? = InProcessToolRegistry()
 
-    /// Task spawned in `applicationWillFinishLaunching` that constructs and
-    /// starts the memory subsystem.
+    /// Builds + starts the memory subsystem. See `installMemory` for the
+    /// six-step flow it executes.
     var memoryInstallTask: Task<Void, Never>?
 
-    // MARK: - Vision subsystem (Plan 07-04..07-05 wired in 07-06)
+    // MARK: - Vision subsystem
 
+    /// Live `AVCaptureSession` adapter. Owns camera hardware claim + frame
+    /// production. Surfaces TCC denial / mid-session revocation through
+    /// `degradationStream` for the banner watcher.
     var captureSession: CameraCapture?
+
+    /// Per-frame presence inference (face count + glance state).
+    /// Constructs and owns the single `PresenceSignalBus` instance — only
+    /// `PresenceMonitor` is allowed to call the bus's `internal init`.
     var presenceMonitor: PresenceMonitor?
 
-    /// VISION-03: the SINGLE PresenceSignalBus reference. PresenceMonitor
-    /// owns construction (only PresenceMonitor can construct the bus per
-    /// 07-04's design); we hold the SAME `monitor.bus` reference and pass
-    /// it BY VALUE (PresenceSignalBus is a Sendable struct wrapping the
-    /// AsyncStream) into both ContextBuilder (D-10 system-prompt enrichment)
-    /// and HudStateCoordinator (D-10 subtle ring indicator). The bus has NO
-    /// subscriber in JarvisTTS or in any code path leading to
-    /// AgentOrchestrator.runTurn / cancelAndSubmit — enforced by
-    /// scripts/check-presence-vision-isolation.sh and PhaseSevenGrepGateTests.
+    /// The SINGLE `PresenceSignalBus` reference, shared by reference
+    /// (Sendable struct wrapping an `AsyncStream`) between two read-only
+    /// consumers: `ContextBuilder` (system-prompt enrichment) and
+    /// `HudStateCoordinator` (subtle ring indicator).
+    ///
+    /// The bus must have ZERO subscribers in `JarvisTTS` or any code path
+    /// reaching `AgentOrchestrator.runTurn` / `cancelAndSubmit` —
+    /// presence is an ambient signal, not a turn input. Enforced by
+    /// `scripts/check-presence-vision-isolation.sh` and
+    /// `PhaseSevenGrepGateTests`.
+    /// (audit trail: VISION-03 / D-10.)
     var presenceSignalBus: PresenceSignalBus?
 
-    /// Menu-bar toggle (D-12). Mirrors muteWakeWord — added to the same
-    /// contextMenu. Disabling presence does NOT disable frame-attach.
+    /// Menu-bar toggle for ambient presence. Mirrors `muteWakeWord` on the
+    /// same context menu. Disabling presence does NOT disable frame-attach
+    /// (the explicit "look at this" path stays live). (D-12.)
     var disablePresence: DisablePresence?
 
-    /// T1/T2/T3 vision routing (Plan 07-05). Wired into the orchestrator's
-    /// runTurn dispatcher branch in Plan 09-02 (D-01 — AgentOrchestrator
-    /// constructor now accepts `visionRouter:`).
+    /// T1/T2/T3 vision routing ladder. Passed into `AgentOrchestrator` at
+    /// construction so image-bearing turns hit the pre-stream branch +
+    /// post-response escalation hook. T2 is currently a `MissingT2Provider`
+    /// that surfaces unavailability as an explicit error rather than
+    /// silently falling back to T1.
+    /// (audit trail: Plan 07-05 / Plan 09-02 D-01 / Track-C 4.)
     var visionRouter: VisionRouter?
 
-    /// Plan 09-02 / D-15. The frame-attach controller owns the dual-trigger
-    /// ingest path (HUD camera-icon button + matched phrase) and the D-15
-    /// SOLE-emission-site discard. nil until installVision completes; the
-    /// orchestrator's broadcaster frame-attach subscriber drives
+    /// Frame-attach controller. Owns the dual-trigger ingest path (HUD
+    /// camera-icon button + matched phrase) and the D-15
+    /// SOLE-emission-site discard invariant. Nil until `installVision`
+    /// completes; the broadcaster's frame-attach release subscriber drives
     /// `onAssistantTurnComplete()` after every image-bearing `.turnEnd`.
+    /// (audit trail: Plan 09-02 / D-15.)
     var frameAttachController: FrameAttachController?
 
-    /// Plan 09-02 / D-16 release subscriber Task. Drains the broadcaster's
-    /// `.frameAttach` priority subscription and, on `.turnEnd` for an
-    /// image-bearing turn (per `agentOrchestrator.turnHadImage`), calls
+    /// Drains the broadcaster's `.frameAttach` priority subscription. On
+    /// `.turnEnd` for an image-bearing turn (per
+    /// `agentOrchestrator.turnHadImage`), calls
     /// `frameAttachController.onAssistantTurnComplete()` to release the
-    /// captured frame's in-memory bytes.
+    /// captured frame's in-memory bytes. (D-16.)
     private var frameAttachReleaseTask: Task<Void, Never>?
 
-    /// Camera-degradation watcher Task — surfaces TCC denial / mid-session
-    /// revocation as HUD banners (S-4 graceful denial).
+    /// Surfaces TCC denial / mid-session revocation as HUD banners (S-4
+    /// graceful denial). Drains `CameraCapture.degradationStream`.
     var cameraDegradationTask: Task<Void, Never>?
 
-    /// Task spawned in `applicationWillFinishLaunching` that constructs and
-    /// starts the vision subsystem.
+    /// Builds + starts the vision subsystem. Spawned BEFORE `agentInstallTask`
+    /// because the orchestrator constructor takes `visionRouter` and the
+    /// broadcaster's frame-attach release subscriber needs
+    /// `frameAttachController` — both populated by `installVision`.
     var visionInstallTask: Task<Void, Never>?
 
-    // MARK: - Agent subsystem (Plan 09-01)
+    // MARK: - Agent subsystem
 
-    /// ConfigStore built from launch + per-turn snapshots in
-    /// `applicationWillFinishLaunching`. Held strongly so installAgent()
-    /// can hand it to the AgentOrchestrator constructor.
+    /// `ConfigStore` built from launch + per-turn snapshots in
+    /// `applicationWillFinishLaunching`. Held strongly so `installAgent`
+    /// can hand it to the `AgentOrchestrator` constructor and so per-turn
+    /// reads from the boot-health + self-knowledge probes hit the same
+    /// authoritative store.
     private var configStore: ConfigStore?
 
-    /// AgentOrchestrator instantiated in `installAgent()`. nil until the
-    /// install task completes. Held strongly so the actor + its events
-    /// channel + the broadcaster's drain Task all outlive launch.
+    /// Live `AgentOrchestrator`. Held strongly so the actor + its
+    /// `events` channel + the broadcaster's drain Task all outlive
+    /// launch. Nil until `installAgent` completes.
     private var agentOrchestrator: AgentOrchestrator?
 
-    /// D-05/D-08: single fan-out drain over `agentOrchestrator.events`.
-    /// Owned for app lifetime by AppDelegate.
+    /// Single fan-out drain over `agentOrchestrator.events`. Six
+    /// subscribers attach in `installAgent` (memory, transcript,
+    /// devOverlay, frameAttach, voice, bus). The broadcaster's
+    /// per-subscriber priority + protection matrix is what makes the
+    /// drop-eligible classification of `.tokenDelta` safe.
+    /// (audit trail: D-05 / D-08.)
     private var eventBroadcaster: OrchestratorEventBroadcaster?
 
-    /// BLOCKER-1 source of truth: the per-turn (userText, assistantText)
-    /// accumulator used by `lookupTurnContent`. Plan 1's transcript
-    /// subscriber appends assistant-side .tokenDelta into this store;
-    /// Plan 4 will append user-side text at submit time.
+    /// Per-turn `(userText, assistantText)` accumulator. The single source
+    /// of truth for `lookupTurnContent` — the transcript subscriber feeds
+    /// the assistant side from `.tokenDelta` and `handleChatSubmit` /
+    /// `handleChatCancelAndSubmit` append the user side at submit time.
+    /// (audit trail: BLOCKER-1 source-of-truth fix.)
     private var turnTranscriptStore: TurnTranscriptStore?
 
-    /// Task spawned in `applicationWillFinishLaunching` that runs `installAgent`.
+    /// Builds + starts the agent subsystem. Awaits `memoryInstallTask`,
+    /// `visionInstallTask`, and `mcpInstallTask` first because
+    /// `installAgent` needs each of their products at construction time.
     private var agentInstallTask: Task<Void, Never>?
 
-    /// Drains the broadcaster's memory subscription into MemoryExtractionCoordinator.
+    /// Drains the broadcaster's `memory` priority subscription into
+    /// `MemoryExtractionCoordinator`. Forms the `turnContent` lookup
+    /// closure that reads from `turnTranscriptStore` + persists completed
+    /// turns into the `turns` table.
     private var memoryEventSubscriberTask: Task<Void, Never>?
 
-    /// Drains the broadcaster's transcript subscription into TurnTranscriptStore
-    /// (assistant-side accumulator).
+    /// Drains the broadcaster's `transcript` priority subscription —
+    /// appends assistant-side `.tokenDelta` text into the
+    /// `turnTranscriptStore`. (BLOCKER-1 source-of-truth feeder.)
     private var transcriptSubscriberTask: Task<Void, Never>?
 
-    /// Drains the broadcaster's devOverlay subscription into DevSnapshotEmitter.
-    /// Lossy — the DevOverlay is observational. Wired in `installAgent`
-    /// (2026-05-12 dev-overlay-end-to-end Slice 2).
+    /// Drains the broadcaster's `devOverlay` priority subscription into
+    /// `DevSnapshotEmitter`. Lossy by design — the DevOverlay is
+    /// observational; the emitter's output channel is `.dropOldest`.
+    /// Pre-fix this drain was `for await _ in …`, which is why the panel
+    /// rendered zeros from P4 onward.
+    /// (audit trail: 2026-05-12 dev-overlay-end-to-end Slice 2.)
     private var devOverlaySubscriberTask: Task<Void, Never>?
 
-    /// Aggregates `OrchestratorEvent` into `DevSnapshot`s for the DevOverlay
-    /// window. Constructed in `installAgent` once the broadcaster is alive;
-    /// `toggleDevOverlay` hands a reference to the lazy `DevOverlayWindow`
-    /// so its `DevOverlayBridge` can subscribe to `emitter.output`.
+    /// Aggregates `OrchestratorEvent` into `DevSnapshot`s for the
+    /// DevOverlay window. Constructed in `installAgent` once the
+    /// broadcaster is alive; `toggleDevOverlay` hands a reference to the
+    /// lazy `DevOverlayWindow` so its `DevOverlayBridge` can subscribe to
+    /// `emitter.output`.
     private var devSnapshotEmitter: DevSnapshotEmitter?
 
-    /// Plan 09-04 — voice path bridge. The real adapter is constructed in
-    /// installVoice() and held strongly here so the broadcaster's voice
-    /// subscriber drain in installAgent can call its `emitTurnEnded` /
-    /// `emitError` hooks.
+    /// Voice-path bridge into `AgentOrchestrator`. Constructed in
+    /// `installVoice` (after the orchestrator exists) and held here so the
+    /// broadcaster's `voice` subscriber drain can call its
+    /// `emitTurnEnded` / `emitError` hooks. (Plan 09-04.)
     private var voiceOrchestratorAdapter: VoiceOrchestratorAdapter?
 
-    /// Plan 09-04 — drains the broadcaster's `.voice` subscription. BLOCKER-2:
-    /// per-turn assistant text accumulator + `turnSourceWasVoice` filter so
-    /// text-originated turns NEVER drive `VoiceController` back to `.idle`.
+    /// Drains the broadcaster's `.voice` priority subscription. Maintains
+    /// a per-turn assistant-text accumulator gated by
+    /// `agentOrchestrator.turnSourceWasVoice` — text-originated turns
+    /// MUST NOT drive `VoiceController` back to `.idle` from `.listening`,
+    /// because that would silently break voice for any user who types
+    /// while talking. (audit trail: Plan 09-04 / BLOCKER-2.)
     private var voiceEventTranslatorTask: Task<Void, Never>?
 
-    /// Phase E follow-up (BLOCKER-INT-2 from `.planning/v0.12.0-MILESTONE-AUDIT.md`).
-    /// Drains the broadcaster's `.bus` subscription and forwards
+    /// Drains the broadcaster's `.bus` priority subscription and forwards
     /// `.tokenDelta` chunks into `outboundBatcher.postToken(_:)` so they
     /// reach the JS-side HUD chat panel. Without this subscriber, the
     /// orchestrator emits tokens that never leave Swift — the chat panel
     /// renders an empty `chatEvents` array forever.
+    /// (audit trail: Phase E follow-up / BLOCKER-INT-2 from
+    /// `.planning/v0.12.0-MILESTONE-AUDIT.md`.)
     private var busSubscriberTask: Task<Void, Never>?
 
-    /// Plan 09-04 — OutboundBatcher used by `VoiceBusEmitterAdapter` to
-    /// route the 30 Hz audio-level RMS into the bus's RingMesh pulse.
-    /// Constructed in installVoice; webviewBridge is the sink.
+    /// 30 Hz outbound coalescer with the `WebviewBridge` as its sink. Used
+    /// by `VoiceBusEmitterAdapter` (audio-level RMS → RingMesh pulse) AND
+    /// by the bus-forwarding subscriber (tokenDelta → chat panel).
+    /// Constructed in `installAgent` so the bus forwarder works even when
+    /// the voice DAG short-circuits on missing models. (Plan 09-04 +
+    /// Phase E hoist.)
     private var outboundBatcher: OutboundBatcher?
 
-    /// Plan 03-05 test seam. Default production value is `"index"` (the R3F
-    /// bundle entry). `installBus()` assigns this once when it resolves the
-    /// Bundle.main URL. Tests assert the post-install value to confirm the
-    /// handler loaded the R3F bundle, not 02-03's `bus-harness.html`.
+    /// Filename of the HTML entry the webview loads. Production value is
+    /// `"index"` (the R3F bundle); `installBus` assigns it on construction.
+    /// Test seam — XCTest asserts the post-install value to confirm the
+    /// handler loaded the R3F bundle and not 02-03's `bus-harness.html`.
     var webviewEntryFilename: String = "index"
 
     private var systemLogger: Logger?
@@ -424,25 +597,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Launch chain
 
+    /// Bootstrap entry point. Executes the 16-step install chain documented
+    /// in the class docstring's "Install order" section above. Two hard-block
+    /// branches early-return before any subsystem touches state:
+    ///
+    /// 1. **Entitlement gate** — if `JarvisEntitlementsVerified` is missing
+    ///    or `false`, the production `onEntitlementFailure` presents the
+    ///    "Jarvis can't start" modal via `TCCAlertService` and terminates.
+    ///    The XCTest-host override is silent so test bundles still load.
+    /// 2. **Config malformed** — `ConfigError` (or any throw from
+    ///    `configLoader`/`configWriter`) routes through `Redact.apply`
+    ///    before logging (a malformed config may carry an inlined API key
+    ///    that would otherwise hit `~/Library/Logs/Jarvis/system.log` as
+    ///    plaintext — WR-02), then hard-blocks + terminates.
+    ///
+    /// Everything after step 3 is fail-soft via banners + degraded
+    /// subsystems, except `installMemory`'s `MemoryStore.init` failure
+    /// path which also terminates (D-5/D-6 closure: no silent forgetting).
+    ///
+    /// The install order is locked by `scripts/check-install-order.sh`:
+    /// vision → agent → voice, and `voiceInstallTask` MUST `await
+    /// agentInstallTask?.value`. See the class docstring's DAG.
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // 1. Logging bootstrap — S-8 one-bootstrap discipline.
+        // 1. Logging bootstrap. S-8 requires exactly one call site; tests
+        //    inject a no-op to keep repeated XCTest runs from tripping it.
         loggingBootstrap()
         systemLogger = Logger(label: JarvisLogChannel.system.rawValue)
         systemLogger?.info("Jarvis launching — Phase 1 scaffold")
 
-        // 2. Entitlement hard-block. The `defaultOnEntitlementFailure`
-        // already short-circuits when running as an XCTest host so the
-        // bundled process doesn't terminate before tests load. Tests that
-        // need to drive the full bootstrap chain inject an `EntitlementYes`
-        // probe + their own fakes and call `applicationWillFinishLaunching`
-        // directly.
+        // 2. Entitlement hard-block. `defaultOnEntitlementFailure`
+        //    short-circuits to a no-op when `XCTestConfigurationFilePath`
+        //    is set so the bundled process doesn't terminate before tests
+        //    load. Tests that want the full bootstrap chain inject an
+        //    `EntitlementYes` probe and call this method directly.
         guard entitlementProbe.isVerified() else {
             systemLogger?.critical("JarvisEntitlementsVerified missing/false — hard-blocking")
             onEntitlementFailure()
             return
         }
 
-        // 3. Config load (writing defaults on first run) with NSAlert on malformed.
+        // 3. Config load (or first-run defaults write). Redact error text
+        //    before logging — a malformed config that inlines a secret
+        //    would otherwise land in OSLog (where `OSLogHandler` skips
+        //    redaction by design) as plaintext. (WR-02.)
         let configURL = configFileURL()
         let snapshots: (LaunchSnapshot, PerTurnSnapshot)
         do {
@@ -452,11 +649,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 snapshots = try configWriter(configURL)
             }
         } catch let e as ConfigError {
-            // WR-02: route error description through Redact.apply before
-            // logging — a malformed config that contains a secret (e.g. a
-            // user accidentally drops an API key into config.json) would
-            // otherwise land in ~/Library/Logs/Jarvis/ and os.Logger (where
-            // OSLogHandler skips redaction by design) as plaintext.
             let description = Redact.apply(String(describing: e))
             systemLogger?.critical("Config malformed: \(description)")
             TCCAlertService.presentHardBlock(
@@ -466,7 +658,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         } catch {
-            // WR-02: same redaction discipline for generic errors.
             let description = Redact.apply(error.localizedDescription)
             systemLogger?.critical("Config load failed: \(description)")
             TCCAlertService.presentHardBlock(
@@ -476,33 +667,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
-        // Plan 09-01: build a ConfigStore from the launch + per-turn
-        // snapshots so installAgent() can construct the AgentOrchestrator
-        // with a live config source.
+        // Wrap the snapshots in a `ConfigStore` actor so `installAgent`
+        // can pass it into the orchestrator constructor and so every
+        // probe / self-knowledge tool reads the same authoritative store.
         let configStore = ConfigStore(launch: snapshots.0, initial: snapshots.1)
         self.configStore = configStore
 
-        // 4. Menu bar + HUD panel + banner panel.
+        // 4. AppKit surfaces.
         installMenuBar()
         installHUDPanel()
         installBannerPanel()
 
-        // 4.5 Bus wiring — construct the bridge around the HUD's WKWebView,
-        // install the WKUserScript (at document-start in JarvisBusWorld),
-        // construct + start the HUD-08 single-writer HudStateCoordinator, and
-        // load the R3F bundle's index.html so the handshake kicks off.
-        // Plan 02-03 (bridge) + Plan 03-05 (coordinator + index.html load).
+        // 4.5 Bus wiring — construct the `WebviewBridge` around the HUD's
+        //     `WKWebView`, install the `WKUserScript` at document-start in
+        //     the isolated `JarvisBusWorld`, start the single-writer
+        //     `HudStateCoordinator`, and load the R3F bundle's
+        //     `index.html` so the handshake kicks off. See `installBus`
+        //     for the seven-step sequence.
         installBus()
 
-        // 5. Keychain fetch.
-        //
-        // Banner suppression: when the API key is missing, the first-launch
-        // wizard is going to open in step 8 to ask for it — enqueuing
-        // `.keychainEmpty` here would stack a "No API key configured" HUD
-        // banner on top of the wizard's own apiKey stage. Only enqueue when
-        // the wizard *won't* open (e.g. wizard was dismissed pre-entry on a
-        // prior launch and the user reopened without re-entering Setup),
-        // which we detect post-wizard-construction below.
+        // 5. Keychain probe. Banner suppression: when the API key is
+        //    missing, the wizard (step 8) is going to ask for it —
+        //    enqueuing `.keychainEmpty` here would stack a "No API key
+        //    configured" HUD banner on top of the wizard's own apiKey
+        //    stage. The actual `.keychainEmpty` enqueue happens in step
+        //    8b, gated on `!willOpenWizard`.
         let apiKeyStored: Bool
         do {
             _ = try keychainStore.get(.anthropic)
@@ -514,22 +703,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             apiKeyStored = false
         }
 
-        // 6. Input Monitoring — query-only check (no prompt).
-        //
-        // Two reasons to NOT call `requestListenEventAccess` at launch:
-        //   1. It can fire a TCC dialog OUTSIDE the wizard's TCC stage,
-        //      surprising the user with a permission prompt before they've
-        //      even seen the wizard.
-        //   2. The wizard's TCC stage is the right place for the prompt —
-        //      it has the explainer copy + the System Settings fallback.
-        //
-        // Use IOHIDCheckAccess (query-only) to detect a prior grant. If
-        // denied/unknown AND the wizard is going to open, skip the banner
-        // (the wizard's TCC stage handles it). Only enqueue the banner when
-        // the wizard won't be opening to address it.
+        // 6. Input Monitoring — query-only via `IOHIDCheckAccess`. We do
+        //    NOT call `requestListenEventAccess` here for two reasons:
+        //      (a) it would fire a TCC dialog outside the wizard's TCC
+        //          stage, surprising the user before they've even seen
+        //          the wizard's explainer copy; and
+        //      (b) the wizard already owns the prompt (with the System
+        //          Settings fallback path).
+        //    Like the keychain probe, the banner enqueue is deferred to
+        //    step 8b so it doesn't stack on top of the wizard.
         let inputMonitoringGranted = hidProbe.isListenEventAccessGranted()
 
-        // 7. Hotkey binder — empty at launch; wizard binds a shortcut later.
+        // 7. Hotkey binder. Unbound at launch — the wizard / Settings UI
+        //    binds a shortcut later.
         hotkeyBinder = HotkeyBinder()
 
         // 8. Wizard state + first-launch open.
@@ -542,10 +728,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openWizard(firstLaunch: true)
         }
 
-        // 8b. Now that the wizard's open/closed decision is settled, enqueue
-        //     the missing-prerequisite banners only if the wizard ISN'T going
-        //     to address them. This avoids stacking redundant banners on top
-        //     of a wizard that's already asking for the same thing.
+        // 8b. Banner enqueue, now that the wizard's open/closed decision
+        //     is settled. Only enqueue missing-prerequisite banners when
+        //     the wizard ISN'T going to address them — avoids stacking
+        //     redundant banners on top of a wizard asking for the same
+        //     thing. (See steps 5 + 6.)
         if !apiKeyStored && !willOpenWizard {
             bannerCoordinator?.enqueue(.keychainEmpty)
         }
@@ -553,14 +740,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             bannerCoordinator?.enqueue(.inputMonitoringDenied)
         }
 
-        // 9. Plan 05-05 / ME-04 closure (CR-02 REVIEW 05): instantiate
-        //    the orch→replay 2048-capacity .dropOldest channel + open
-        //    the on-disk ReplayLog + spawn the drain task that writes
-        //    drained envelopes through to ReplayLog. AGENT-10's
+        // 9. Orch→replay seam. Allocate the 2048-capacity .dropOldest
+        //    channel, open the on-disk `ReplayLog`, and spawn the drain
+        //    task that writes drained envelopes to the log. AGENT-10's
         //    four-seam contract is now exercised by production traffic:
-        //    the observer (created lazily by MCPRuntimeWiring.build,
-        //    step 10 below) PRODUCES into the channel; this drain task
-        //    CONSUMES.
+        //    the observer (created lazily inside `MCPRuntimeWiring.build`,
+        //    next step) PRODUCES; this drain task CONSUMES.
+        //    (audit trail: Plan 05-05 / ME-04 / CR-02 REVIEW 05.)
         let channel = BoundedAsyncChannel<ReplayEnvelope>(capacity: 2048, policy: .dropOldest)
         orchToReplayChannel = channel
         let replayDBURL = replayDatabaseURL()
@@ -575,8 +761,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             systemLogger?.error("CR-02: failed to open ReplayLog at \(replayDBURL.path): \(String(describing: error))")
             // Drain still runs — discards events so the producer doesn't
-            // block. Boot continues; replay capture is best-effort per
-            // OBS-02.
+            // back-pressure. Replay capture is best-effort per OBS-02.
             orchToReplayDrainTask = Task.detached { [weak self] in
                 for await _ in channel {
                     _ = self
@@ -584,41 +769,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 10. CR-02 (REVIEW 05): instantiate the production MCPRuntime
-        //     so the dispatcher chain (broker + presenter + observer)
-        //     is wired and the orchestrator (later plan) has a
-        //     ToolDispatcher to consume. Helpers may be absent under
-        //     XCTest hosts or before-codesign builds; failure is
-        //     non-fatal — we log and proceed without MCP, the same way
-        //     a missing API key proceeds without the agent.
+        // 10. MCP runtime build. Constructs the broker + presenter +
+        //     observer + dispatcher composite and the in-process tool
+        //     registry it routes to. Helpers may be absent (XCTest hosts,
+        //     pre-codesign builds); failure is non-fatal — we log and
+        //     proceed without MCP, the same way a missing API key
+        //     proceeds without the agent.
+        //
+        //     The `bus` adapter resolves `outboundBatcher` lazily via a
+        //     MainActor closure because the batcher is constructed later
+        //     in `installAgent`. Until it exists, tool-card emissions are
+        //     dropped — but `ReplayingToolResultObserver` still records
+        //     every call so the audit trail isn't lost.
+        //     (audit trail: CR-02 REVIEW 05; BLOCKER-INT-1 fix replaced
+        //     the previous Null bus adapter.)
         let bundleURL = Bundle.main.bundleURL
         mcpInstallTask = Task { @MainActor [weak self] in
             guard let self = self, let channel = self.orchToReplayChannel else { return }
-            // BLOCKER-INT-1 fix: real BusGateway that forwards tool-call
-            // events to the HUD via OutboundBatcher. The batcher is
-            // constructed later (step 13 in installAgent) so the adapter
-            // resolves it lazily via a MainActor-isolated closure. Until
-            // the batcher exists, emissions are dropped (the
-            // ReplayingToolResultObserver still records the call so the
-            // audit trail isn't lost).
             let busAdapter = MCPBusGatewayAdapter(resolveBatcher: { [weak self] in
                 await MainActor.run { [weak self] in self?.outboundBatcher }
             })
             do {
-                // Plan 10-02c (B-01b): pass the eagerly-constructed
-                // inProcessToolRegistry so MCPRuntimeWiring can wrap the inner
-                // MCPToolDispatcher with InProcessAwareToolDispatcher. Memory
-                // tools (registered later by installMemory) and the four
-                // self-knowledge tools (registered later by
-                // installSelfKnowledgeTools) land in this same registry
-                // instance — the composite's name-routing query reads from
-                // the live actor on every dispatch so late registrations are
-                // routable too.
+                // Pass the eagerly-constructed `inProcessToolRegistry` so
+                // `MCPRuntimeWiring` wraps the inner `MCPToolDispatcher`
+                // with `InProcessAwareToolDispatcher`. Memory tools and
+                // the four self-knowledge tools register into THIS same
+                // registry from later install steps — the composite's
+                // name-routing query reads from the live actor on every
+                // dispatch, so late registrations are routable too.
+                // (Plan 10-02c / B-01b.)
                 let runtime = try await MCPRuntimeWiring.build(
                     bundleURL: bundleURL,
                     bus: busAdapter,
                     replayChannel: channel,
-                    turnIDResolver: { nil },  // pre-orchestrator returns nil (observer logs without writing).
+                    turnIDResolver: { nil },  // No live orchestrator yet — observer logs without writing.
                     inProcessRegistry: self.inProcessToolRegistry
                 )
                 self.mcpRuntime = runtime
@@ -629,56 +813,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 11. Plan 07-06: install memory subsystem. MemoryStore.init can
-        //     throw if vec0.dylib is missing — installMemory catches and
-        //     degrades gracefully. We start memory BEFORE voice so the
-        //     extraction coordinator is subscribed to AgentOrchestrator.events
-        //     before the first voice-driven turn lands.
+        // 11. Memory install. Spawned BEFORE voice so the extraction
+        //     coordinator is subscribed to `AgentOrchestrator.events`
+        //     before the first voice-driven turn lands. `MemoryStore.init`
+        //     hard-blocks on failure per D-5/D-6 (no silent forgetting).
         memoryInstallTask = Task { @MainActor [weak self] in
             await self?.installMemory()
         }
 
-        // MARK: - Install Order (Phase 9 / Plan 4 / WARNING-5: LOCKED)
-        // vision → agent → voice. DO NOT REORDER.
+        // MARK: - Install order: vision → agent → voice (LOCKED)
         //
-        // - vision must finish before agent because installAgent's orchestrator
-        //   constructor takes self.visionRouter (Plan 2 / D-01) and the
-        //   broadcaster's frame-attach release subscriber needs frameAttachController.
-        // - agent must finish before voice because installVoice's adapters
-        //   require self.agentOrchestrator and self.turnTranscriptStore (both
-        //   constructed inside installAgent — Plan 1 / Plan 4).
-        // scripts/check-install-order.sh enforces the literal line ordering.
+        // Enforced literally by `scripts/check-install-order.sh`:
+        //   - Vision must finish before agent because `installAgent`'s
+        //     orchestrator constructor takes `self.visionRouter` and the
+        //     broadcaster's frame-attach release subscriber needs
+        //     `frameAttachController`.
+        //   - Agent must finish before voice because `installVoice`'s
+        //     adapters require `self.agentOrchestrator` and
+        //     `self.turnTranscriptStore` (both constructed inside
+        //     `installAgent`).
+        // The gate checks BOTH the literal Task-spawn line order AND the
+        // explicit `await self?.agentInstallTask?.value` inside the voice
+        // spawn. Removing either trips CI.
 
-        // 12. Plan 07-06: install vision subsystem. Camera TCC may be
-        //     undetermined or denied at first launch; presence + frame-attach
-        //     degrade gracefully via the cameraDegradationTask banner watcher.
+        // 12. Vision install. Camera TCC may be undetermined or denied at
+        //     first launch; presence + frame-attach degrade gracefully via
+        //     the `cameraDegradationTask` banner watcher.
         visionInstallTask = Task { @MainActor [weak self] in
             await self?.installVision()
         }
 
-        // 13. Plan 09-01: install agent subsystem. Awaits the memory install
-        //     task so the MemoryExtractionCoordinator is constructed before
-        //     installAgent subscribes it to the broadcaster's memory child
-        //     stream.
-        //
-        //     Plan 09-02: also awaits the vision install task so installAgent
-        //     can pass `visionRouter:` and `frameAttachController` (both set
-        //     by installVision) into the orchestrator constructor + the
-        //     broadcaster's frame-attach release subscriber.
-        //
-        //     Phase E follow-up (this commit): also awaits `mcpInstallTask`.
-        //     `installAgent` requires `self.mcpRuntime != nil` and silently
-        //     short-circuits otherwise. MCP runtime build is ~1s due to
-        //     helper child-process spawn (mcp-time / mcp-clipboard /
-        //     mcp-applescript), which consistently lost the race against
-        //     installAgent on every cold launch — every system log to date
-        //     shows `installAgent: deps not ready — skipping` precede
-        //     `MCPRuntime built` by ~900 ms, leaving the orchestrator +
-        //     broadcaster + ALL six broadcaster subscribers dormant for the
-        //     process lifetime. Audited only via static source grep, so the
-        //     milestone-audit findings of "5 subscribers wired" in
-        //     v0.12.0-MILESTONE-AUDIT.md were structurally correct but
-        //     runtime-false until this gate lands.
+        // 13. Agent install. Awaits memory + vision + MCP install tasks
+        //     because:
+        //       - memory: `MemoryExtractionCoordinator` must exist before
+        //         the broadcaster's memory subscriber attaches.
+        //       - vision: `installAgent` passes `visionRouter:` and
+        //         `frameAttachController` into the orchestrator + the
+        //         broadcaster's frame-attach release subscriber.
+        //       - MCP: `installAgent` short-circuits when `mcpRuntime`
+        //         is nil. MCP build is ~1s due to helper child-process
+        //         spawn; before this gate landed, every cold launch
+        //         showed `installAgent: deps not ready — skipping`
+        //         arriving ~900 ms before `MCPRuntime built`, leaving the
+        //         orchestrator + broadcaster + ALL six subscribers
+        //         dormant for the process lifetime. The
+        //         v0.12.0-MILESTONE-AUDIT.md "5 subscribers wired"
+        //         finding was static-grep correct but runtime-false
+        //         until this gate landed. (Phase E follow-up.)
         agentInstallTask = Task { @MainActor [weak self] in
             await self?.memoryInstallTask?.value
             await self?.visionInstallTask?.value
@@ -686,100 +867,98 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await self?.installAgent()
         }
 
-        // 14. Plan 06-05: install voice subsystem asynchronously.
-        //     Model files (ORT sessions, Orpheus MLX weights) may be absent
-        //     on first launch — failure is non-fatal (voice degrades gracefully).
-        //     The dormantVoiceContinuation is replaced with the real producer
-        //     once VoiceController is live and started.
-        //
-        //     Plan 4 / WARNING-5: voiceInstallTask now AWAITS agentInstallTask
-        //     because the real VoiceOrchestratorAdapter / VoiceBusEmitterAdapter
-        //     require self.agentOrchestrator + self.turnTranscriptStore.
+        // 14. Voice install. Model files (ORT sessions, Orpheus MLX
+        //     weights) may be absent on first launch — failure is
+        //     non-fatal (voice degrades gracefully, banner surfaces).
+        //     The `dormantVoiceContinuation` slot is replaced with the
+        //     real producer once `VoiceController` is live.
+        //     Awaits `agentInstallTask` — the real voice adapters require
+        //     `agentOrchestrator` and `turnTranscriptStore`.
         voiceInstallTask = Task { @MainActor [weak self] in
             await self?.agentInstallTask?.value
             await self?.installVoice()
         }
 
-        // 15. Plan 10-01: register the four self-knowledge MCP tools
-        //     (list_audio_devices, get_active_audio_route, get_self_state,
-        //     list_camera_devices) AFTER voice so the live audioGraphOwner
-        //     reference is available for AudioGraphRouteAdapter. The
-        //     CoreAudio + AVCaptureDevice queries are read-only metadata
-        //     only — no TCC prompt. D-10: every tool registers with
-        //     requiresConfirmation:false explicitly.
+        // 15. Self-knowledge tool registration. Runs AFTER voice so the
+        //     live `audioGraphOwner` reference is available for
+        //     `AudioGraphRouteAdapter`. All queries are read-only
+        //     metadata (CoreAudio + AVCaptureDevice) — no TCC prompt.
+        //     Every tool registers with `requiresConfirmation: false`
+        //     explicitly. (Plan 10-01 / D-10.)
         selfKnowledgeInstallTask = Task { @MainActor [weak self] in
             await self?.voiceInstallTask?.value
             await self?.installSelfKnowledgeTools()
         }
 
-        // 16. Round 2 — Boot-phase health probes. Awaits the tail of the
-        //     install chain (selfKnowledgeInstallTask transitively awaits
-        //     every other install Task) so each probe reads the live state
-        //     of a settled subsystem. Logs structured per-subsystem lines
-        //     and enqueues a banner for any .failed result. The snapshot
-        //     is stored on `bootHealthOrchestrator` for Round 3's Status
-        //     menu to render.
+        // 16. Boot-health probe sweep. Awaits the tail of the install
+        //     chain so each probe reads the live state of a settled
+        //     subsystem. Logs structured per-subsystem lines, enqueues
+        //     severity-classified banners, pushes the degradation
+        //     summary into the agent, and tints the menu-bar icon by
+        //     overall health. (Round 2/3/4.)
         bootHealthTask = Task { @MainActor [weak self] in
             await self?.selfKnowledgeInstallTask?.value
             await self?.runBootHealth()
         }
     }
 
-    /// CR-02 (REVIEW 05): on-disk replay log path. Lives next to
-    /// config.json under Application Support / Jarvis / replay.sqlite.
+    /// On-disk replay log path. Lives next to `config.json` under
+    /// `~/Library/Application Support/Jarvis/replay.sqlite`.
+    /// (audit trail: CR-02 REVIEW 05.)
     private func replayDatabaseURL() -> URL {
         configFileURL().deletingLastPathComponent().appendingPathComponent("replay.sqlite")
     }
 
-    // MARK: - Round 2 — Boot health
+    // MARK: - Boot health (Round 2/3/4)
 
-    /// Registers the eight concrete `BootHealthProbe`s against the
-    /// now-live subsystem actors, runs them in parallel, logs each
-    /// result as a structured line, and enqueues banners for any
-    /// `.failed` subsystem. Idempotent — safe to call again from the
-    /// Status panel's "Re-probe" button (Round 3); the orchestrator's
-    /// snapshot overwrites cleanly.
+    /// Runs one boot-health sweep against every registered subsystem
+    /// probe. Idempotent — safe to call again from the Status panel's
+    /// "Re-probe" button (Round 3); the orchestrator's snapshot
+    /// overwrites cleanly.
+    ///
+    /// Four side effects per call:
+    ///   1. Register probes the first time (`registeredNames().isEmpty`
+    ///      guard handles the Round 3 re-probe case).
+    ///   2. Log one structured line per subsystem (parser-friendly
+    ///      `key=value` pairs).
+    ///   3. Enqueue severity-classified banners for non-ok subsystems.
+    ///   4. Push the degradation summary into `AgentOrchestrator` so the
+    ///      next turn's system prompt warns the model not to lie about
+    ///      dead capabilities (the Toby case), and paint the menu-bar
+    ///      icon by overall health.
     ///
     /// Anti-fake-status invariant: every probe MUST report a concrete
-    /// status (`.ok`, `.degraded`, `.failed`, `.unknown`). If a
-    /// subsystem never installed, the probe still runs — it just
-    /// returns `.unknown(reason:)`. The orchestrator is not a "best
-    /// effort" surface; a missing probe is itself a bug.
+    /// status (`.ok`, `.degraded`, `.failed`, `.unknown`). A subsystem
+    /// that never installed still runs a probe — it just returns
+    /// `.unknown(reason:)`. The orchestrator is not a "best effort"
+    /// surface; a missing probe is itself a bug.
     @MainActor
     func runBootHealth() async {
-        // Register the eight probes the first time we run. The orchestrator
-        // de-dupes via append, so on the second invocation (Round 3's
-        // re-probe) we skip registration. Inspecting `registeredNames`
-        // is cheap because the actor returns an array snapshot.
         if await bootHealthOrchestrator.registeredNames().isEmpty {
             await registerBootHealthProbes()
         }
         let snapshot = await bootHealthOrchestrator.runAll()
         emitBootHealthLog(snapshot: snapshot)
         enqueueFailedBootHealthBanners(snapshot: snapshot)
-        // Round 4 — push the latest degradation summary into the
-        // AgentOrchestrator so the next turn's system prompt warns the
-        // model not to lie about dead capabilities (the Toby case). The
-        // orchestrator may be nil here on cold-boot if installAgent
-        // hasn't finished — the bootHealthTask awaits selfKnowledgeInstallTask
-        // which transitively awaits agentInstallTask, but defensive nil-coalesce
+        // The bootHealthTask awaits selfKnowledgeInstallTask which
+        // transitively awaits agentInstallTask, so the orchestrator is
+        // normally live by the time we get here. The nil-coalesce is
         // belt-and-suspenders against future install-order changes.
         let summary = buildDegradationSummary(snapshot: snapshot)
         if let orchestrator = self.agentOrchestrator {
             await orchestrator.setDegradationSummary(summary)
         }
-        // Round 4 — paint the menu-bar icon red when overall health is
-        // loud or critical so the user sees the warning even with the
-        // HUD closed. Single-writer-safe: contentTintColor lives on the
-        // NSStatusItemButton, not in HudState, so HUD-08 stays intact.
+        // Single-writer-safe: `contentTintColor` lives on the
+        // `NSStatusItemButton`, not in `HudState`, so HUD-08 stays intact.
         menuBarController?.applyHealth(snapshot.overallHealth)
     }
 
-    /// Round 4 — build the agent-facing "DO NOT promise" preamble from a
-    /// boot-health snapshot. Returns nil when everything is `.ok` so the
-    /// orchestrator's normal system prompt is used verbatim. Keeps the
-    /// string well under the 4096-char cache-eligibility boundary
-    /// (Pitfall #4) so adding it doesn't flip `cache_control` emission.
+    /// Builds the agent-facing "DO NOT promise" preamble from a
+    /// boot-health snapshot. Returns `nil` when everything is `.ok` so
+    /// the orchestrator's normal system prompt is used verbatim. Keeps
+    /// the string well under the 4096-char cache-eligibility boundary
+    /// (Opus pitfall #4) so adding it doesn't flip `cache_control`
+    /// emission. (Round 4.)
     @MainActor
     func buildDegradationSummary(snapshot: BootHealthSnapshot) -> String? {
         var critical: [(name: String, reason: String)] = []
@@ -809,10 +988,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return lines.joined(separator: "\n")
     }
 
-    /// Round 3 — opens the Status panel (lazy-creates on first click).
-    /// The panel's `.task { await model.reprobe() }` SwiftUI modifier
-    /// fires a fresh probe sweep on every appearance, so the user always
-    /// sees live state — never a stale boot snapshot.
+    /// Opens the Status panel (lazy-creates on first click). The panel's
+    /// `.task { await model.reprobe() }` SwiftUI modifier fires a fresh
+    /// probe sweep on every appearance, so the user always sees live
+    /// state — never a stale boot snapshot. (Round 3.)
     @MainActor
     func openStatusPanel() {
         if statusPanel == nil {
@@ -828,23 +1007,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Constructs one probe per subsystem and registers it on the
-    /// orchestrator. Each register call is awaited inline so the
-    /// caller can `runAll()` immediately after and be certain every
-    /// probe is in the registry (no fire-and-forget Task race).
-    /// Subsystems that never installed get a placeholder probe that
-    /// honestly reports `.unknown` from the probe body itself.
+    /// orchestrator. Each register call is awaited inline so the caller
+    /// can `runAll()` immediately after and be certain every probe is in
+    /// the registry (no fire-and-forget Task race). Subsystems that never
+    /// installed get a `DormantSubsystemProbe` that honestly reports
+    /// `.unknown` (or `.critical` for memory — silent forgetting is the
+    /// loudest possible failure mode).
+    ///
+    /// Probes registered:
+    ///   - **memory** — `MemoryBootHealthProbe` on `MemoryStatsStoreAdapter`,
+    ///     same adapter the `get_memory_stats` MCP tool consumes.
+    ///   - **anthropic** — `AnthropicBootHealthProbe` — structural keychain
+    ///     check, no network.
+    ///   - **ollama** — `OllamaBootHealthProbe` — live `/api/tags` against
+    ///     the configured base URL.
+    ///   - **voice** — `VoiceBootHealthProbe` against `AudioGraphOwner`.
+    ///   - **vision** — `VisionBootHealthProbe` — TCC status + device
+    ///     enumeration only, no captured actor.
+    ///   - **mcp** — `MCPBootHealthProbe` over `MCPRuntime` + the
+    ///     in-process registry, because the composite dispatcher routes
+    ///     both stdio helpers AND in-process tools.
+    ///   - **replay** — `ReplayBootHealthProbe` on DB URL + `replayLog`
+    ///     presence.
+    ///   - **webview** — `WebviewBootHealthProbe` on `WebviewBridge`
+    ///     handshake state.
     @MainActor
     private func registerBootHealthProbes() async {
-        // Memory — uses the same MemoryStatsStoreAdapter the
-        // get_memory_stats MCP tool consumes. Reconstructs the adapter
-        // here rather than caching it on AppDelegate.
         let dbURL = configFileURL().deletingLastPathComponent().appendingPathComponent("jarvis.db")
         if let memoryStore = self.memoryStore {
             await bootHealthOrchestrator.register(
                 MemoryBootHealthProbe(adapter: MemoryStatsStoreAdapter(store: memoryStore, databaseURL: dbURL))
             )
         } else {
-            // Round 4 — memory dormant = silent forgetting. Critical so the
+            // Memory dormant = silent forgetting. Critical severity so the
             // banner is non-dismissible and the agent's preamble warns the
             // model not to promise to remember anything.
             await bootHealthOrchestrator.register(DormantSubsystemProbe(
@@ -854,14 +1049,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ))
         }
 
-        // Anthropic — structural keychain check. Cheap, no network.
         await bootHealthOrchestrator.register(
             AnthropicBootHealthProbe(keychain: self.keychainStore)
         )
 
-        // Ollama — live /api/tags against the configured base URL.
-        // ConfigStore is an actor; `launch` is actor-isolated even
-        // though it's a `let`. Read it inside the await and register.
+        // `ConfigStore` is an actor; `launch` is actor-isolated even
+        // though it's a `let`. Read it inside the await before registering.
         if let cfg = self.configStore {
             let baseURL = await cfg.launch.ollama.baseURL
             await bootHealthOrchestrator.register(OllamaBootHealthProbe(baseURL: baseURL))
@@ -872,17 +1065,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ))
         }
 
-        // Voice — captures AudioGraphOwner if live.
         await bootHealthOrchestrator.register(
             VoiceBootHealthProbe(audioGraphOwner: self.audioGraphOwner)
         )
 
-        // Vision — TCC status + device enumeration only; no captured actor.
         await bootHealthOrchestrator.register(VisionBootHealthProbe())
 
-        // MCP — captures live MCPRuntime + in-process registry. The
-        // composite dispatcher routes both, so the probe must count both
-        // (stdio helpers + in-process self-knowledge/memory tools).
         await bootHealthOrchestrator.register(
             MCPBootHealthProbe(
                 mcpRuntime: self.mcpRuntime,
@@ -890,7 +1078,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         )
 
-        // Replay — captures DB URL + live ReplayLog presence flag.
         await bootHealthOrchestrator.register(
             ReplayBootHealthProbe(
                 databaseURL: self.replayDatabaseURL(),
@@ -898,16 +1085,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         )
 
-        // Webview — captures live WebviewBridge handshake state.
         await bootHealthOrchestrator.register(
             WebviewBootHealthProbe(bridge: self.webviewBridge)
         )
     }
 
     /// Writes one structured log line per subsystem in the snapshot, plus
-    /// a header summarising the total / .ok / .failed / .degraded / .unknown
-    /// counts. The format is parser-friendly (`key=value` pairs with
-    /// quoted values where evidence contains spaces) so a future log
+    /// a header summarising the `total / .ok / .failed / .degraded /
+    /// .unknown` counts. The format is parser-friendly (`key=value` pairs
+    /// with quoted values where evidence contains spaces) so a future log
     /// scraper can extract the columns cleanly.
     @MainActor
     private func emitBootHealthLog(snapshot: BootHealthSnapshot) {
@@ -924,15 +1110,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Round 4 — one banner per non-ok subsystem, routed by severity:
-    ///   * `.critical` → non-dismissible red banner at priority 1, plus
-    ///     a [system] CRITICAL log line so the system channel reflects it.
-    ///   * `.loud`     → dismissible banner at priority 3.
-    ///   * `.soft`     → no banner (Status panel only).
+    /// Enqueues one banner per non-ok subsystem, routed by severity:
+    ///   - `.critical` → non-dismissible red banner at priority 1, plus a
+    ///     `[system] CRITICAL` log line so the system channel reflects it.
+    ///   - `.loud`     → dismissible banner at priority 3.
+    ///   - `.soft`     → no banner (Status panel only).
     ///
     /// Banner ids are severity-scoped, so re-probing the same subsystem
-    /// doesn't spam — same `boot-health-critical-memory` id dedupes
-    /// inside the coordinator.
+    /// doesn't spam — the coordinator dedupes on the
+    /// `boot-health-{severity}-{subsystem}` key. (Round 4.)
     @MainActor
     private func enqueueFailedBootHealthBanners(snapshot: BootHealthSnapshot) {
         for health in snapshot.subsystems {
@@ -950,9 +1136,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Round 4 — extracts the reason string from a non-ok status for use
-    /// in banner copy. Falls back to "unknown" for `.ok` (defensive — the
-    /// caller already filters those out via `severity.map`).
+    /// Extracts the reason string from a non-ok status for use in banner
+    /// copy. Falls back to `"unknown"` for `.ok` (defensive — the caller
+    /// already filters those out via `severity.map`). (Round 4.)
     @MainActor
     private func reasonForBanner(_ status: ProbeStatus) -> String {
         switch status {
@@ -984,18 +1170,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return (ok, degraded, failed, unknown)
     }
 
+    /// Cancels every long-lived Task and shuts down every subsystem actor
+    /// the delegate owns. Each cancellation is explicit (not relying on
+    /// process exit to GC them) because long-lived subscribers must not
+    /// outlive the process — a stray `for await` Task that survives
+    /// teardown will keep the actor alive and prevent clean shutdown
+    /// reporting in the `at_exit` log line.
+    ///
+    /// Order matters lightly: hotkey unbind first so the global event
+    /// monitor releases its TCC claim cleanly; install Tasks next so any
+    /// in-flight install sees `Task.isCancelled` and exits; subscriber
+    /// Tasks last so the broadcaster's drain finishes cleanly. The
+    /// per-subsystem `shutdown()`/`stop()`/`cancel()` calls run as
+    /// detached Tasks because we're already on `@MainActor` and the
+    /// subsystems live on their own actors.
     func applicationWillTerminate(_ notification: Notification) {
         hotkeyBinder?.unbind()
-        // Round 2: cancel any in-flight boot-health task. Probes are
-        // short-lived but a re-probe from Round 3's Status menu could
-        // still be mid-flight when the user quits.
+        // Probes are short-lived but a re-probe triggered from Round 3's
+        // Status menu can still be mid-flight when the user quits.
         bootHealthTask?.cancel()
-        // Plan 05-05 / ME-04: tear down the orch→replay drain so the Task
-        // doesn't outlive the process.
         orchToReplayDrainTask?.cancel()
-        // Plan 06-05: shut down voice subsystem.
         voiceInstallTask?.cancel()
-        // Track B-4: degradation/rebuild stream consumers + audio graph owner.
         audioGraphDegradationTask?.cancel()
         audioGraphRebuildTask?.cancel()
         if let owner = audioGraphOwner {
@@ -1004,7 +1199,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let vc = voiceController {
             Task { await vc.shutdown() }
         }
-        // Plan 07-06: tear down memory + vision.
         memoryInstallTask?.cancel()
         visionInstallTask?.cancel()
         cameraDegradationTask?.cancel()
@@ -1020,41 +1214,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let capture = captureSession {
             Task { await capture.shutdown() }
         }
-        // Plan 09-01: tear down agent subsystem (broadcaster + subscribers).
         agentInstallTask?.cancel()
         memoryEventSubscriberTask?.cancel()
         transcriptSubscriberTask?.cancel()
         devOverlaySubscriberTask?.cancel()
-        // Plan 09-02 / D-16: tear down frame-attach release subscriber.
         frameAttachReleaseTask?.cancel()
-        // Plan 09-04: tear down voice event translator subscriber.
         voiceEventTranslatorTask?.cancel()
-        // Phase E (BLOCKER-INT-2): tear down bus-forwarding subscriber.
         busSubscriberTask?.cancel()
         if let broadcaster = eventBroadcaster {
             Task { await broadcaster.stop() }
         }
     }
 
-    // MARK: - Voice install (Plan 06-05)
+    // MARK: - Voice install
 
-    /// Constructs and starts the voice subsystem.
+    /// Constructs and starts the voice subsystem (wake word → VAD → STT
+    /// → orchestrator → TTS). Runs on the voice install Task after
+    /// `agentInstallTask` completes; the agent + transcript dependencies
+    /// it captures don't exist any earlier.
     ///
-    /// Called from a background Task in `applicationWillFinishLaunching` (step 11).
-    /// Model files and hardware are required — failure is logged and voice degrades
-    /// gracefully (banner + silent mode). PTT and mute-wake-word are set up after
-    /// VoiceController is live.
+    /// Fail-soft policy: model files and hardware are best-effort. Each
+    /// of these failures degrades voice to dormant + a banner, but the
+    /// rest of the app keeps running:
+    ///   - ORT models missing → no wake word.
+    ///   - Silero models missing → no VAD.
+    ///   - Mic permission denied → no audio graph.
+    ///   - Audio graph fails to open → no listening loop.
     ///
-    /// Production wiring:
-    ///   1. Build `VoiceController` using `dormantVoiceContinuation` as the
-    ///      `voiceHudCont` parameter — this replaces the dormant placeholder
-    ///      that `HudStateCoordinator` is already consuming.
-    ///   2. Replace `dormantVoiceContinuation` with `nil` so it no longer holds
-    ///      the continuation (VoiceController now owns it).
-    ///   3. Wire `PushToTalk` (binds PTT hotkey, VOICE-13).
-    ///   4. Wire `MuteWakeWord` (menu-bar toggle, VOICE-12).
-    ///   5. Call `voiceController.start()` to open the audio graph and begin
-    ///      the wake-word / VAD / STT / TTS loop.
+    /// Step sequence:
+    ///   1. Construct `OpenWakeWordSession` + `SileroVAD` + `WakeWordDAG`.
+    ///   2. Construct `AudioGraphOwner` and spawn the degradation +
+    ///      rebuild consumer Tasks BEFORE `open()`. `open()` may
+    ///      immediately emit `.aecUnavailable` on its retry-with-aec=off
+    ///      path; the consumers must be ready.
+    ///   3. Request mic permission (`AVCaptureDevice.requestAccess`) so
+    ///      first-launch surfaces the prompt — without this the wizard's
+    ///      "request at first use" contract is violated and the app
+    ///      receives a silent input stream.
+    ///   4. Open the graph; hand its ring buffer to the wake-word DAG.
+    ///   5. Construct the production adapter triad
+    ///      (`VoiceOrchestratorAdapter`, `VoiceTTSAdapter`,
+    ///      `VoiceBusEmitterAdapter`).
+    ///   6. Construct `VoiceController` against `dormantVoiceContinuation`
+    ///      (the coordinator is already subscribed to it). Swap the
+    ///      continuation slot to `nil` so the controller is now the sole
+    ///      producer.
+    ///   7. Wire `PushToTalk` + `MuteWakeWord` + `AudioLevelEmitter`.
+    ///   8. Call `voiceController.start()`.
     @MainActor
     private func installVoice() async {
         // Require dormant continuation — it's our connection to HudStateCoordinator.
@@ -1090,18 +1296,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // Construct WakeWordDAG.
         let wakeWordDAG = WakeWordDAG(session: wakeWordSession)
 
-        // Track B-4 (2026-05-03 voice audit fix): construct AudioGraphOwner,
-        // open it, and feed its RingBuffer into the wake-word DAG. Without
-        // this, wake-word inference loops on a ring that production never
-        // wrote to (mic taps were never installed). Audit:
-        // `.planning/audit-2026-05-03/voice.md`.
-        //
-        // Order matters: the degradation/rebuild consumer Tasks must be
-        // spawned BEFORE `open()` because `open()` may immediately yield
-        // `.aecUnavailable` on its retry-with-aec=false path (VOICE-09).
+        // The degradation + rebuild consumer Tasks MUST be spawned before
+        // `graphOwner.open()` because `open()` may immediately yield
+        // `.aecUnavailable` on its retry-with-aec=off path (VOICE-09) —
+        // dropping that first event on the floor leaves voice without
+        // banners until the second AEC failure.
+        // (audit trail: 2026-05-03 voice audit / Track B-4 — production
+        // was never constructing AudioGraphOwner; the wake-word DAG read
+        // an empty ring forever.)
         let (degradationStream, degradationCont) = AsyncStream<DegradationReason>.makeStream()
         let (rebuildStream, rebuildCont) = AsyncStream<RebuildEvent>.makeStream()
 
@@ -1139,14 +1343,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 2026-05-06 — TCC mic permission. macOS does not deterministically
-        // surface the microphone prompt from AVAudioEngine alone; without an
-        // explicit `AVCaptureDevice.requestAccess(for: .audio)` call the
-        // app receives a silent input stream and the wizard's "request at
-        // first use" contract is violated. This is the single point where
-        // the voice loop first claims the mic, so it's the right place to
-        // request. Failure to grant degrades voice to dormant — the rest of
-        // the app keeps running.
+        // macOS does not deterministically surface the microphone prompt
+        // from `AVAudioEngine` alone; without an explicit
+        // `AVCaptureDevice.requestAccess(for: .audio)` the app receives a
+        // silent input stream and the wizard's "request at first use"
+        // contract is violated. This is the single point where the voice
+        // loop first claims the mic, so it's the right place to ask.
+        // (audit trail: 2026-05-06 voice-permission fix.)
         let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         let micGranted: Bool
         switch micStatus {
@@ -1193,32 +1396,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             systemLogger?.warning("installVoice: graph opened but ringBuffer is nil — wake-word DAG not started")
         }
 
-        // Wire teardown step 1 (VOICE-10): cancel wake-word inference before
-        // the engine stops. Without this, the detached feed Task races the
-        // ring deallocation during graph rebuilds.
+        // Cancel wake-word inference before the engine stops — otherwise
+        // the detached feed Task races the ring deallocation during graph
+        // rebuilds. (VOICE-10.)
         await graphOwner.setCancelInFlight { [wakeWordDAG] in
             await wakeWordDAG.cancel()
         }
 
-        // Construct VoiceController. Plan 09-04 (D-09 + D-11) replaces the
-        // three Null placeholder adapters with the production adapter triad:
-        //
-        //   - VoiceOrchestratorAdapter wraps `self.agentOrchestrator` and
-        //     surfaces SubmitOutcome.rejected reasons to HUDBannerCoordinator.
-        //   - VoiceTTSAdapter wraps a TTSEngineActor (currently nil — engine
-        //     construction lands in a follow-on plan; the adapter no-ops
-        //     gracefully so the rest of the wiring goes live).
-        //   - VoiceBusEmitterAdapter wraps an OutboundBatcher whose sink is
-        //     the WebviewBridge (audio-level RMS → RingMesh pulse, ~30 Hz).
-        //
-        // BLOCKER-1: `transcriptStore: self.turnTranscriptStore` — the voice
-        // adapter appends user-side text to the transcript store after every
-        // submit/cancelAndSubmit so MemoryExtractionCoordinator's drain finds
-        // non-nil pair text.
-        //
-        // WARNING-5: this method runs AFTER installAgent (install order
-        // locked in applicationWillFinishLaunching). If the agent install
-        // failed (orchestrator nil), the voice subsystem stays dormant.
+        // The production adapter triad replaces the three earlier Null
+        // placeholders:
+        //   - `VoiceOrchestratorAdapter` wraps `agentOrchestrator` and
+        //     surfaces `SubmitOutcome.rejected` reasons to the banner
+        //     coordinator. Requires `turnTranscriptStore` so the adapter
+        //     can append user-side text after every submit /
+        //     cancelAndSubmit — without that append, the memory
+        //     coordinator's drain sees nil pair text. (BLOCKER-1.)
+        //   - `VoiceTTSAdapter` wraps a `TTSEngineActor` (tier-1
+        //     AVSpeechSynthesizer today; tier-2 Orpheus is gated on the
+        //     ~6 GB weight download).
+        //   - `VoiceBusEmitterAdapter` wraps an `OutboundBatcher` whose
+        //     sink is the `WebviewBridge` (audio-level RMS → RingMesh
+        //     pulse, ~30 Hz coalesced).
+        // (audit trail: Plan 09-04 / D-09 + D-11.)
         let bannerAdapter = AppDelegateBannerAdapter(coordinator: bannerCoordinator)
 
         guard let agentOrch = self.agentOrchestrator else {
@@ -1233,24 +1432,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.voiceOrchestratorAdapter = orchAdapter
 
-        // Track B-3 (2026-05-03 voice audit fix): construct a real TTS
-        // engine via TTSEngineWiring (lives in App/Voice/ so the
-        // VISION-03 Layer 3 gate doesn't see TTSEngine* in this file).
-        // Tier-1 (AVSpeechSynthesizer) wires alone — tier-2 (Orpheus)
-        // is gated behind the ~6GB weight download; tier-2 requests
-        // degrade to tier-1 transparently. Coverage:
-        // TTSEngineActorTier1Tests (4 cases incl. real AVSpeech).
+        // Real TTS engine via `TTSEngineWiring`. The wiring helper lives in
+        // `App/Voice/` so the VISION-03 Layer 3 gate doesn't see
+        // `TTSEngine*` symbols in this file. Tier-1 (AVSpeechSynthesizer)
+        // wires alone here; tier-2 (Orpheus) is gated behind the ~6 GB
+        // weight download and degrades to tier-1 transparently.
+        // (audit trail: 2026-05-03 voice audit / Track B-3.)
         let ttsAdapter = VoiceTTSAdapter(engine: VoiceOutputWiring.makeTier1Engine())
 
-        // OutboundBatcher wired with the live webviewBridge as its sink.
-        // The batcher coalesces high-frequency audio-level RMS at ~30 Hz
-        // before crossing the JS-call boundary.
-        //
-        // Phase E (2026-05-03): the batcher is now constructed in
-        // installAgent (so the .bus forwarder works even when voice DAG
-        // short-circuits on missing models). Reuse it here. If installAgent
-        // also failed to set it (no webviewBridge), fall back to the
-        // dormant emitter so audio-level still degrades gracefully.
+        // Reuse the `OutboundBatcher` constructed by `installAgent`. The
+        // batcher coalesces high-frequency audio-level RMS at ~30 Hz
+        // before crossing the JS-call boundary. It moved up to
+        // `installAgent` so the bus forwarder works even when the voice
+        // DAG short-circuits on missing models (Phase E hoist). If even
+        // `installAgent` couldn't construct one (no `webviewBridge`),
+        // fall back to the dormant emitter so audio-level emissions
+        // degrade gracefully instead of crashing.
         let busAdapter: any BusOutboundEmitter
         if let batcher = self.outboundBatcher {
             busAdapter = VoiceBusEmitterAdapter(batcher: batcher)
@@ -1259,16 +1456,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             busAdapter = DormantVoiceBusEmitter()
         }
 
-        // Track B-5 + B-7 (2026-05-03 voice audit fix): production chunk pump.
-        // VoiceController.startSTTSession opens an `AsyncStream<AudioChunk>`
-        // and hands the consumer side to the STT provider; the pump fills
-        // the producer side.
-        //
-        // P1-2 (audit 2026-05-04): the closure body lives in
+        // Production chunk pump. `VoiceController.startSTTSession` opens
+        // an `AsyncStream<AudioChunk>` and hands the consumer side to the
+        // STT provider; this pump fills the producer side from the live
+        // audio graph. The closure body lives in
         // `ProductionChunkPump.swift` so it can be exercised by an
-        // integration test against a real AudioGraphOwner + mock
-        // GraphBuilder, closing the "tested with synthetic pumps only"
+        // integration test against a real `AudioGraphOwner` + mock
+        // `GraphBuilder`, closing the "tested with synthetic pumps only"
         // gap that allowed BLOCKER-INT-1-style divergence.
+        // (audit trail: 2026-05-03 voice audit / Track B-5 + B-7;
+        // audit-2026-05-04 P1-2.)
         let chunkPump = makeProductionChunkPump { [weak self] in
             await MainActor.run { self?.audioGraphOwner }
         }
@@ -1286,11 +1483,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         voiceController = vc
 
-        // P1-1 (audit 2026-05-04): wire AudioLevelEmitter so the listening-state
-        // HUD ring pulses on real mic RMS. The emitter consumes a dedicated
-        // BufferBroadcaster subscription so it does NOT steal samples from
-        // WakeWordDAG / chunkPump (Track B-7 invariant). VoiceController.start()
-        // / stop() are driven from doTransition's listening-boundary edges.
+        // Wire `AudioLevelEmitter` so the listening-state HUD ring pulses
+        // on real mic RMS. The emitter consumes a dedicated
+        // `BufferBroadcaster` subscription so it does NOT steal samples
+        // from `WakeWordDAG` / `chunkPump` (Track B-7 invariant).
+        // `VoiceController.start()` / `.stop()` drive from
+        // `doTransition`'s listening-boundary edges.
+        // (audit trail: audit-2026-05-04 P1-1.)
         if let levelSubscription = await graphOwner.subscribe() {
             let emitter = AudioLevelEmitter(subscription: levelSubscription, bus: busAdapter)
             await vc.setAudioLevelEmitter(emitter)
@@ -1298,48 +1497,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             systemLogger?.warning("installVoice: AudioGraphOwner.subscribe() returned nil — HUD ring pulse degraded")
         }
 
-        // Transfer ownership of the continuation to VoiceController.
-        // The coordinator's subscriber task continues to drain; VoiceController
-        // is now the producer.
+        // Transfer continuation ownership to `VoiceController`. The
+        // coordinator's subscriber Task continues to drain; the controller
+        // is now the sole producer. Setting the dormant slot to nil
+        // releases our hold on the continuation.
         dormantVoiceContinuation = nil
 
-        // Wire PushToTalk (VOICE-13).
+        // PTT hotkey binding is deferred to the wizard / Settings UI —
+        // unbound at launch. (VOICE-13.)
         let ptt = PushToTalk(controller: vc)
-        // PTT hotkey binding is deferred to the wizard / user preference; unbound at launch.
         pushToTalk = ptt
 
-        // Wire MuteWakeWord (VOICE-12).
+        // Menu-bar wake-word mute toggle. (VOICE-12.)
         if let menu = menuBarController?.contextMenu {
             muteWakeWord = MuteWakeWord(controller: vc, wakeWordDAG: wakeWordDAG, menuBarMenu: menu)
         }
 
-        // Start the voice loop.
         await vc.start()
         systemLogger?.info("installVoice: VoiceController started")
     }
 
-    // MARK: - Memory install (Plan 07-06 — mirrors installVoice)
+    // MARK: - Memory install
 
-    /// Constructs and starts the memory subsystem.
+    /// Constructs and starts the memory subsystem. The 2026-05-11 D-5/D-6
+    /// closure changed the boot policy: `MemoryStore.init` is now a
+    /// hard-block. Vec0 is statically linked via `CSQLiteVec`, so init
+    /// has only two failure modes — file-system / permission error on
+    /// the DB path, or an extraordinarily rare SQLite-internal failure.
+    /// Both are operator-environment problems the user MUST be told
+    /// about, not papered over.
     ///
-    /// Bootstrap order (mirrors installVoice's six-step pattern):
-    ///   1. Build deps: jarvis.db URL under Application Support.
-    ///   2. Construct MemoryStore — opens DB + loads vec0.dylib + migrates.
-    ///      Failure is non-fatal: agent runs without memory until the user
-    ///      resolves it (vec0.dylib bundling is forwarded to Phase 8).
-    ///   3. Wire `replayLog` sink so MemoryStore.applyOp can record
-    ///      ReplayEvent.memoryMutation through to the on-disk replay log.
-    ///   4. Construct MemoryExtractor on top of OllamaProvider configured for
-    ///      qwen2.5-coder:32b.
-    ///   5. Construct MemoryExtractionOrchestrator (bounded AsyncChannel
-    ///      capacity 32, dropOldest, serial drain). start() spawns the
-    ///      consumer Task. The applyOp closure adapts the orchestrator's
-    ///      Int64 source-turn-id to MemoryStore.applyOp.
-    ///   6. Construct MemoryExtractionCoordinator and try to subscribe to
-    ///      AgentOrchestrator.events. AgentOrchestrator wiring lands in a
-    ///      future plan; until then the coordinator is constructed but its
-    ///      `start(...)` call is skipped — see SUMMARY's Deferred wiring.
-    ///   7. Log success.
+    /// Failure path: `Logger.critical` + `TCCAlertService.presentHardBlock`
+    /// + `NSApp.terminate(nil)`. Matches the existing entitlement /
+    /// config-malformed hard-block pattern. (Not `NSAlert.runModal` —
+    /// that's forbidden by `scripts/check-no-modal-presentation.sh`.)
+    ///
+    /// Bootstrap sequence:
+    ///   1. Build the `jarvis.db` URL under Application Support.
+    ///   2. Construct `MemoryStore`. Hard-block on failure.
+    ///   3. Wire the `replayLog` sink so `MemoryStore.applyOp` records
+    ///      `ReplayEvent.memoryMutation` through to the on-disk log.
+    ///   4. Construct `MemoryExtractor` on `OllamaProvider` configured for
+    ///      `qwen2.5-coder:32b` (CLAUDE.md known-good local baseline).
+    ///   5. Construct `MemoryExtractionOrchestrator` (bounded channel,
+    ///      capacity 32, `.dropOldest`, serial drain) and start its
+    ///      consumer Task. `applyOp` adapts the orchestrator's Int64
+    ///      trigger-turn-id to `MemoryStore.applyOp`.
+    ///   6. Construct `MemoryExtractionCoordinator`. `installAgent`
+    ///      subscribes it to the broadcaster's `.memory` priority stream.
+    ///   7. Register `forget_fact` + `search_memory` into the shared
+    ///      `inProcessToolRegistry`.
     @MainActor
     func installMemory() async {
         // 1. DB URL.
@@ -1347,34 +1554,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .deletingLastPathComponent()
             .appendingPathComponent("jarvis.db")
 
-        // 2. MemoryStore. **Boot policy reversed 2026-05-11 (D-5/D-6 closure).**
-        //    Track-D D-1 (commit 75a10be, 2026-05-04) made MemoryStore.init
-        //    failures non-fatal: store stayed nil, extractor ran with a no-op
-        //    sink, the app booted with dormant memory. That degradation hid
-        //    the entire B-02 / B-04 / B-05 bug class — silent failures by
-        //    construction. The 2026-05-07 API-first pivot's thesis is "no
-        //    silent failures"; this is the corresponding substrate change.
-        //
-        //    Today: vec0 is statically linked via CSQLiteVec
-        //    (jkrukowski/SQLiteVec). MemoryStore.init has only two failure
-        //    modes: (a) file-system / permission error on the DB path, (b)
-        //    extraordinarily rare SQLite-internal failure. Both are
-        //    operator-environment problems the user MUST be told about,
-        //    not papered over.
-        //
-        //    Policy: fail loud. Logger.critical + NSAlert + exit(78). The
-        //    app refuses to launch with a non-working memory store. Users
-        //    fix the underlying issue (disk permissions, corrupt DB,
-        //    missing entitlement) once and the app works thereafter.
+        // 2. MemoryStore. Hard-block on failure per D-5/D-6 — see method
+        //    docstring above for the policy + the prior Track-D D-1 era
+        //    that this reversed.
         let store: MemoryStore
         do {
             store = try MemoryStore(databaseURL: dbURL)
         } catch {
-            // Matches the existing hard-block pattern (config malformed,
-            // entitlements missing): Logger.critical + TCCAlertService
-            // .presentHardBlock + NSApp.terminate. Uses the same banner-
-            // panel-based "hard block" UX — NOT NSAlert.runModal which is
-            // forbidden per scripts/check-no-modal-presentation.sh.
             let description = String(describing: error)
             systemLogger?.critical(
                 "installMemory: MemoryStore.init failed — \(description). Hard-blocking; check disk permissions or move jarvis.db aside."
@@ -1388,13 +1574,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.memoryStore = store
         // Vec0 is statically linked via auto-extension; search is always
-        // available when the store opens. The split between "store works"
-        // and "search works" the D-1 era introduced no longer applies.
+        // available when the store opens. The pre-D-5/D-6 split between
+        // "store works" and "search works" no longer applies.
         self.memorySearchAvailable = true
         let searchAvailable = true
 
-        // 3. Wire the replay sink. After 2026-05-11 D-5/D-6 closure `store`
-        //    is non-optional (we exit(78) earlier if init failed).
+        // 3. Wire the replay sink. `store` is non-optional after D-5/D-6
+        //    (we'd have terminated above if init had failed).
         if let log = replayLog {
             await store.setReplayLog(AppDelegateMemoryReplaySink(replayLog: log))
         } else {
@@ -1408,17 +1594,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let extractor = MemoryExtractor(provider: extractorProvider)
 
-        // 5. Background orchestrator. Held strongly; start() spawns drain.
-        //    Track-D D-1: when `store` is nil the applyOp closure logs +
-        //    drops the op instead of throwing — the drain loop survives
-        //    so a future store reconstruction (e.g., installMemory retry)
-        //    can replace this orchestrator if needed.
-        //    Track-D D-3: priorFactsLookup returns up to 50 recent active
-        //    facts so the extractor can emit UPDATE ops (mem0 supersede
-        //    pattern) instead of always ADDing. When `store` is nil the
-        //    closure returns []; pre-D-3 behavior preserved on the no-store
-        //    path. 50 is a deliberate cap — RESEARCH §5 caps the rendered
-        //    priorFacts block at ~4 KB (~50 facts at typical S/P/O length).
+        // 5. Background orchestrator. Held strongly; `start()` spawns the
+        //    drain Task. `priorFactsLookup` caps at 50 recent active facts
+        //    so the extractor can emit UPDATE ops (mem0 supersede pattern)
+        //    instead of always ADDing. The 50 cap matches RESEARCH §5's
+        //    ~4 KB priorFacts budget. `applyOp` logs-and-drops when
+        //    `memoryStore` is nil (drain loop survives, so a future
+        //    reconstruction can replace this orchestrator).
+        //    (audit trail: Track-D D-1 / D-3.)
         let logger = self.systemLogger
         let memoryOrch = MemoryExtractionOrchestrator(
             extractor: extractor,
@@ -1439,19 +1622,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         await memoryOrch.start()
         memoryExtractionOrchestrator = memoryOrch
 
-        // 6. Construct the MemoryExtractionCoordinator. Plan 09-01 moves the
-        //    `coord.start(...)` call into `installAgent()` — this is where the
-        //    OrchestratorEventBroadcaster's memory child stream is allocated
-        //    and the BLOCKER-1-fixing `lookupTurnContent` closure is bound.
+        // 6. Construct the coordinator. `installAgent` calls
+        //    `coord.start(...)` once the broadcaster's `.memory` priority
+        //    child stream exists and the BLOCKER-1-fixing
+        //    `lookupTurnContent` closure is bound.
         let coord = MemoryExtractionCoordinator(memoryOrchestrator: memoryOrch)
         memoryExtractionCoordinator = coord
 
-        // 7. Track-D D-2: in-process MCP tool registry.
-        //    Build adapters that bridge MCP's HybridSearchDispatching /
-        //    ForgetFactDispatching protocols to the Memory.HybridSearch and
-        //    MemoryStore.forgetFact actor methods.
-        // D-5/D-6 closure: `store` is non-optional now — we exit on init
-        // failure. No `if let` needed.
+        // 7. Register memory tools into the SHARED in-process registry.
+        //    Adapters bridge MCP's `HybridSearchDispatching` /
+        //    `ForgetFactDispatching` protocols to `Memory.HybridSearch` /
+        //    `MemoryStore.forgetFact`. (audit trail: Track-D D-2.)
         let forgetDispatcher: any ForgetFactDispatching = ForgetFactStoreAdapter(store: store)
         var searchDispatcher: (any HybridSearchDispatching)? = nil
         if searchAvailable {
@@ -1468,11 +1649,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Plan 10-02c (B-01b): self.inProcessToolRegistry is now eagerly
-        // default-initialized at property declaration so installMCP can
-        // hand the SAME instance to MCPRuntimeWiring.build for the dispatch
-        // routing composite. Memory tools register INTO the existing
-        // registry rather than into a fresh one constructed here.
+        // Register INTO the shared `inProcessToolRegistry` — never
+        // construct a fresh one here. See the property docstring on
+        // `inProcessToolRegistry` for the three-site sharing contract.
+        // The `??` is dead-defensive: the property is eagerly
+        // default-initialized at declaration. (Plan 10-02c / B-01b.)
         let registry = self.inProcessToolRegistry ?? InProcessToolRegistry()
         self.inProcessToolRegistry = registry
         await Self.populateMemoryTools(
@@ -1529,22 +1710,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Agent install (Plan 09-01)
+    // MARK: - Agent install
 
-    /// Bootstrap the AgentOrchestrator + OrchestratorEventBroadcaster +
-    /// TurnTranscriptStore wiring (Phase 9 SC#1, SC#2). Closes INT-07-01:
-    /// memory extraction now reaches MemoryExtractionCoordinator's drain
-    /// AND `lookupTurnContent` returns NON-NIL pairs.
+    /// Bootstraps the agent subsystem: `AgentOrchestrator` +
+    /// `OrchestratorEventBroadcaster` + `TurnTranscriptStore` and six
+    /// broadcaster subscribers (memory, transcript, devOverlay,
+    /// frameAttach, voice, bus). Without this method running, the
+    /// orchestrator + broadcaster + every downstream consumer stays
+    /// dormant — which is the runtime-dormancy class of bug the
+    /// 2026-05-04 / 2026-05-12 audits surfaced repeatedly.
     ///
-    /// Six-step pattern (S-2):
-    ///   1. Required deps from earlier installs.
-    ///   2. Provider factory closure (closes over Keychain).
-    ///   3. Construct the AgentOrchestrator (existing 7-arg signature; visionRouter
-    ///      and presenceSnapshot wiring lands in Plans 2 + 3).
-    ///   4. Construct the OrchestratorEventBroadcaster + start drain (D-08).
-    ///      Construct the TurnTranscriptStore (BLOCKER-1 source of truth).
-    ///   5. Subscribe consumers (memory + transcript + devOverlay).
-    ///   6. Log success.
+    /// Fail-soft policy: returns early when any required dep is nil
+    /// (mcp / replay / config) or when `replayLog.beginSession` throws.
+    /// In both cases the agent stays dormant and the rest of the app
+    /// continues; the boot-health probe set reports the dormancy.
+    ///
+    /// Step sequence:
+    ///   1. Guard on `mcpRuntime`, `replayLog`, `configStore` (set by
+    ///      earlier installs that this Task awaited).
+    ///   2. Build the provider factory closure — `AnthropicProvider`
+    ///      uses `AnthropicAPIKeyProvider.make` so keychain errors
+    ///      surface as `LLMProviderError.transport` instead of being
+    ///      silently substituted with empty headers (the pre-fix path
+    ///      was `(try? get) ?? ""`, which made auth failures
+    ///      indistinguishable from `streamTruncatedFinal`).
+    ///   3. Construct the orchestrator with `visionRouter`,
+    ///      `presenceSnapshot`, `sessionHistoryLookup`, and a lazy tool
+    ///      catalog resolver (in-process tools register late — see
+    ///      `toolCatalogResolver`).
+    ///   4. Hoist `OutboundBatcher` up here (out of `installVoice`) so
+    ///      the `.bus` subscriber works even when the voice DAG
+    ///      short-circuits on missing models.
+    ///   5. Construct `OrchestratorEventBroadcaster` +
+    ///      `TurnTranscriptStore` and attach six subscribers:
+    ///        5a. memory      — extraction coordinator drain.
+    ///        5b. transcript  — assistant-side tokenDelta accumulator.
+    ///        5c. devOverlay  — `DevSnapshotEmitter` feed.
+    ///        5d. frameAttach — release captured image bytes on turnEnd.
+    ///        5e. voice       — turn-source-filtered voice translator.
+    ///        5f. bus         — `BusForwarder.drain` → chat panel.
     @MainActor
     private func installAgent() async {
         // 1. Required deps from earlier installs.
@@ -1555,23 +1759,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // 2. Provider factory closure — closes over the keychain reference.
-        //    `keychainStore` is a non-Sendable existential; capture a local
-        //    Sendable copy for the closure.
+        // 2. Provider factory closure — closes over a local Sendable copy
+        //    of the keychain reference (the existential itself is not
+        //    Sendable). The propagating `AnthropicAPIKeyProvider.make`
+        //    surfaces real `KeychainError`s as
+        //    `LLMProviderError.transport(...)` so they reach the chat
+        //    panel via `BusForwarder`. The pre-fix `(try? get) ?? ""`
+        //    pattern silently substituted an empty `x-api-key` header,
+        //    making auth failures indistinguishable from a stale key —
+        //    the user only ever saw `streamTruncatedFinal` after
+        //    Anthropic's 401 → SSE EOF cascade. (audit trail: Phase E
+        //    2026-05-03 audit; coverage in `AnthropicAPIKeyProviderTests`.)
         let keychainStoreLocal: any KeychainStore = self.keychainStore
         let providerFactory: @Sendable (ProviderSelection) async throws -> any LLMProvider = {
             selection in
             switch selection {
             case .anthropic:
-                // Phase E (2026-05-03 audit fix): use the propagating
-                // builder so a real KeychainError surfaces as
-                // `LLMProviderError.transport(...)` and reaches the chat
-                // panel via BusForwarder. The previous `(try? get) ?? ""`
-                // pattern silently substituted an empty `x-api-key` header
-                // and made auth failures indistinguishable from a stale
-                // key — the user only saw `streamTruncatedFinal` after
-                // Anthropic's 401 → SSE EOF cascade.
-                // Coverage: AnthropicAPIKeyProviderTests.
                 return AnthropicProvider(
                     apiKeyProvider: AnthropicAPIKeyProvider.make(keychain: keychainStoreLocal)
                 )
@@ -1580,23 +1783,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 3. Construct the orchestrator. Plan 09-02 (D-01) — passes
-        //    `visionRouter:` so image-bearing turns dispatch through the
-        //    pre-stream branch + post-response escalation hook.
-        //    Plan 09-03 (D-13/D-14) — passes `presenceSnapshot:` so runTurn
-        //    can append ambient presence enrichment to the system prompt.
+        // 3. Construct the orchestrator. Image-bearing turns dispatch
+        //    through `visionRouter` (pre-stream branch + post-response
+        //    escalation hook). `presenceSnapshot` lets `runTurn` append
+        //    ambient presence enrichment to the system prompt.
         //
-        //    Phase E (2026-05-03 smoke test): also calls
-        //    `replayLog.beginSession(...)` to insert the parent row in the
-        //    `sessions` table. Without this, every `startTurn` violates the
-        //    `turns.session_id REFERENCES sessions(session_id)` FK and the
-        //    orchestrator returns `SubmitOutcome.rejected(reason:
-        //    .configError)` for every text turn — surfacing in the chat
-        //    panel as "Config error — see ~/Library/Logs/Jarvis/system.log."
-        //    Production code prior to this commit only ever called
-        //    `beginSession` from tests, so the sessions table was empty on
-        //    every cold launch and no turn could persist. App version + build
-        //    string come from Info.plist; if absent we fall back to "dev".
+        //    `beginSession` inserts the parent row in the `sessions`
+        //    table; without it, every `startTurn` violates the
+        //    `turns.session_id REFERENCES sessions(session_id)` FK and
+        //    the orchestrator returns
+        //    `SubmitOutcome.rejected(reason: .configError)` for every
+        //    text turn (surfacing as "Config error — see system.log" in
+        //    the chat panel). Pre-fix production only called
+        //    `beginSession` from tests; the sessions table was empty on
+        //    every cold launch.
+        //    (audit trail: Plan 09-02 D-01 / 09-03 D-13+D-14 / Phase E
+        //    2026-05-03 smoke test.)
         let info = Bundle.main.infoDictionary ?? [:]
         let appVersion = info["CFBundleShortVersionString"] as? String ?? "dev"
         let buildSHA = info["CFBundleVersion"] as? String ?? "dev"
@@ -1957,22 +2159,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    // MARK: - Self-knowledge install (Plan 10-01)
+    // MARK: - Self-knowledge install
 
-    /// Plan 10-01 / SELF-01..04. Registers the four read-only self-knowledge
-    /// MCP tools into the in-process registry built by installMemory.
+    /// Registers the read-only self-knowledge tools (`list_audio_devices`,
+    /// `list_camera_devices`, `get_active_audio_route`, `get_self_state`,
+    /// `get_memory_stats`) into the shared `inProcessToolRegistry`. Runs
+    /// AFTER `installVoice` so `audioGraphOwner` is live for
+    /// `AudioGraphRouteAdapter`.
     ///
-    /// Runs AFTER installVoice so the live `audioGraphOwner` reference is
-    /// available for `AudioGraphRouteAdapter`. If `inProcessToolRegistry`
-    /// or `audioGraphOwner` are nil (memory short-circuited or voice
-    /// failed to construct the graph), this method degrades gracefully —
-    /// the tools that don't depend on the missing reference still
-    /// register, the rest are skipped with a single warning.
+    /// Degrade-gracefully policy: tools whose dependencies are nil are
+    /// skipped with a single warning rather than dropping the whole
+    /// install — `list_audio_devices` + `list_camera_devices` are pure
+    /// metadata queries with no captured actor, so they always register.
     ///
-    /// D-10: every tool registers with `requiresConfirmation = false`
-    /// explicitly (read-only, no side effects). The flag is on the tool
-    /// type itself; no defaulting at the registry boundary.
-    /// D-09: dispatchers do NOT cache — every call queries fresh state.
+    /// Invariants:
+    ///   - Every tool registers with `requiresConfirmation: false`
+    ///     explicitly (read-only, no side effects). The flag is on the
+    ///     tool type itself; the registry doesn't default it. (D-10.)
+    ///   - Dispatchers do NOT cache — every call queries fresh state so
+    ///     the model never reads a stale snapshot. (D-09.)
+    /// (audit trail: Plan 10-01 / SELF-01..04 + D-5/D-6
+    /// `get_memory_stats` add.)
     @MainActor
     func installSelfKnowledgeTools() async {
         guard let registry = self.inProcessToolRegistry else {
@@ -2230,24 +2437,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Vision install (Plan 07-06 — mirrors installVoice)
+    // MARK: - Vision install
 
-    /// Constructs and starts the vision subsystem.
+    /// Constructs and starts the vision subsystem. Spawns the camera
+    /// capture session, presence monitor (which owns the single
+    /// `PresenceSignalBus`), vision router ladder (T1/T2/T3), and the
+    /// frame-attach controller.
     ///
-    /// VISION-03 architectural boundary: PresenceSignalBus is constructed
-    /// EXACTLY ONCE (by PresenceMonitor — only PresenceMonitor can
-    /// construct the bus per 07-04's `internal init`) and shared by
-    /// reference (the Sendable struct value type wraps the AsyncStream)
-    /// between two read-only consumers (ContextBuilder for D-10
-    /// system-prompt enrichment and HudStateCoordinator for D-10 subtle
-    /// ring indicator). No subscriber of the bus has any reference to
-    /// JarvisTTS or to the AgentOrchestrator.runTurn / cancelAndSubmit
-    /// code path — scripts/check-presence-vision-isolation.sh enforces.
+    /// Architectural invariant — VISION-03: `PresenceSignalBus` is
+    /// constructed EXACTLY ONCE (by `PresenceMonitor` — only that type
+    /// can call the bus's `internal init` per 07-04's design) and shared
+    /// by reference between two read-only consumers (`ContextBuilder`
+    /// for system-prompt enrichment, `HudStateCoordinator` for the
+    /// subtle ring indicator). The bus must have ZERO subscribers in
+    /// `JarvisTTS` or any code path reaching
+    /// `AgentOrchestrator.runTurn` / `.cancelAndSubmit` — presence is
+    /// ambient, not a turn input. Enforced by
+    /// `scripts/check-presence-vision-isolation.sh`.
     ///
-    /// D-09: presence-on-by-default after first TCC grant. CameraCapture's
-    /// `becameAuthorized()` is the public entry that flips the session live
-    /// once Camera TCC has been granted; before that, `open()` throws and
-    /// the degradation watcher surfaces the banner.
+    /// TCC policy: request camera permission BEFORE `open()` so the
+    /// first-launch path either gets the prompt or proceeds gracefully
+    /// degraded. The degradation watcher Task is spawned BEFORE the
+    /// request so a denial enqueues `.cameraDenied` cleanly.
+    /// (D-09 presence-on-by-default after first TCC grant.)
     @MainActor
     private func installVision() async {
         // 1. Camera capture session + degradation stream → HUD banner.
@@ -2438,12 +2650,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bannerCoordinator = HUDBannerCoordinator(panel: panel)
     }
 
+    /// Summons or dismisses the HUD panel. Gated on
+    /// `WebviewBridge.handshakeState == .armed` — any other state means
+    /// the JS side hasn't acknowledged `hello`, so popping the panel
+    /// would show an unresponsive black window. The banner path is the
+    /// graceful fallback.
     private func toggleHUD() {
         guard let panel = hudPanel else { return }
-        // Gate on handshake armed — don't summon an unresponsive HUD.
-        // `.armed` means the bus is usable; any other state (idle, sentHello,
-        // mismatched, timedOut) gets the "hud-not-ready" banner instead of
-        // popping an empty window.
         if let bridge = webviewBridge, bridge.handshakeState != .armed {
             bannerCoordinator?.enqueue(BannerContent(
                 id: "hud-not-ready",
@@ -2457,27 +2670,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if panel.isSummoned { panel.dismiss() } else { panel.summon() }
     }
 
-    /// @testable seam — XCTest calls this to drive the private
-    /// `toggleHUD()` without reaching for `perform(Selector(...))`. Production
-    /// code path is through the menu-bar left-click action and hotkey binder.
+    /// XCTest seam — drives `toggleHUD()` without reaching for
+    /// `perform(Selector(...))`. Production callers are the menu-bar
+    /// left-click action and the hotkey binder.
     func exposedToggleHUD() { toggleHUD() }
 
-    // MARK: - Bus wiring (Plan 02-03)
+    // MARK: - Bus wiring
 
-    /// Constructs the `WebviewBridge` around `hudPanel.webView`, wires the
-    /// handshake callbacks (armed → `coordinator.markReady()` + `onBusArmed`;
-    /// mismatch/timeout → `TCCAlertService.presentHardBlock` +
-    /// `onHandshakeMismatch`), installs the `WKNavigationDelegate` so the
-    /// handshake fires on `didFinish`, constructs + starts the HUD-08
-    /// `HudStateCoordinator` with three dormant producer streams (Phase 4/5/6
-    /// replace them), and loads the R3F bundle's `index.html` from the app
-    /// bundle. Called once during `applicationWillFinishLaunching` after
-    /// `installHUDPanel()`.
+    /// Wires Swift ↔ JS. Called once during
+    /// `applicationWillFinishLaunching` after `installHUDPanel()`. Owns:
     ///
-    /// Plan 03-05 replaces 02-03's `bus-harness.html` load target with
-    /// `index.html` (same `webview/` subdirectory, different entry). The
-    /// bus-harness stays in the bundle for the 02-04 parity script and as a
-    /// dev-debugging fallback.
+    ///   1. The `WKNavigationDelegate` that fires the handshake on first
+    ///      `didFinish`.
+    ///   2. The `WebviewBridge` (handshake callbacks: `armed` →
+    ///      `coordinator.markReady()` + `onBusArmed`; mismatch/timeout →
+    ///      `TCCAlertService.presentHardBlock` + `onHandshakeMismatch`).
+    ///   3. The single-writer `HudStateCoordinator` with three dormant
+    ///      producer streams (agent / voice / confirmation — later
+    ///      subsystems swap them out).
+    ///   4. The `onInbound` dispatcher (HUD camera button →
+    ///      `requestAttach`; chat panel `submit`/`cancelAndSubmit` →
+    ///      agent text path).
+    ///   5. Loading the R3F bundle's `index.html` from `webview/` in the
+    ///      app bundle. Missing entry HTML is a hard-block (no recovery
+    ///      path) except under XCTest, where the bundle resources may be
+    ///      absent.
+    ///
+    /// The `bus-harness.html` entry stays in the bundle for the bus
+    /// protocol parity script and dev debugging; production loads
+    /// `index.html`.
+    /// (audit trail: Plan 02-03 bridge + Plan 03-05 coordinator wiring.)
     private func installBus() {
         guard let panel = hudPanel else {
             systemLogger?.error("installBus called before hudPanel exists")
@@ -2705,9 +2927,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         devOverlayWindow?.toggle()
     }
 
-    /// Writes ONLY boolean presence indicators to the clipboard. The API key
-    /// VALUE is never fetched into a local variable or written anywhere.
-    /// SEC-01 / T-04-02 defense-in-depth.
+    /// Copies a debug state snapshot to the system clipboard. Writes ONLY
+    /// boolean presence indicators (`apiKeyStored`, `inputMonitoringGranted`,
+    /// `hotkeyBound`). The API key VALUE is never fetched into a local
+    /// variable or written anywhere — defense in depth against accidental
+    /// leakage into a user's pasted bug report.
+    /// (audit trail: SEC-01 / T-04-02.)
     private func copyStateDump() {
         var payload: [String: Any] = [:]
         payload["apiKeyStored"] = (try? keychainStore.get(.anthropic)) != nil
