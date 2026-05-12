@@ -3,6 +3,12 @@
 > A personal, always-on macOS AI assistant in the shape of the Iron Man HUD —
 > native Swift brain, R3F particle-ring face, voice-first, locally-grounded.
 
+[![License: MIT](https://img.shields.io/github/license/KofTwentyTwo/Jarvis)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/KofTwentyTwo/Jarvis/develop)](https://github.com/KofTwentyTwo/Jarvis/commits/develop)
+[![Issues](https://img.shields.io/github/issues/KofTwentyTwo/Jarvis)](https://github.com/KofTwentyTwo/Jarvis/issues)
+[![Platform: macOS 26](https://img.shields.io/badge/platform-macOS%2026%20Tahoe-blue)](https://www.apple.com/macos/)
+[![Swift 6](https://img.shields.io/badge/swift-6.0-orange)](https://swift.org)
+
 Jarvis is a hybrid native + embedded-web macOS app that runs as an ambient
 menu-bar presence. A Swift host owns the operating system (mic, camera,
 clipboard, AppleScript, hotkeys, persistent storage) and an agent loop that
@@ -13,10 +19,13 @@ ride on **MCP** (Model Context Protocol). Voice (wake-word, STT, TTS) and
 memory (SQLite + FTS5 + `sqlite-vec`, mem0-style extraction) are **fully
 local**: no cloud TTS/STT, no remote embeddings.
 
-It is built for one user on one machine — the author. There is no
-multi-tenancy, no auth, no commercial framing. The repo is public-shaped
-purely for portability across the author's machines and so AI coding agents
-can read it.
+**Scope:** built for one user on one machine — the author. There is no
+multi-tenancy, no auth, and no commercial framing. The repo is public so
+the code is portable across the author's machines and legible to AI
+coding agents; outside readers are welcome to lift the agent loop, typed
+JSON Bus, MCP runtime, voice pipeline, R3F HUD scaffold, or the eighteen
+boundary-gate linters if useful — but the product is not pitched at a
+general audience.
 
 > **Status:** alpha / under active development. `develop` is `0.1.0`. The
 > nine GSD phases shipped; the project is now in an audit-and-stabilize
@@ -25,6 +34,8 @@ can read it.
 > is done versus in flight.
 
 ## Screenshots
+
+<!-- TODO: ![HUD demo](docs/media/hud-demo.gif) — record and add separately. -->
 
 Screenshots are TBD — when there is something worth showing, it lands in
 [`assets/screenshots/`](assets/screenshots/) per the shot list in that
@@ -341,6 +352,54 @@ Style, commit conventions, and the GSD workflow live in
 
 ## License
 
-Personal use only. No license is granted; no contributions are solicited
-from outside collaborators. The repository is public-shaped purely for
-portability across the author's machines.
+Released under the [MIT License](LICENSE) — © 2026 James Maes /
+KofTwentyTwo. Use it, fork it, ship something better with it. The
+rationale and the alternatives that were considered live in
+[`.planning/decisions/license.md`](.planning/decisions/license.md).
+
+## Acknowledgments
+
+Jarvis stands on a stack of excellent open-source work. The most
+load-bearing dependencies:
+
+**LLM + agents**
+- [Anthropic Messages API](https://docs.anthropic.com/) — Claude Opus 4.7 as
+  the primary reasoning model.
+- [Ollama](https://ollama.ai) — local LLM runtime; Qwen 2.5-Coder for tool-
+  calling, `nomic-embed-text` for memory embeddings.
+- [Model Context Protocol Swift SDK](https://github.com/modelcontextprotocol/swift-sdk)
+  — typed `Client` / `Server` / `StdioTransport` so we don't roll our own
+  JSON-RPC framing.
+
+**Voice (fully local)**
+- [openWakeWord](https://github.com/dscripka/openWakeWord) — `hey_jarvis`
+  pretrained model running through ONNX Runtime.
+- [Silero VAD](https://github.com/snakers4/silero-vad) v6.2.1 — voice
+  activity detection.
+- [`onnxruntime-swift-package-manager`](https://github.com/microsoft/onnxruntime-swift-package-manager)
+  — wake-word + VAD inference in-process.
+- [`argmax-oss-swift`](https://github.com/argmaxinc/argmax-oss-swift) —
+  WhisperKit STT fallback + TTSKit streaming alternative.
+- [`mlx-audio-swift`](https://github.com/Blaizzy/mlx-audio-swift) — Orpheus
+  TTS via MLX, no Python sidecar.
+
+**Memory**
+- [SQLite](https://sqlite.org) + [FTS5](https://www.sqlite.org/fts5.html) —
+  keyword search and the canonical store.
+- [`sqlite-vec`](https://github.com/asg017/sqlite-vec) (via `sqlitevec`
+  SPM) — statically-linked vec0 vector extension.
+
+**HUD**
+- [React Three Fiber](https://r3f.docs.pmnd.rs/) + [Three.js](https://threejs.org/)
+  — particle ring, holographic chrome, agent-state-reactive shaders.
+- [pnpm](https://pnpm.io) + [Vite](https://vitejs.dev) — webview workspace
+  + bundle.
+
+**Swift platform**
+- [`swift-log`](https://github.com/apple/swift-log) — structured logging
+  feeding the Dev Overlay's Logs tab.
+- [`swift-nio`](https://github.com/apple/swift-nio) — async networking
+  primitives under MCP and HTTP providers.
+- [`yams`](https://github.com/jpsim/Yams) — YAML config parsing.
+
+The full dependency graph lives in each package's `Package.resolved`.
