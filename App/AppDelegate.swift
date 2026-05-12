@@ -1895,6 +1895,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             availableTools: [],
             availableToolsResolver: toolCatalogResolver,
             visionRouter: self.visionRouter,
+            // Audit 2026-05-12 F-V1: `hasRealT2Provider: false` because
+            // `installVision` wires `MissingT2Provider` (the real T2 sidecar
+            // is v1.1 work, GH issue #84). Without this gate, every low-
+            // confidence local T1 response escalated into MissingT2Provider
+            // and died with `t2ProviderUnavailable`. Flip to `true` only when
+            // a real T2 LLMProvider replaces `MissingT2Provider` above.
+            hasRealT2Provider: false,
             presenceSnapshot: PresenceStateSnapshot.shared,
             sessionHistoryLookup: sessionHistoryLookup
         )

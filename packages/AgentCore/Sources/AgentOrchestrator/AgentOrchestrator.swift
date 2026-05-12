@@ -91,6 +91,18 @@ public actor AgentOrchestrator {
     /// who care about that pre-route through their own dispatcher).
     private let visionRouter: VisionRouter?
 
+    /// Audit 2026-05-12 F-V1 — honest T2 availability flag. The orchestrator
+    /// previously derived `t2AvailableForThisTurn = (decision.tier != .t3Cloud)`,
+    /// passing `true` on every local-tier vision turn. In production T2 is
+    /// `MissingT2Provider` (no real T2 sidecar exists yet — that's v1.1, GH
+    /// issue #84). Combined with the router's escalate-on-low-confidence
+    /// heuristic, every short / "I'm not sure" T1 response escalated into
+    /// `MissingT2Provider.stream(...)` which throws `t2ProviderUnavailable`,
+    /// killing the turn. Until a real T2 provider is wired, production passes
+    /// `false`; tests that exercise T1→T2 escalation pass `true` and supply a
+    /// real mock T2 provider.
+    private let hasRealT2Provider: Bool
+
     /// Plan 09-03 / D-13 + D-14 — read-only ambient presence snapshot.
     /// `runTurn` queries `currentEnrichment()` during system-prompt
     /// composition and appends a plain sentence (e.g., "User is at the
@@ -168,6 +180,7 @@ public actor AgentOrchestrator {
         availableTools: [ToolSchema] = [],
         availableToolsResolver: (@Sendable () async -> [ToolSchema])? = nil,
         visionRouter: VisionRouter? = nil,
+        hasRealT2Provider: Bool = false,
         presenceSnapshot: PresenceStateSnapshot? = nil,
         sessionHistoryLookup: @escaping SessionHistoryLookup = AgentOrchestrator.emptySessionHistoryLookup,
         degradationSummary: String? = nil
@@ -181,6 +194,7 @@ public actor AgentOrchestrator {
         self.availableToolsList = availableTools
         self.availableToolsResolver = availableToolsResolver
         self.visionRouter = visionRouter
+        self.hasRealT2Provider = hasRealT2Provider
         self.presenceSnapshot = presenceSnapshot
         self.sessionHistoryLookup = sessionHistoryLookup
         self.degradationSummary = degradationSummary
@@ -314,11 +328,16 @@ public actor AgentOrchestrator {
                 explicitCloudOptIn: cloudOptIn
             )
             provider = await router.providerForTier(decision.tier)
-            // T2 is available iff we routed local — D-04 ships with
-            // t2Provider == t1Provider, but evaluatePostResponse correctly
-            // stays-on-T1 when t2Available == false, so passing the actual
-            // tier here keeps the contract honest.
-            t2AvailableForThisTurn = (decision.tier != .t3Cloud)
+            // Audit 2026-05-12 F-V1: T2 is available iff we routed local AND
+            // a real T2 provider is wired. Production passes
+            // `hasRealT2Provider: false` because AppDelegate wires
+            // `MissingT2Provider` (the real T2 sidecar is v1.1 work, GH
+            // issue #84). Without the AND-gate, every low-confidence local
+            // T1 response escalated into `MissingT2Provider.stream(...)`
+            // which throws `t2ProviderUnavailable`, killing the turn. The
+            // router's `evaluatePostResponse(..., t2Available: false)`
+            // correctly stays-on-T1 in that case.
+            t2AvailableForThisTurn = (decision.tier != .t3Cloud) && hasRealT2Provider
             imageBearingTurns.insert(turnId)
         }
 
