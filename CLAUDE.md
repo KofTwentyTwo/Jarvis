@@ -6,6 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **GitHub Issues at https://github.com/KofTwentyTwo/Jarvis/issues is the canonical tracker for all bugs, audit findings, and feature work.** `docs/TODO.md` is retained for **historical reference only** — do NOT add new entries to it. Migration phases live as `epic` issues; bugs as `bug` issues; audit findings as `audit-finding` issues. Label conventions: `severity:<critical|high|medium|low>`, `area:<subsystem>`. New work always opens an issue; commits reference issues with `Closes #N` or `Refs #N`.
 
+## Roadmap
+
+**Current roadmap:** `.planning/ROADMAP-2026-05-12.md` — user-outcome-focused milestone roadmap. Supersedes `.planning/ROADMAP.md` (2026-04-22, build-phase roadmap, which describes shipped phases).
+
+**Milestones** (https://github.com/KofTwentyTwo/Jarvis/milestones): all 142 open issues are assigned to one of six milestones.
+- **v0.1 — It actually works (basic capabilities)** — 28 issues. Critical audit findings that break basic capabilities (voice, listening, seeing, facts, debugging dialogs, basic UI). Tactical patches so the user has a working Jarvis NOW; some will be re-fixed during API migration.
+- **v0.2 — Observable + stable (audit punch-list)** — 23 issues. Remaining audit findings (MED/LOW), plus PTT (#87) and Input Monitoring TCC banner (#88).
+- **v0.5 — API M-0..M-3 (Self / Settings / Diagnostics surfaces)** — 31 issues. Migration phases M-0 substrate, M-1 Self, M-2 Settings, M-3 Diagnostics. Closes B-08.
+- **v0.8 — API M-4..M-7 (Memory / Vision / Voice / Turn surfaces)** — 36 issues. Migration phases M-4 Memory, M-5 Vision (B-03), M-6 Voice (B-04, B-05), M-7 Turn (B-06 partial).
+- **v1.0 — Shipping (commenting, behavioral gates, first-launch polish)** — 13 issues. Code-commenting style rollout, doc reconciliation. Orthogonal to migration.
+- **v1.1 — Backlog (Orpheus, WhisperKit, Voice Log, presence, advanced)** — 11 issues. Deferred capabilities per migration plan §10.
+
 ## Repository state
 
 Post-v0.12.0 audit-and-stabilize. All 9 GSD phases shipped (Foundations → Bus → HUD → Agent Core → MCP → Voice → Memory+Vision → Hardening → Orchestrator Wiring). Active workstream is the v1.0 API migration (M-0..M-7 epics in GitHub Issues) plus the 2026-05-12 audit follow-ups. Day-to-day handoff narrative still lives in `docs/SESSION-STATE.md`; live triage has moved to GitHub Issues. Milestone-level state lives in `.planning/STATE.md`.
