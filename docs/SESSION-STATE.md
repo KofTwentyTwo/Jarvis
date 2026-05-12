@@ -1,6 +1,10 @@
 # Session State
 
-**Last Updated:** 2026-05-11 (morning — B-02 tactical patch shipped; migration M-0 next)
+**Last Updated:** 2026-05-12 (issues migrated to GitHub)
+
+> **Live state lives in GitHub Issues:** https://github.com/KofTwentyTwo/Jarvis/issues
+>
+> This file preserves session-handoff narrative. The bullet-list pending-work sections have been replaced with crosswalks to issue numbers. Read narrative paragraphs for historical context; check GitHub for current state of any item.
 
 ## ▶ Next Session: M-0 (pre-migration gates) — read FIRST
 
@@ -179,13 +183,18 @@ All 18 boundary gates green; App target builds clean; Voice + MCP packages compi
 |--------|--------|
 | `develop` | At `2d9a25a`, ahead of origin (push pending). Tree clean. |
 
-## Pending Work
+## Pending Work — moved to GitHub Issues
 
-- [ ] **AudioLevelEmitter production wiring** — emitter is constructed only in tests today; AppDelegate doesn't yet build/start it. When wired, it MUST call `audioGraphOwner.subscribe()` (the broadcaster fan-out is in place from Track B-7). Small follow-up.
-- [x] **Track C** — vision: closed in commits `7a5543a` (C-1) → `ea09fd4` (C-2) → `4159d44` (C-3) → `df6a4d2` (C-4) → `eac16c9` (C-5) → `19362f6` (C-6). Vision 56 → 72; HUD vitest 94 → 97. Real T2 sidecar wiring (binary bundling + codesigning + feature flag) deferred to a future track — Track C-4 made the missing wiring explicit via `MissingT2Provider`, not silent.
-- [x] **Track D** — memory code-work: closed in `75a10be` (D-1) → `707c45b` (D-2) → `51750c1` (D-3) → `c3bd0a5` (D-4) → `6e249ee` (D-5/D-6 skeletons). Memory 86 → 88; gates green; app builds clean. **Deferred to user (environment work):** D-5 (run `bash scripts/build-sqlite-with-extensions.sh` after pinning SQLite version/SHA), D-6 (run `bash scripts/fetch-sqlite-vec.sh` after pinning sqlite-vec tag/SHA), D-7 (`ollama pull nomic-embed-text` + `ollama pull qwen2.5-coder:32b`). Once those land + first cold launch initializes the schema, memory is end-to-end live.
-- [ ] **Pre-existing TTSInterruptTests.testI3 flake** — `XCTAssertLessThan failed: ("10.4...") is not less than ("0.08")`. Deterministic 10s timeout in `InterruptSequence.run`; pre-dates Track B-4. Not blocking but should be triaged.
-- [ ] streamTruncated empirical confirmation — re-launch app and verify cache_control fix actually completes a turn.
+Live tracking has migrated to https://github.com/KofTwentyTwo/Jarvis/issues. Crosswalk for items previously listed here:
+
+- AudioLevelEmitter production wiring — verified done; consumer still dead — [#54](https://github.com/KofTwentyTwo/Jarvis/issues/54) + [#44](https://github.com/KofTwentyTwo/Jarvis/issues/44)
+- Track C (vision) — CLOSED 2026-05-04 (commits `7a5543a` through `19362f6`)
+- Track D (memory code-work) — CLOSED 2026-05-04 (commits `75a10be` through `6e249ee`); environment work [#56](https://github.com/KofTwentyTwo/Jarvis/issues/56)/[#57](https://github.com/KofTwentyTwo/Jarvis/issues/57)/[#58](https://github.com/KofTwentyTwo/Jarvis/issues/58); memory database now live via `48ad8d6`
+- TTSInterruptTests.testI3 flake — [#55](https://github.com/KofTwentyTwo/Jarvis/issues/55)
+- streamTruncated empirical confirmation — [#62](https://github.com/KofTwentyTwo/Jarvis/issues/62)
+- Migration M-0..M-7 — epics [#4](https://github.com/KofTwentyTwo/Jarvis/issues/4) through [#11](https://github.com/KofTwentyTwo/Jarvis/issues/11)
+- Carry-forward bugs B-03..B-08 — [#48](https://github.com/KofTwentyTwo/Jarvis/issues/48) through [#53](https://github.com/KofTwentyTwo/Jarvis/issues/53)
+- 2026-05-12 audit findings — see `docs/TODO.md` crosswalk for the full list
 
 ## Key Reference
 
