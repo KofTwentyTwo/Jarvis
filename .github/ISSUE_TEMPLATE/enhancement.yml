@@ -1,0 +1,52 @@
+name: Enhancement
+description: New feature, improvement, or change request.
+title: "<one-line summary>"
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What's the proposed change?
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why now? What does it unlock?
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Approach (optional)
+      description: Rough sketch of how this might be implemented. Skip if unclear.
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Subsystem
+      multiple: true
+      options:
+        - agent
+        - bus
+        - build
+        - devtool
+        - hud
+        - logging
+        - mcp
+        - memory
+        - vision
+        - voice
+    validations:
+      required: true

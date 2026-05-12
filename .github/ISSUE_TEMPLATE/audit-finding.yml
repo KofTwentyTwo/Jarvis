@@ -1,0 +1,69 @@
+name: Audit finding
+description: A gap surfaced by an audit pass or code review.
+title: "<one-line summary>"
+labels: ["audit-finding"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What's the gap?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: |
+        File:line citations, log snippets, gate output, or audit report references
+        (e.g., `.planning/audit-2026-05-04/...` or specific commit SHAs).
+    validations:
+      required: true
+  - type: dropdown
+    id: classification
+    attributes:
+      label: Gap classification
+      options:
+        - wired-but-dead
+        - working-but-not-wired
+        - missing-UI-surface
+        - test-gap
+        - missing-boundary-gate
+        - documentation-drift
+        - other
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Subsystem
+      multiple: true
+      options:
+        - agent
+        - bus
+        - build
+        - devtool
+        - hud
+        - logging
+        - mcp
+        - memory
+        - vision
+        - voice
+    validations:
+      required: true
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Proposed remediation
+      description: What does "fixed" look like? Acceptance criteria.

@@ -1,0 +1,51 @@
+name: Bug report
+description: Something doesn't work as designed.
+title: "<one-line summary>"
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What's broken?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: |
+        Concrete steps. Include: input, expected, actual.
+        For runtime bugs, paste the relevant lines from
+        `~/Library/Logs/Jarvis/*.log` or the Dev Overlay Logs tab.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Subsystem
+      multiple: true
+      options:
+        - agent
+        - bus
+        - build
+        - devtool
+        - hud
+        - logging
+        - mcp
+        - memory
+        - vision
+        - voice
+    validations:
+      required: true

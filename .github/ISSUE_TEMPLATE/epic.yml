@@ -1,0 +1,40 @@
+name: Epic
+description: Large multi-issue work — a milestone slice or cross-subsystem effort.
+title: "<epic name>"
+labels: ["epic"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One-sentence outcome. What does "done" deliver to the user?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in scope, and (explicitly) what is out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Verifiable conditions for closing this epic.
+    validations:
+      required: true
+  - type: textarea
+    id: subissues
+    attributes:
+      label: Sub-issues
+      description: |
+        Checklist of linked issues. GitHub auto-renders these as a task list.
+        Example:
+        - [ ] #123 Wire X
+        - [ ] #124 Add boundary gate
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes / risks
+      description: Known unknowns, dependencies, sequencing concerns.
