@@ -135,4 +135,31 @@ final class CacheHintsEligibilityTests: XCTestCase {
             "ContextBuilder.systemPrompt(for: .empty) must start with selfAwarePreamble (D-12 — preamble FIRST, then per-turn enrichments)."
         )
     }
+
+    // MARK: - Audit 2026-05-12 / M-3 — proactive memory recall discoverability
+    //
+    // Issue #14: agent never called `search_memory` in production because the
+    // preamble didn't name it — model preference is shaped by the preamble's
+    // explicit "always prefer calling those tools" rule. Without a name in the
+    // preamble, the tool falls into "tools the agent technically has access to
+    // but won't think to use." Regression guard: the preamble MUST cue
+    // `search_memory` and `forget_fact` so proactive recall is alive.
+
+    /// test_preambleNamesMemoryTools — Issue #14 regression guard.
+    ///
+    /// Asserts both memory tools are named in the preamble. Without naming,
+    /// the model has no preamble-level nudge to call them, so the live
+    /// 2026-05-12 session reproduced the failure: user asks "what is my dog's
+    /// name?" and the agent answers from the void without searching.
+    func test_preambleNamesMemoryTools() {
+        let preamble = ContextBuilder.selfAwarePreamble
+        XCTAssertTrue(
+            preamble.contains("search_memory"),
+            "Issue #14: selfAwarePreamble must name `search_memory` so the model is cued to call it when the user references prior context."
+        )
+        XCTAssertTrue(
+            preamble.contains("forget_fact"),
+            "Issue #14: selfAwarePreamble must name `forget_fact` alongside `search_memory` — the read/write pair of the memory surface."
+        )
+    }
 }
