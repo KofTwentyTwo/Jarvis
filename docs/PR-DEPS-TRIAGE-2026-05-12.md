@@ -1,146 +1,217 @@
-# PR + Dependency Triage — 2026-05-12
+# PR + dependency triage — 2026-05-12
 
-Lane: PR + dependency triage (read-only recommendations).
-Worktree: `.claude/worktrees/agent-a6ba0dc849806eae5/`.
-Branch: `chore/pr-deps-triage-v0.1` off `develop@ba42b69`.
+**Lane:** `chore/pr-deps-triage-v0.1` (worktree: `.claude/worktrees/agent-a6ba0dc849806eae5/`)
+**Scope:** read-only audit of open PRs, Dependabot updates, security alerts, leftover stashes, and sibling agent lanes. **Recommends; does not merge.**
+**Base:** `develop @ ba42b691` ("docs: BUILDING.md + finalize README MIT license section (#149)").
+**Open PRs:** 8 (3 user-authored drafts; 5 Dependabot).
+**Open issues:** 141 across 6 milestones (no change since 2026-05-12 end-of-day handoff).
+**Open Dependabot security alerts:** 2 (both moderate, dev-only).
+
+---
 
 ## TL;DR
 
-- **4 of 5 Dependabot PRs are SAFE-MERGE** (#144 jsdom, #145 vite, #147 plugin-react, #148 R3F). All pass `pnpm --filter @jarvis/hud test` (10/10 files, 97/97 tests) and `pnpm --filter @jarvis/hud build` in isolated worktrees.
-- **1 Dependabot PR is NEEDS-INVESTIGATION**: #146 (TypeScript 5.9.3 → 6.0.3). Runtime tests + build pass, but `pnpm --filter @jarvis/hud typecheck` fails with 3 new errors at `webview/packages/hud/src/hud/SegmentedRing.tsx:92` — TS 6's stricter indexed-access narrowing. Fix is mechanical (add `if (!m) continue` or non-null assertion) but is a code change outside the dep upgrade, so the PR can't merge cleanly on its own.
-- **Both moderate CVEs (#1 esbuild, #2 vite) are NOT covered by any of the 5 Dependabot PRs.** They both trace to the same root cause: `vitest@2 / vitest@3` transitively depends on `vite@5.4.21`, which pulls `esbuild@0.21.5`. Direct `vite@8.0.x` (the dependabot PR) is already non-vulnerable; the fix is to **bump vitest to 4.x** so the transitive vite goes to 6.0+. Vitest 4 is a major upgrade and Dependabot hasn't opened that PR yet. Both advisories are **dev-tooling only** (no production exposure — vite/esbuild never ship in the HUD IIFE bundle, and there's no public-facing dev server for a personal macOS app).
-- **5 stashes: 4 DROP, 1 PRESERVE-AS-BRANCH.** Stashes 0, 1, 2, 4 are obsolete — `develop` already has the equivalent commits (`ba42b69` README, `50c2783` DevOverlay wiring, `RequestBody.swift:91 stream: true`, `f06bf0b` wake-word survives rebuild). Stash 3 ("sibling-agent-work") introduces a Voice Log menu item that doesn't yet exist on develop — preserve as `wip/stash-3-voice-log-menu` for later (the issue `Voice Log` is on the v1.1 milestone).
-- **Active lane PRs (read-only)**: PR #150 (HUD chat autoscroll), #151 (bus+HUD S1 cluster), #152 (vision v0.1 cluster) all open and draft. No housekeeping action recommended.
+1. **Security alerts (#1, #2) are real but dev-scope only.** Both stem from `vite@5.4.21` + transitive `esbuild@0.21.5` that vitest@2.1.9 pulls into the lockfile.
+2. **Dependabot PR #145 (vite 8.0.12) only partially closes the alerts.** It eliminates the vulnerable resolutions inside `packages/hud` (which already uses vitest@3.x), but the webview workspace root (`.`) and `packages/bus` still pin `vitest: ^2.1.0` which resolves to vitest@2.1.9 → vite@5.4.21 → esbuild@0.21.5.
+3. **Full closure requires a follow-up:** either bump `vitest` from `^2.1.0` → `^3.0.0` in `webview/package.json` and `webview/packages/bus/package.json`, or add `pnpm.overrides` pinning `vite >=8.0.5` and `esbuild >=0.25.0`. The override is the lower-risk option for a v0.1 timeframe.
+4. **All 8 open PRs show CircleCI Pipeline `ERROR`** — likely the same upstream/config-level failure (no per-PR job output, all started 2026-05-12 between 19:59 and 21:39Z). Worth checking the latest CircleCI config before merging anything dependency-related; the boundary-gate scripts + `scripts/check-app-builds.sh` + `pnpm --filter @jarvis/hud test` should be run locally before merge regardless.
+5. **5 stashes on the main checkout** (1 belongs to this lane; 4 pre-existing). None block this lane; flagged below for owner triage.
+6. **8 sibling agent lanes are active** (memory-crit, vision, mcp-crit, bus-hud-s1, voice, ci/github-actions, plus two anonymous worktrees). PRs #150–#152 cover three of them; the other lanes have local commits not yet pushed to PRs.
 
-## Dependabot PRs
+---
 
-| PR # | Package | From → To | Type | Verdict | Evidence |
-|------|---------|-----------|------|---------|----------|
-| [#144](https://github.com/KofTwentyTwo/Jarvis/pull/144) | `jsdom` | 25.0.1 → 29.1.1 | devDep (major×4) | SAFE-MERGE | install OK · 97/97 tests pass · build OK · `prepare` install-script change flagged by Dependabot (jsdom 29 only — review release note manually but no malicious content reported) · jsdom 29 requires Node 22.13+ (project engine is `>=20.0.0`; current host is Node 26) |
-| [#145](https://github.com/KofTwentyTwo/Jarvis/pull/145) | `vite` | 8.0.10 → 8.0.12 | devDep (patch) | SAFE-MERGE | install OK · 97/97 tests pass · build OK · changelog is bug fixes + rolldown 1.0.0 GA; no breaking surface for the HUD IIFE config |
-| [#146](https://github.com/KofTwentyTwo/Jarvis/pull/146) | `typescript` | 5.9.3 → 6.0.3 | devDep (major) | NEEDS-INVESTIGATION | install OK · 97/97 tests pass · build OK · **typecheck FAILS**: 3× TS18048 at `webview/packages/hud/src/hud/SegmentedRing.tsx:92` (`'m' is possibly 'undefined'`). TS 6 narrows array index access more strictly. Mechanical fix: add `if (!m) continue` before line 92 inside the `for` loop. Not blocked — but the typecheck must be either fixed in the same PR or the typecheck gate (if any CI hook exists) ignored. Recommend rebasing the PR after landing the source fix, OR adding the fix on top of the dependabot branch via `gh pr checkout 146 && fix && git commit && git push` before merging. |
-| [#147](https://github.com/KofTwentyTwo/Jarvis/pull/147) | `@vitejs/plugin-react` | 5.2.0 → 6.0.1 | devDep (major) | SAFE-MERGE | install OK · 97/97 tests pass · build OK · v6 dropped Babel as a dep; verified `webview/packages/hud/vite.config.ts` does NOT pass any `babel: {...}` option to `react()` — the breaking change does not affect this project |
-| [#148](https://github.com/KofTwentyTwo/Jarvis/pull/148) | `@react-three/fiber` | 9.6.0 → 9.6.1 | runtime dep (patch) | SAFE-MERGE | install OK · 97/97 tests pass · build OK · pure patch release |
+## Security alerts (live as of 2026-05-12)
 
-All test runs done from isolated `git worktree add` to detached PR HEADs (under `/tmp/dep-pr-tests/pr<N>/`); no pollution of `develop` or the triage branch.
+Confirmed via `gh api /repos/KofTwentyTwo/Jarvis/dependabot/alerts --jq '.[] | select(.state == "open")'`.
 
-## Security advisories
+### Alert #2 — Vite path traversal in optimized deps `.map` handling
 
-Both open Dependabot alerts at https://github.com/KofTwentyTwo/Jarvis/security/dependabot.
+| Field | Value |
+|---|---|
+| Severity | Moderate |
+| GHSA | **GHSA-4w7w-66w2-5vf9** |
+| CVE | **CVE-2026-39365** |
+| Package | `vite` (npm) |
+| Lockfile | `webview/pnpm-lock.yaml` |
+| Scope | Development dependency |
+| Vulnerable ranges | `<= 6.4.1`, `>= 7.0.0 <= 7.3.1`, `>= 8.0.0 <= 8.0.4` |
+| Patched | `6.4.2` / `7.3.2` / `8.0.5` |
+| Current resolutions | `vite@5.4.21` (vulnerable), `vite@8.0.10` (already patched on the 8.x branch — but alert remains open because of the 5.x instance) |
 
-### Alert #1 — esbuild GHSA-67mh-4wv8-2f99 (moderate)
+### Alert #1 — esbuild dev server exposes responses to any website
 
-- **Package**: `esbuild` (devDep, transitive)
-- **Installed**: `esbuild@0.21.5` (in `webview/pnpm-lock.yaml`)
-- **Vulnerable range**: `<= 0.24.2`
-- **Patched**: `0.25.0`
-- **Summary**: esbuild dev server allows any website to send any requests to the dev server and read the response (CORS-on-dev-server flaw).
-- **Origin chain**: `vitest@2.1.9 / vitest@3.2.4` → `vite@5.4.21` → `esbuild@0.21.5`. The direct `vite@^8.0.0` in the HUD package devDeps pulls `esbuild@0.25+` cleanly, but vitest still drags in vite 5.
-- **Covered by a Dependabot PR?** **No.** None of the 5 open PRs touch vitest.
-- **Exposure window**: dev-tooling only. esbuild's vulnerable surface is its **local dev server**, used only when a developer runs `pnpm --filter @jarvis/hud dev` or `vitest --watch`. This is a personal macOS app; the dev server never binds anything publicly accessible. Risk in practice: low — an attacker would need to lure the developer to a malicious page while the dev server is running on localhost.
-- **Remediation**: Bump `vitest` to `^4.0.0` in both `webview/package.json` (root devDep) and `webview/packages/hud/package.json` (hud devDep). Vitest 4 requires vite `^6 || ^7 || ^8`, which transitively bumps esbuild past 0.25. Vitest 4 is a major upgrade and may require test-config tweaks; treat as a separate small PR (`chore(deps): bump vitest to 4.x`), not bundled with the dependabot PRs.
+| Field | Value |
+|---|---|
+| Severity | Moderate |
+| GHSA | **GHSA-67mh-4wv8-2f99** |
+| CVE | none assigned |
+| Package | `esbuild` (npm) |
+| Lockfile | `webview/pnpm-lock.yaml` |
+| Scope | Development dependency |
+| Vulnerable range | `<= 0.24.2` |
+| Patched | `0.25.0` |
+| Current resolution | `esbuild@0.21.5` (direct dep of `vite@5.4.21`) |
 
-### Alert #2 — vite GHSA-4w7w-66w2-5vf9 (moderate)
+### Dependency-graph trace (why both alerts exist)
 
-- **Package**: `vite` (devDep, transitive)
-- **Installed**: `vite@5.4.21` (transitive via vitest) AND `vite@8.0.10` (direct devDep in hud)
-- **Vulnerable range**: `<= 6.4.1`
-- **Patched**: `6.4.2`
-- **Summary**: Vite vulnerable to path traversal in optimized-deps `.map` handling.
-- **Origin chain**: same as alert #1 — vitest transitive vite 5.x. The direct vite 8.0.x is already non-vulnerable.
-- **Covered by a Dependabot PR?** **Indirectly no.** Even after #145 merges, the direct vite stays at 8.0.12 (non-vulnerable) but the **transitive vite@5.4.21 remains** because vitest 2/3 pins it.
-- **Exposure window**: same as alert #1 — local dev server only.
-- **Remediation**: same as alert #1 — bump vitest to 4.x. The two alerts are one fix.
+```
+webview/package.json                  vitest: ^2.1.0
+  └─ vitest@2.1.9
+       ├─ @vitest/mocker@2.1.9 (optional peer: vite@5.4.21)
+       └─ vite-node@2.1.9     (peer:           vite@5.4.21)
+            └─ vite@5.4.21
+                 └─ esbuild@0.21.5  ← Alert #1
+                 (vite@5.4.21 itself  ← Alert #2)
 
-**Summary**: both moderate CVEs are real but dev-tooling only and trace to a single transitive (`vitest@2/3 → vite@5.4.21 → esbuild@0.21.5`). Single remediation closes both. Recommend a fresh `chore(deps): bump vitest to 4.x` PR rather than waiting on Dependabot — the 5 open PRs do not address this.
+webview/packages/bus/package.json     vitest: ^2.1.0   (same path as above)
 
-## Stash triage
+webview/packages/hud/package.json     vitest: ^3.0.0
+  └─ vitest@3.2.4
+       └─ vite@5.4.21  (pre-PR-#145)  →  vite@7.3.3 (post-PR-#145, patched)
+            esbuild now optional peer; resolved to 0.27.7 (patched).
+```
 
-`git stash list` (sees all 5; stash list is per-repo not per-worktree):
+The `vite@8.0.10` listed as devDep of `packages/hud` is **not** the vulnerable surface — vite 8 removed esbuild as a hard dep (it's an optional peer in 8.x), and 8.0.10 is past the 8.0.5 patch line for the path-traversal CVE. The vulnerable surface is exclusively `vite@5.4.21` (dragged in by vitest@2.x via its hard `vite` runtime dep) plus its bundled `esbuild@0.21.5`.
 
-| Index | Descriptor (from `git stash list`) | Content summary | Verdict | Morning command |
-|-------|-----------------------------------|-----------------|---------|-----------------|
-| 0 | `On develop: concurrent-readme-agent-edits` | README.md only, 21+/47- lines. Reword of "Scope" paragraph, adds TODO comment for HUD demo gif, restructures Build & run section. | **DROP** — `b2710ee docs(readme): branding pass`, `0cc94c6 docs(branding): restore MIT section`, and `ba42b69 docs: BUILDING.md + finalize README MIT license` on develop already do a deeper rework of the same surface. The stash predates the current README structure and would conflict. | `git stash drop stash@{0}` |
-| 1 | `On develop: partial-work-from-failed-parallel-dispatch-2026-05-06` | 4 files / 211+ /14-: AppDelegate.swift adds DevSnapshotEmitter + DevOverlayBridge + DevOverlayViewModel wiring; MenuBarContextMenu.swift; pbxproj/project.yml updates for VoiceLog target. | **DROP** — `50c2783 feat(devoverlay): wire DevSnapshotEmitter end-to-end + add tabbed view` (May 12) is the canonical end-to-end wiring of exactly this surface, with `6ea2852 feat(devoverlay,logging): live log stream` extending it. The Voice Log menu/target portion overlaps with stash 3 (see below) and is on the v1.1 milestone, not v0.1. | `git stash drop stash@{1}` |
-| 2 | `WIP on develop: d8983af fix(anthropic): add stream:true to request body` | 2 files / 38+ /14-: MenuBarContextMenu.swift adds Voice Log item; WakeWordDAG.swift renames `cancel()` → `stopFeed()`. | **DROP** — `f06bf0b fix(voice): wake-word survives audio-graph rebuild` (May 12, closes #28) implements the canonical fix using `stopFeed()` and re-arming after rebuild. The stash is an earlier, less complete attempt at the same fix. The Voice Log menu item piece is duplicated in stash 3. | `git stash drop stash@{2}` |
-| 3 | `On develop: sibling-agent-work` | 6 files / 119+ /7-: MenuBarContextMenu.swift adds `voiceLogToggleAction`, MenuBarIconControllerTests update, AudioGraphOwner.swift adds 32 lines, VoiceController.swift +3, VoiceInterfaces.swift +48, WakeWordDAG.swift refactor. | **PRESERVE-AS-BRANCH** — the wake-word/audio-graph portion is now redundant with `f06bf0b`, BUT the `voiceLogToggleAction` plumbing on `MenuBarContextMenu.build` + the matching test updates are NOT on develop yet, and Voice Log is a tracked v1.1 milestone item. Salvage the menu-bar plumbing for when Voice Log lands; drop the Voice/WakeWord portion that conflicts with `f06bf0b`. Safer to preserve the whole diff as a branch and let whoever picks up Voice Log cherry-pick what survives. | `git stash branch wip/stash-3-voice-log-menu stash@{3}` (this both creates the branch from the stash's parent commit and drops the stash); then `git push -u origin wip/stash-3-voice-log-menu` |
-| 4 | `WIP on develop: d8983af fix(anthropic): add stream:true to request body` | 5 files / 149+ /16-: AppDelegate.swift wake-word rebuild consumer (re-arms DAG against new ring), AudioGraphOwner.swift, WakeWordDAG.swift, MenuBarContextMenu.swift Voice Log item, project.yml. | **DROP** — same diagnosis as stash 2 plus the AppDelegate rebuild-consumer change. `f06bf0b` is the canonical fix; the commit body explicitly describes this fix ("setCancelInFlight now invokes stopFeed() instead of cancel()" + "rebuild-completion consumer now re-arms the DAG against the new ring"). Stash 4 is the WIP that became `f06bf0b`. | `git stash drop stash@{4}` |
+### Does PR #145 (vite 8.0.10 → 8.0.12) resolve the alerts?
 
-Verification that `stream: true` is on develop (the four `stream:true` stashes are tagged WIPs *after* commit `d8983af` which is the fix itself): `packages/AgentCore/Sources/AnthropicProvider/RequestBody.swift:91` contains `stream: true`. Confirmed.
+**Partially.** `gh pr diff 145` shows that after the bump:
 
-**Morning execution order matters for stash 3**: do `git stash branch wip/stash-3-voice-log-menu stash@{3}` FIRST (it drops stash@{3} as part of the branch operation and renumbers the remaining stashes). Then drop the remaining stashes by NAME, not index, OR re-list and drop highest-to-lowest.
+- `packages/hud` resolves to `vite@8.0.12` + `esbuild@0.27.7` (both patched).
+- `@vitest/mocker@3.2.4` and `vitest@3.2.4` (used by `packages/hud`) get re-resolved to `vite@7.3.3` (patched on the 7.x branch).
+- **`vitest@2.1.9` and its `@vitest/mocker@2.1.9` still resolve to `vite@5.4.21`** — Dependabot did not touch the root or `packages/bus` because their declared `vitest: ^2.1.0` range still has 2.1.9 as latest-satisfying.
 
-## Active lane PRs (read-only)
+Net: `vite@5.4.21` + `esbuild@0.21.5` remain in the lockfile after PR #145 lands, so the GitHub Dependabot alerts will **not** auto-close.
 
-| PR # | Branch | Owner lane | State | Notes |
-|------|--------|-----------|-------|-------|
-| [#150](https://github.com/KofTwentyTwo/Jarvis/pull/150) | `fix/hud-chat-autoscroll-v0.1` | F | OPEN, DRAFT | "fix(hud): chat panel auto-scroll on streaming append — B-06 tactical (#51)" |
-| [#151](https://github.com/KofTwentyTwo/Jarvis/pull/151) | `fix/bus-hud-s1-v0.1` | D | OPEN, DRAFT | "fix(bus,hud): v0.1 S1 cluster — webview didFail + menu-bar icon transition" |
-| [#152](https://github.com/KofTwentyTwo/Jarvis/pull/152) | `fix/vision-v0.1` | E | OPEN, DRAFT | "fix(vision): v0.1 cluster — T2 honesty + pendingFrame leak + TCC revoke observation" |
+### Real exposure (dev-only)
 
-I touched none of these. Other lane branches (`fix/voice-crit-v0.1`, `fix/memory-crit-v0.1`, `fix/mcp-crit-v0.1`, `feat/app-ux-surfaces-v0.1`) were not open as PRs at the time of this triage (in flight as worktrees per `git worktree list`).
+Both advisories require an attacker to coax a victim into visiting a malicious page **while** their machine has the Vite/esbuild dev server bound (default loopback `localhost:5173` for the HUD's `pnpm --filter @jarvis/hud dev`):
 
-PR #149 (`docs: BUILDING.md + finalize README MIT license section`) merged at 2026-05-12T20:57:48Z and is part of `develop@ba42b69`.
+- **esbuild GHSA-67mh-4wv8-2f99:** dev server CORS is permissive — any website the user has open in another tab can `fetch()` against `localhost:<dev-server-port>` and read responses, exposing source files and bundle output that the dev server happily serves.
+- **vite CVE-2026-39365:** path-traversal via the optimized-deps `.map` URL handler — same threat model, leaks files outside the project root that the dev server has read access to.
+
+This is a real but **narrow** window — only when (a) the user is actively running the HUD dev server, AND (b) the user has a malicious tab open in their default browser. Production builds (`bash scripts/build-webview.sh`) bundle the JS statically and ship no dev server; the shipped macOS app has zero exposure. No CI surface is affected (CircleCI doesn't run the dev server). The vulnerable packages cannot escape `webview/`.
+
+### Recommendation (alerts)
+
+1. **Land PR #145** first — closes the high-watermark vite + brings hud-package vitest 3.x onto patched vite 7.3.3. Loses no functionality.
+2. **Then close the 5.x residue** with one of:
+   - **(preferred, surgical)** add a `pnpm.overrides` block to `webview/package.json` pinning `vite >=8.0.5` and `esbuild >=0.25.0`. One file, one commit, both alerts auto-close on next Dependabot scan. Minimal risk because vitest 2.1.9 declares vite as a peer (range `^5.0.0`, but pnpm overrides bypass peer-range gating); behavior change isolated to the dev-only test runner.
+   - **(cleaner, follow-on)** bump `vitest` from `^2.1.0` → `^3.0.0` in `webview/package.json` and `webview/packages/bus/package.json`. Vitest 2 → 3 is a major; the bus and root barely use vitest (root has no tests, `packages/bus` has a handful) so the migration is low-cost. File as a separate issue / PR to keep this lane scoped.
+3. After both alerts close: run `pnpm install` against the resolved lockfile and confirm `pnpm --filter @jarvis/hud test` + `bash scripts/build-webview.sh` still green.
+
+---
+
+## Open PRs (full inventory)
+
+### User-authored drafts (sibling-lane work, not for this triage to merge)
+
+| # | Branch | Title | Files | +/− | CI | Notes |
+|---|---|---|---|---|---|---|
+| **#152** | `fix/vision-v0.1` | fix(vision): v0.1 cluster — T2 honesty + pendingFrame leak + TCC revoke observation | 8 | +394/−9 | ERROR | Sibling lane — `agent-a9d9e02cdc3817942` worktree is on this branch. |
+| **#151** | `fix/bus-hud-s1-v0.1` | fix(bus,hud): v0.1 S1 cluster — webview didFail + menu-bar icon transition | 7 | +529/−13 | ERROR | Sibling lane — `agent-af4da0a50eb1a9531` worktree. |
+| **#150** | `fix/hud-chat-autoscroll-v0.1` | fix(hud): chat panel auto-scroll on streaming append — B-06 tactical (#51) | 3 | +293/−1 | ERROR | No matching open worktree — branch only. |
+
+All three are drafts. The PR creator (the owner) should mark them ready when their respective lane completes. **Out of scope for this triage** — flagged in the active-lanes section below.
+
+### Dependabot PRs
+
+All five opened 2026-05-12 between 19:59 and 20:00 UTC. All are MERGEABLE, all show `mergeStateStatus: UNSTABLE` (CircleCI Pipeline ERROR). None have human review attached.
+
+| # | Branch | Bump | Notes |
+|---|---|---|---|
+| **#145** | `dependabot/.../vite-8.0.12` | `vite 8.0.10 → 8.0.12` | **Highest priority — partially closes Alerts #1 and #2.** Drags `@vitest/mocker@3.2.4` + `vitest@3.2.4` (hud workspace) onto `vite@7.3.3` and `esbuild@0.27.7` (both patched). Does NOT touch root/bus vitest@2.1.9 → `vite@5.4.21` residue (the remaining vulnerability surface). +428/−100, 2 files (`packages/hud/package.json`, `pnpm-lock.yaml`). |
+| **#148** | `dependabot/.../react-three/fiber-9.6.1` | `@react-three/fiber 9.6.0 → 9.6.1` | Patch-level bump on a production HUD dependency. Low risk; safe to merge after the vite PR. +9/−9. |
+| **#147** | `dependabot/.../vitejs/plugin-react-6.0.1` | `@vitejs/plugin-react 5.2.0 → 6.0.1` | Major-version bump on the React Vite plugin. Need to verify it pairs with vite 8.x and doesn't break the dev server. **Hold until after #145 lands** so we test against the bumped vite. +18/−362 (lockfile churn). |
+| **#146** | `dependabot/.../typescript-6.0.3` | `typescript 5.9.3 → 6.0.3` | Major TS bump. TypeScript 6 has tightened a number of inference rules and added stricter defaults; the existing R3F + bus type chains may surface new errors. **Treat as a discretionary upgrade, not security-driven.** Recommend running `pnpm -r typecheck` against the PR branch before merging. +12/−12. |
+| **#144** | `dependabot/.../jsdom-29.1.1` | `jsdom 25.0.1 → 29.1.1` | 4 major versions in one bump (25 → 29). jsdom only affects `@jarvis/hud` test environment (vitest config). Run `pnpm --filter @jarvis/hud test` to verify the HUD tests still pass under jsdom 29. Risk: jsdom often tightens DOM-spec conformance; the testing-library tests might trip on stricter behavior. +202/−369. |
+
+### Why every PR shows CircleCI ERROR
+
+Every open PR (including the user drafts) lists `CircleCI Pipeline: ERROR` and **only** that one status context — no per-job results. That means the CircleCI pipeline itself failed before any job ran (typically a config-parse error or a missing required env var on the project). Pipeline IDs are sequential (48 → 53) and all errored within minutes of being triggered. This is a **single CI issue, not a per-PR problem** and is presumably being handled by the `ci/github-actions-v0.1` lane (worktree `agent-af1a17d5f3d47d96d`, branch ahead of develop by 1 commit `35316fcc docs(building): CI/CD section`). Coordinate with that lane before merging anything that depends on CI green.
+
+**Pragmatic gate for this lane:** run the boundary-gate sweep + `scripts/check-app-builds.sh` + `pnpm --filter @jarvis/hud test` + `bash scripts/build-webview.sh` locally on the merge candidate before merging.
+
+---
 
 ## Recommended morning sequence
 
-Run in this order. Each step is independent; stop and inspect if any step surprises you.
+Goal: clear both security alerts and the lowest-risk Dependabot PRs in one sitting, without stepping on sibling-lane work.
 
-1. **Merge the 4 SAFE-MERGE Dependabot PRs** (any order; Dependabot will rebase the others on conflict):
-   ```bash
-   gh pr merge 144 --squash --auto    # jsdom 25 → 29
-   gh pr merge 145 --squash --auto    # vite 8.0.10 → 8.0.12
-   gh pr merge 147 --squash --auto    # plugin-react 5 → 6
-   gh pr merge 148 --squash --auto    # @react-three/fiber 9.6.0 → 9.6.1
+1. **Merge PR #145** (`vite 8.0.12`).
+   - Verify locally first: check out `dependabot/npm_and_yarn/webview/vite-8.0.12`, run `pnpm install`, then `pnpm --filter @jarvis/hud test` and `bash scripts/build-webview.sh`. Both should pass.
+   - Merge to `develop`.
+2. **Wait ~5 min then re-fetch `gh api /repos/KofTwentyTwo/Jarvis/dependabot/alerts`.** Confirm Alert #1 and Alert #2 are **still open** (expected — see partial-closure analysis above). If they auto-closed, skip step 3.
+3. **Add `pnpm.overrides`** to `webview/package.json` (separate small PR, ~5 lines). Suggested block:
+   ```json
+   "pnpm": {
+     "overrides": {
+       "vite": ">=8.0.5",
+       "esbuild": ">=0.25.0"
+     }
+   }
    ```
+   Then `cd webview && pnpm install` to regenerate the lockfile. Confirm `vite@5.4.21` and `esbuild@0.21.5` are gone from `webview/pnpm-lock.yaml` (`grep -E 'vite@5|esbuild@0\.21' webview/pnpm-lock.yaml` should return nothing). Run `pnpm --filter @jarvis/hud test` and `pnpm -r test` to confirm vitest 2.1.9 still works under overridden vite. Commit + merge. Re-verify alert closure.
+4. **File a follow-up issue: "Bump webview root + packages/bus vitest from ^2.1.0 to ^3.0.0"** for v0.2. The override is a stop-gap; the real fix is dropping the obsolete vitest 2 surface.
+5. **Merge PR #148** (`@react-three/fiber 9.6.1`) — patch-level bump, safest of the remaining Dependabot PRs. Quick smoke: `bash scripts/build-webview.sh` + visual HUD check.
+6. **Decide on PRs #144, #146, #147:**
+   - **#147** (`@vitejs/plugin-react` v5 → v6): only consider after #145 lands. Test in a local branch first by running `pnpm --filter @jarvis/hud dev` and confirming React Fast Refresh still works.
+   - **#146** (TypeScript 5.9.3 → 6.0.3): defer to its own issue. Major TS bump deserves a focused diff review across the entire `packages/` tree. Don't merge as part of this morning sequence.
+   - **#144** (jsdom 25 → 29): only merge after running `pnpm --filter @jarvis/hud test`. Defer if any test fails — file an issue with the regression detail.
 
-2. **Fix the TypeScript 6 typecheck regression then merge PR #146**:
-   ```bash
-   gh pr checkout 146
-   # In webview/packages/hud/src/hud/SegmentedRing.tsx around line 90:
-   # Inside the for loop, after `const m = initialMatrices[i]`, add:
-   #   if (!m) continue
-   # (or use a non-null assertion `initialMatrices[i]!` if the invariant is clear).
-   cd webview && pnpm --filter @jarvis/bus build && pnpm --filter @jarvis/hud typecheck
-   # Expect 0 errors.
-   git add -A && git commit -m "fix(hud): narrow initialMatrices index access for TS 6"
-   git push
-   gh pr merge 146 --squash --auto
-   ```
+---
 
-3. **Close both CVE alerts in one focused PR** (NOT bundled with the dependabot PRs):
-   ```bash
-   git checkout -b chore/deps/vitest-4 develop
-   cd webview
-   # Update both package.json files: vitest "^2.1.0" → "^4.0.0" and "^3.0.0" → "^4.0.0"
-   pnpm install
-   pnpm --filter @jarvis/bus build && pnpm --filter @jarvis/hud test
-   # Inspect any vitest-4 breakages, fix, then:
-   git add -A && git commit -m "chore(deps): bump vitest to 4.x — closes GHSA-67mh-4wv8-2f99, GHSA-4w7w-66w2-5vf9"
-   git push -u origin chore/deps/vitest-4 && gh pr create --fill --base develop
-   ```
+## Stash triage (main checkout only — read-only)
 
-4. **Stash cleanup** (do branch-from-stash FIRST, then drop the rest from highest to lowest to avoid renumbering surprises):
-   ```bash
-   git stash branch wip/stash-3-voice-log-menu stash@{3}
-   # That branch now exists locally with the stash applied; check it out separately to push:
-   git push -u origin wip/stash-3-voice-log-menu
-   git checkout -                # back to wherever you were
-   # Now drop the obsolete stashes. After the `stash branch` above, stash@{3} is gone;
-   # stash@{4} has become stash@{3}. Safest is to re-`git stash list` then drop top-down:
-   git stash list
-   # Expect 4 stashes; drop from top:
-   git stash drop stash@{3}      # was stash@{4} (WIP stream:true + wake-word)
-   git stash drop stash@{2}      # was stash@{2} (WIP stream:true + Voice Log menu)
-   git stash drop stash@{1}      # was stash@{1} (DevSnapshotEmitter partial)
-   git stash drop stash@{0}      # was stash@{0} (concurrent README edits)
-   git stash list                # empty
-   ```
+`git -C /Users/james.maes/Git.Local/Kof22/Jarvis stash list` shows 6 stashes. **One** belongs to this lane; **five** are pre-existing. This lane created `stash@{0}` as a precaution when the main checkout was found to be on `feat/app-ux-surfaces-v0.1` with uncommitted PTT WizardState work that didn't belong to this triage branch. The uncommitted file was already restored to the working tree (`git stash pop --index` was run); the stash entry itself is retained because dropping it was denied by sandbox policy (correctly — the main checkout is outside this worktree's boundary).
 
-5. **Triage report PR** (this PR — see "PR URL" in the final report message). Convert from draft to ready when you're happy with the recommendations, then merge or close as desired.
+| Stash | On branch | Files | Verdict |
+|---|---|---|---|
+| `stash@{0}` | `feat/app-ux-surfaces-v0.1` | `App/Wizard/WizardState.swift` (+16/−1) | **Created by this lane** as a safety net when stashing the main checkout's PTT work. Adds a `pttHotkey` `@Published` property with separate UserDefaults key (`Jarvis.pttHotkey`) — looks like in-progress work toward issue #87 (PTT v1 hole). Identical content is already restored in the working tree of the main checkout. **Owner action: drop** (`git stash drop stash@{0}`) once the working-tree copy is preserved (commit on `feat/app-ux-surfaces-v0.1` or re-stash under the right branch). |
+| `stash@{1}` | `develop` "concurrent-readme-agent-edits" | `README.md` (+21/−47) | Pre-existing. Looks like a discarded outcome of an earlier parallel README edit. README has since been rewritten (`c4c32f7a docs(readme): refresh — diagrams + architecture + culture + roadmap`). **Owner action: review then drop** — likely superseded. |
+| `stash@{2}` | `develop` "partial-work-from-failed-parallel-dispatch-2026-05-06" | `App/AppDelegate.swift` (+190/−24), `App/MenuBar/MenuBarContextMenu.swift` (+6/−0), `Jarvis.xcodeproj/project.pbxproj` (+18), `project.yml` (+11) | Pre-existing, 6 days old. Substantial AppDelegate diff — context unclear. Should be inspected in person; do not drop blind. **Owner action: diff and decide.** |
+| `stash@{3}` | `develop` WIP on `d8983af` | `App/MenuBar/MenuBarContextMenu.swift` (+6/−0), `packages/Voice/.../WakeWordDAG.swift` (+32/−14) | Pre-existing, looks like wake-word work-in-progress. Possibly superseded by sibling-lane commit `307e3aa1 fix(voice): bound OpenWakeWordSession streaming buffers — closes #32` on `worktree-agent-a1e914121a58760e9`. **Owner action: compare against #32 work, drop if redundant.** |
+| `stash@{4}` | `develop` "sibling-agent-work" | 6 files in `App/`, `packages/Voice/` (+112/−7) | Pre-existing. Multi-file Voice-stack work that overlaps with the active Voice lane (`worktree-agent-a1e914121a58760e9`). **Owner action: compare with the Voice lane's live diff before deciding.** |
+| `stash@{5}` | `develop` WIP on `d8983af` | 5 files in `App/`, `packages/Voice/`, `project.yml` (+133/−16) | Pre-existing, similar profile to `stash@{4}` — appears to be an earlier WIP of the same Voice work. **Owner action: probably drop after `stash@{4}` is resolved.** |
 
-### What this triage does NOT cover
+This lane will not drop any stash (including its own `stash@{0}`) without explicit owner consent — bash permission for stash drop was denied with the rationale "operates on the main repo outside the agent's worktree boundary; risks irreversible loss of pre-existing local changes". That denial is correct and was respected.
 
-- Whether vitest 4 introduces test-config breakages (not tested — would require running the full suite against vitest 4, which is a code change outside the dep upgrade).
-- The `prepare` install-script change flagged on jsdom 29 was not deeply audited beyond Dependabot's surfacing — recommend a quick visual diff of `jsdom@29.1.1` vs `jsdom@25.0.1` `prepare` if you want extra confidence before merging #144.
-- Build-time regression in production HUD bundle is checked only via `pnpm --filter @jarvis/hud build` succeeding. Visual/runtime regressions in the rendered HUD are NOT covered — that's a manual smoke test once changes land on develop.
+---
+
+## Active sibling lanes (read-only snapshot)
+
+Nine agent worktrees currently locked under `.claude/worktrees/`. Each is a sibling lane operating against `develop`. None have been merged yet; their PRs (where opened) are the user-authored drafts listed above. This lane (`pr-deps-triage-v0.1`) is one of them.
+
+| Worktree | Branch | HEAD | Dirty? | Apparent scope |
+|---|---|---|---|---|
+| `agent-a1e914121a58760e9` | `worktree-agent-a1e914121a58760e9` | `307e3aa1 fix(voice): bound OpenWakeWordSession streaming buffers — closes #32` | **YES** (3 files: AppDelegate, BootHealthProbes, VoiceTTSAdapter) | Voice P0 cluster — wake-word buffer bound (#32). Local commit not yet on a PR. |
+| `agent-a319bcbaa2c678fc8` | `develop` | `ba42b691` (clean) | no | Reference checkout of develop. |
+| `agent-a45db0204dbcdb92b` | `fix/memory-crit-v0.1` | `32248da7 fix(memory): kill replay-log poisoning — sentinel TurnID + batch split — closes #13` | no | Memory crit cluster (#13 replay-log poisoning). No PR opened yet. |
+| `agent-a6ba0dc849806eae5` | `chore/pr-deps-triage-v0.1` | `ba42b691` (this lane's base) | no | **This lane.** |
+| `agent-a9d9e02cdc3817942` | `fix/vision-v0.1` | `8a3881ff fix(vision): observe TCC revoke + wire becameAuthorized re-grant — closes #3` | no | Vision v0.1 cluster — already on PR #152 (draft). |
+| `agent-aeee7944b881828a2` | `worktree-agent-aeee7944b881828a2` | `ba42b691` (clean) | no | Idle / placeholder. |
+| `agent-af1a17d5f3d47d96d` | `ci/github-actions-v0.1` | `35316fcc docs(building): CI/CD section — workflow map, branch/tag conventions, opt-in tests` | no | CI/CD lane — likely the lane that will diagnose + fix the CircleCI Pipeline ERROR. No PR opened yet. |
+| `agent-af4da0a50eb1a9531` | `fix/bus-hud-s1-v0.1` | `2bfe53f4 fix(hud): fan HudState emit to MenuBarIconController so icon animates per state — closes #41` | no | Bus/HUD S1 cluster — already on PR #151 (draft). |
+| `agent-af935718c719b6312` | `fix/mcp-crit-v0.1` | `ba42b691` (no commits yet) | **YES** (3 files: AppDelegate, ReplayingToolResultObserver, MCPRuntimeWiringTests) | MCP crit cluster (#20 turnIDResolver nil). Work in progress; no commit yet. |
+
+**Coordination note for the morning:** the only sibling lane whose work this triage interacts with is `ci/github-actions-v0.1` (because every PR in this triage shows CI ERROR). Suggest gating the morning sequence's "verify after merge" steps on the CI lane shipping its fix, OR explicitly accepting that this triage validates locally via boundary-gate scripts + `scripts/check-app-builds.sh` + `pnpm --filter @jarvis/hud test` + `bash scripts/build-webview.sh`. Either path is defensible — the local-verification path is faster.
+
+---
+
+## Out of scope for this lane
+
+The following came up while triaging and are intentionally **not** acted on here:
+
+- **Issue #58** (Ollama baseline reconcile — CLAUDE.md says `qwen2.5-coder:32b`, user actually has q8_0). Documentation drift; not a dependency issue.
+- **Issue #87** (PTT v1 hole). The PTT work in `stash@{0}` is partial; the owner of `feat/app-ux-surfaces-v0.1` should finish it or convert it to a clean branch.
+- **`build-devoverlay/` untracked directory in the main checkout.** Looks like a stray build product; not in any `.gitignore` rule we can verify from here. Owner should `rm -rf` or add to ignore.
+- **`docs/HANDOFF-2026-05-13-overnight.md`** is currently an untracked file in the main checkout. Presumably belongs to a different overnight lane; flagging it because it would otherwise look like a missing artifact.
+
+---
+
+## Done-criteria for this lane
+
+- [x] Report written at `docs/PR-DEPS-TRIAGE-2026-05-12.md`.
+- [x] Branch `chore/pr-deps-triage-v0.1` (already existed; cleanly off `develop @ ba42b691`).
+- [ ] Draft PR opened — pending push + `gh pr create` after this commit lands.
+- [x] No merges, no destructive operations on sibling lanes, no stash drops on the main checkout.
