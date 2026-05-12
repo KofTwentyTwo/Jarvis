@@ -41,6 +41,11 @@ actor VoiceTTSAdapter: VoiceTTSInterface {
         }
     }
 
+    /// Whether a real `TTSEngineActor` is wired (vs. the dormant
+    /// `engine: nil` path). Used by `TTSBootHealthProbe`
+    /// (audit-2026-05-12 P1-2 / Issue #33).
+    var hasEngine: Bool { engine != nil }
+
     func synthesize(_ text: String) async {
         guard let engine else { return }  // dormant — no engine wired yet
         let tier = await tierResolver()

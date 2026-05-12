@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import AVFoundation
+import Speech
 import AgentCore
 import Bus
 import Config
@@ -262,6 +263,125 @@ public struct VoiceBootHealthProbe: BootHealthProbe {
                 evidence: "AVCaptureDevice.authorizationStatus returned unrecognized case"
             )
         }
+    }
+}
+
+// MARK: - WakeWord (Issue #33)
+
+/// Watchdog for the wake-word DAG. Status `.ok` only when the feed Task
+/// is armed against a ring. `.failed` when the DAG is dormant — fires
+/// after audit-2026-05-12 P0-1's silent-death scenario (DAG cancelled
+/// via `cancel()` and never re-armed).
+///
+/// Constructed against an optional `@Sendable` closure so the AppDelegate
+/// can resolve the DAG lazily — `installVoice` may not have constructed
+/// the DAG yet at probe-registration time (model files absent), and we
+/// want one probe shape across "DAG armed" / "DAG dormant" / "DAG
+/// never installed".
+public struct WakeWordBootHealthProbe: BootHealthProbe {
+    public let name = "wake_word"
+    private let isArmed: @Sendable () async -> Bool?
+
+    /// - Parameter isArmed: closure returning `true` when the DAG's
+    ///   feed Task is armed, `false` when stopped, `nil` when the DAG
+    ///   was never installed (e.g. models missing).
+    public init(isArmed: @escaping @Sendable () async -> Bool?) {
+        self.isArmed = isArmed
+    }
+
+    public func probe() async -> ProbeOutcome {
+        guard let armed = await isArmed() else {
+            return ProbeOutcome(
+                status: .unknown(reason: "wake-word DAG not installed (models absent or mic denied)", severity: .soft),
+                evidence: "WakeWordDAG handle unavailable"
+            )
+        }
+        if armed {
+            return ProbeOutcome(status: .ok, evidence: "feed Task armed")
+        }
+        return ProbeOutcome(
+            status: .failed(reason: "wake-word DAG feed Task not armed", severity: .loud),
+            evidence: "WakeWordDAG.isFeedArmed=false — wake-word will not fire until re-armed"
+        )
+    }
+}
+
+// MARK: - STT (Issue #33)
+
+/// Probes Apple Speech recognition authorization status as a proxy for
+/// SpeechAnalyzer asset availability. macOS 26 SpeechAnalyzer requires
+/// the `com.apple.developer.speech-recognition-assets` entitlement +
+/// `NSSpeechRecognitionAssetsUsageDescription` Info.plist key for
+/// on-device asset download; missing either causes silent
+/// `SFSpeechErrorCode.assetUnavailable` on first transcription.
+///
+/// `SFSpeechRecognizer.authorizationStatus()` returns synchronously
+/// without TCC prompts (it just reads the current state), so this
+/// probe is safe to run at boot.
+public struct STTBootHealthProbe: BootHealthProbe {
+    public let name = "stt"
+
+    public init() {}
+
+    public func probe() async -> ProbeOutcome {
+        let status = SFSpeechRecognizer.authorizationStatus()
+        switch status {
+        case .authorized:
+            return ProbeOutcome(
+                status: .ok,
+                evidence: "SFSpeechRecognizer authorized"
+            )
+        case .denied, .restricted:
+            return ProbeOutcome(
+                status: .degraded(reason: "speech recognition TCC denied", severity: .loud),
+                evidence: "SFSpeechRecognizer status=\(String(describing: status))"
+            )
+        case .notDetermined:
+            return ProbeOutcome(
+                status: .unknown(reason: "speech recognition TCC not yet requested", severity: .soft),
+                evidence: "SFSpeechRecognizer status=notDetermined"
+            )
+        @unknown default:
+            return ProbeOutcome(
+                status: .unknown(reason: "unknown SFSpeechRecognizer status \(status.rawValue)", severity: .soft),
+                evidence: "SFSpeechRecognizer.authorizationStatus returned unrecognized case"
+            )
+        }
+    }
+}
+
+// MARK: - TTS (Issue #33)
+
+/// Cheap watchdog for the TTS engine: verifies the adapter is wired
+/// (engine non-nil). The prior `VoiceBootHealthProbe` reported `ok`
+/// based only on `audioGraphOwner` + `micStatus`, so a `nil`-engine
+/// adapter (the pre-Track-B-3 production state) never surfaced.
+///
+/// The probe doesn't actually synthesize at boot — the audit suggests
+/// "synthesize empty string" as one option but that would emit
+/// audible events into a not-yet-ready audio chain. Cheaper, safer:
+/// check whether the adapter has an engine attached. The AppDelegate
+/// closure returns true when the TTS adapter was constructed with a
+/// real `TTSEngineActor` and false when the dormant path is wired.
+public struct TTSBootHealthProbe: BootHealthProbe {
+    public let name = "tts"
+    private let engineAlive: @Sendable () async -> Bool
+
+    public init(engineAlive: @escaping @Sendable () async -> Bool) {
+        self.engineAlive = engineAlive
+    }
+
+    public func probe() async -> ProbeOutcome {
+        if await engineAlive() {
+            return ProbeOutcome(
+                status: .ok,
+                evidence: "TTSEngineActor wired"
+            )
+        }
+        return ProbeOutcome(
+            status: .degraded(reason: "TTS engine not wired (adapter dormant)", severity: .loud),
+            evidence: "VoiceTTSAdapter.engine=nil — synth calls no-op"
+        )
     }
 }
 

@@ -561,6 +561,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `emitTurnEnded` / `emitError` hooks. (Plan 09-04.)
     private var voiceOrchestratorAdapter: VoiceOrchestratorAdapter?
 
+    /// Stored handle to the wake-word DAG so `WakeWordBootHealthProbe`
+    /// (audit-2026-05-12 P1-2 / Issue #33) can query `isFeedArmed`.
+    /// Nil before `installVoice` succeeds (model files missing, etc.).
+    private var wakeWordDAG: WakeWordDAG?
+
+    /// Stored handle to the production TTS adapter so
+    /// `TTSBootHealthProbe` can query whether a real `TTSEngineActor`
+    /// is wired. Nil before `installVoice` succeeds.
+    /// (audit-2026-05-12 P1-2 / Issue #33.)
+    private var voiceTTSAdapter: VoiceTTSAdapter?
+
     /// Drains the broadcaster's `.voice` priority subscription. Maintains
     /// a per-turn assistant-text accumulator gated by
     /// `agentOrchestrator.turnSourceWasVoice` — text-originated turns
@@ -1069,6 +1080,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             VoiceBootHealthProbe(audioGraphOwner: self.audioGraphOwner)
         )
 
+        // Three voice-watchdog probes — fill the gap surfaced by
+        // audit-2026-05-12 P1-2 / Issue #33. `VoiceBootHealthProbe`
+        // alone checked `audioGraphOwner` + `micStatus` + `currentVariant`
+        // and reported `ok` even after the wake-word DAG died (P0-1) or
+        // TTS was never wired (Track B-3 pre-fix). These probes
+        // distinguish "voice is plumbed" from "voice will actually work".
+        await bootHealthOrchestrator.register(
+            WakeWordBootHealthProbe(isArmed: { [weak self] in
+                guard let dag = await MainActor.run(body: { self?.wakeWordDAG })
+                else { return nil }
+                return await dag.isFeedArmed
+            })
+        )
+
+        await bootHealthOrchestrator.register(STTBootHealthProbe())
+
+        await bootHealthOrchestrator.register(
+            TTSBootHealthProbe(engineAlive: { [weak self] in
+                guard let adapter = await MainActor.run(body: { self?.voiceTTSAdapter })
+                else { return false }
+                return await adapter.hasEngine
+            })
+        )
+
         await bootHealthOrchestrator.register(VisionBootHealthProbe())
 
         await bootHealthOrchestrator.register(
@@ -1297,6 +1332,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let wakeWordDAG = WakeWordDAG(session: wakeWordSession)
+        self.wakeWordDAG = wakeWordDAG  // expose to BootHealthProbe (Issue #33)
 
         // The degradation + rebuild consumer Tasks MUST be spawned before
         // `graphOwner.open()` because `open()` may immediately yield
@@ -1473,6 +1509,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return snap.tts.tier == "tier2" ? .tier2 : .tier1
             }
         )
+        self.voiceTTSAdapter = ttsAdapter  // expose to BootHealthProbe (Issue #33)
 
         // Reuse the `OutboundBatcher` constructed by `installAgent`. The
         // batcher coalesces high-frequency audio-level RMS at ~30 Hz
