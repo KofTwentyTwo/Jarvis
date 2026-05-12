@@ -42,6 +42,55 @@ final class CameraCaptureTCCTests: XCTestCase {
         await capture.shutdown()
     }
 
+    /// Audit 2026-05-12 F-V3 — `becameAuthorized()` is the re-grant entry
+    /// point AppDelegate's foreground TCC re-check calls when the user
+    /// flips camera permission `.denied → .authorized` via System Settings.
+    /// Before the fix, this method had zero non-doc callsites in production
+    /// (grep returned nothing outside its own declaration), so a re-grant
+    /// after first-launch denial never reopened the session. The
+    /// AppDelegate-side wiring is exercised by host integration; this test
+    /// covers the Vision-side contract: after the auth probe flips to
+    /// .authorized, calling becameAuthorized() opens the session
+    /// successfully.
+    func testBecameAuthorizedOpensSessionAfterRegrant() async throws {
+        // Class-backed status box so the @Sendable probe can read the
+        // latest value (simulating the user flipping permission in
+        // System Settings between calls without needing an actor hop).
+        final class StatusBox: @unchecked Sendable {
+            private let lock = NSLock()
+            private var value: AVAuthorizationStatus
+            init(_ v: AVAuthorizationStatus) { self.value = v }
+            func read() -> AVAuthorizationStatus { lock.lock(); defer { lock.unlock() }; return value }
+            func write(_ v: AVAuthorizationStatus) { lock.lock(); defer { lock.unlock() }; value = v }
+        }
+        let box = StatusBox(.denied)
+
+        let (stream, cont) = AsyncStream<VisionDegradationReason>.makeStream()
+        let capture = CameraCapture(degradationContinuation: cont, degradationStream: stream)
+        await capture.setAuthStatusProbe { box.read() }
+
+        do {
+            try await capture.open()
+            XCTFail("Expected VisionError.tccDenied on first open")
+        } catch VisionError.tccDenied {
+            // Expected — first-launch denial.
+        }
+
+        // Flip the probe — user granted via Settings.
+        box.write(.authorized)
+        do {
+            try await capture.becameAuthorized()
+        } catch VisionError.noCameraDevice {
+            try XCTSkipIf(true, "no camera device available — see Track-C 6 hardware test")
+            return
+        } catch {
+            XCTFail("becameAuthorized() threw after re-grant: \(error)")
+        }
+
+        await capture.shutdown()
+        _ = stream
+    }
+
     func testCaptureFrameThrowsWhenSessionNotRunning() async throws {
         let (stream, cont) = AsyncStream<VisionDegradationReason>.makeStream()
         let capture = CameraCapture(degradationContinuation: cont, degradationStream: stream)

@@ -489,6 +489,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// graceful denial). Drains `CameraCapture.degradationStream`.
     var cameraDegradationTask: Task<Void, Never>?
 
+    /// Audit 2026-05-12 F-V3 — observer for `NSApplication.didBecomeActive`.
+    /// macOS does not publish an `AVCaptureDevice.authorizationStatus`
+    /// change notification, so we re-check the status whenever the app
+    /// returns to the foreground. If the status flipped from
+    /// non-authorized → `.authorized` (user granted via System Settings
+    /// while the app was running), we call `becameAuthorized()` on the
+    /// camera capture so presence + frame-attach come back online without a
+    /// restart.
+    var cameraAuthRecheckObserver: NSObjectProtocol?
+
     /// Builds + starts the vision subsystem. Spawned BEFORE `agentInstallTask`
     /// because the orchestrator constructor takes `visionRouter` and the
     /// broadcaster's frame-attach release subscriber needs
@@ -1202,6 +1212,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         memoryInstallTask?.cancel()
         visionInstallTask?.cancel()
         cameraDegradationTask?.cancel()
+        if let obs = cameraAuthRecheckObserver {
+            NotificationCenter.default.removeObserver(obs)
+            cameraAuthRecheckObserver = nil
+        }
         if let monitor = presenceMonitor {
             Task { await monitor.cancel() }
         }
@@ -2613,9 +2627,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
 
+        // 8. Audit 2026-05-12 F-V3 — TCC re-grant detection via foreground
+        //    re-check. macOS does not surface an `AVCaptureDevice` auth
+        //    status change notification, so we observe
+        //    `NSApplication.didBecomeActive` and compare current status
+        //    against the last-seen value. On a `non-authorized → authorized`
+        //    flip we call `capture.becameAuthorized()` to bring the camera
+        //    session back online. Skip under XCTest (no AppKit run loop).
+        if !Self.isRunningAsTestHost {
+            installCameraAuthRecheckObserver(capture: capture)
+        }
+
         systemLogger?.info(
             "installVision: presence + VisionRouter + FrameAttachController wired (T2 sidecar deferred)"
         )
+    }
+
+    /// Audit 2026-05-12 F-V3 — last camera TCC status observed during
+    /// foreground re-checks. Updated only by
+    /// `handleCameraAuthRecheck(capture:)` which runs on the main actor; the
+    /// observer closure dispatches there so this property stays
+    /// MainActor-isolated.
+    private var lastCameraAuthStatus: AVAuthorizationStatus?
+
+    /// Audit 2026-05-12 F-V3 — install the foreground TCC re-check observer.
+    /// macOS does not surface a camera authorization-change notification, so
+    /// we observe `NSApplication.didBecomeActive` and compare the current
+    /// status against the last-seen value. On a `non-authorized → authorized`
+    /// flip we call `capture.becameAuthorized()`.
+    @MainActor
+    private func installCameraAuthRecheckObserver(capture: CameraCapture) {
+        lastCameraAuthStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        cameraAuthRecheckObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // The block lands on `.main`; dispatch to MainActor for property
+            // access. `weak self` keeps the AppDelegate retain cycle clean.
+            Task { @MainActor [weak self] in
+                await self?.handleCameraAuthRecheck(capture: capture)
+            }
+        }
+    }
+
+    /// Foreground TCC re-check body. Invoked from
+    /// `installCameraAuthRecheckObserver`'s notification closure.
+    @MainActor
+    func handleCameraAuthRecheck(capture: CameraCapture) async {
+        let current = AVCaptureDevice.authorizationStatus(for: .video)
+        let previous = lastCameraAuthStatus
+        lastCameraAuthStatus = current
+        guard previous != .authorized, current == .authorized else { return }
+        systemLogger?.info(
+            "installVision: foreground re-check detected camera permission grant — calling becameAuthorized()"
+        )
+        do {
+            try await capture.becameAuthorized()
+        } catch {
+            systemLogger?.warning(
+                "installVision: becameAuthorized() after re-grant threw \(error)"
+            )
+        }
     }
 
     // MARK: - Test-host detection
