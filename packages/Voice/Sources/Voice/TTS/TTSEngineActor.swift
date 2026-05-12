@@ -19,7 +19,11 @@ import MLXAudioCore
 //   - fallback: TTSKit (feature-flag gated, defaulted off; Plan 06-05 wires flag).
 //
 // Event stream: `ttsEventStream` emits TTSEvent values for HUD animation +
-// ducking control. Ducking releases ONLY on `.ttsStopped` (VOICE-11 / Pitfall #6).
+// ducking control. Ducking releases on `.ttsStopped` — emitted both on
+// natural completion (after `.finished`, inside `synthesize`) and on
+// barge-in (via `InterruptSequence.run`). Prior to audit-2026-05-12 P0-3
+// (Issue #30) only the barge-in site emitted `.ttsStopped`, so natural
+// completion left any future ducking consumer with ducks engaged forever.
 
 public actor TTSEngineActor {
 
@@ -27,8 +31,17 @@ public actor TTSEngineActor {
 
     /// Event stream for HUD animation and ducking control.
     ///
-    /// VOICE-11 / Pitfall #6: Ducking releases ONLY on `.ttsStopped`.
-    /// DO NOT release ducking on `.finished` — producer done ≠ sink empty.
+    /// VOICE-11 / Pitfall #6: Ducking releases on `.ttsStopped`,
+    /// NOT on `.finished` — producer done ≠ sink empty.
+    /// `.ttsStopped` is emitted from two sites:
+    ///   - Natural completion: `synthesize(...)` yields it after
+    ///     `.finished` once the tier path has fully drained.
+    ///   - Barge-in: `InterruptSequence.run(...)` yields it at step 5
+    ///     after the 5-step interrupt sequence has run.
+    /// (audit-2026-05-12 P0-3 / Issue #30 added the natural-completion
+    /// emit; before then only barge-in fired `.ttsStopped`, so any
+    /// ducking consumer would have left ducks engaged forever on a
+    /// normal spoken reply.)
     public nonisolated let ttsEventStream: AsyncStream<TTSEvent>
 
     // MARK: - Private state
@@ -165,6 +178,8 @@ public actor TTSEngineActor {
             try await task.value
         } catch is CancellationError {
             _hasSynthInFlight = false
+            // Cancellation flows through `InterruptSequence.run`, which
+            // emits `.ttsStopped` at step 5. Don't double-emit here.
             throw TTSError.cancelled
         } catch let e as TTSError {
             _hasSynthInFlight = false
@@ -175,6 +190,13 @@ public actor TTSEngineActor {
         }
         _hasSynthInFlight = false
         currentTask = nil
+
+        // Natural-completion `.ttsStopped` emit (audit-2026-05-12 P0-3 /
+        // Issue #30). The barge-in path emits `.ttsStopped` from
+        // `InterruptSequence.run` step 5 instead. Together these are
+        // the two sites that release ducking — see `ttsEventStream`
+        // doc-comment.
+        eventContinuation.yield(.ttsStopped)
     }
 
     // MARK: - Cancel
