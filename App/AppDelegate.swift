@@ -297,6 +297,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// so the SwiftUI model state survives the panel cycling.
     private var statusPanel: StatusPanel?
 
+    /// Issue #89 — startup-surfaces mode. `.diagnostic` opens Status panel +
+    /// DevOverlay alongside the HUD on app start; `.minimal` opens only the
+    /// HUD. Defaults to `.diagnostic` for Debug builds (developer's
+    /// observability surface is one launch away, not three menu clicks) and
+    /// `.minimal` for Release builds. Settable by injection in tests; tests
+    /// also use the `XCTestConfigurationFilePath` short-circuit below to
+    /// keep test runs from popping panels.
+    enum StartupSurfaces { case minimal, diagnostic }
+    var startupSurfacesMode: StartupSurfaces = {
+        #if DEBUG
+        return .diagnostic
+        #else
+        return .minimal
+        #endif
+    }()
+
+    /// Set to `true` when `applicationWillFinishLaunching` decided to open
+    /// the onboarding wizard. The `bootHealthTask` tail reads this to skip
+    /// auto-opening Status + DevOverlay over the top of the wizard.
+    private var startupWizardWillOpen: Bool = false
+
     /// Drains `orchToReplayChannel` into `replayLog`. Pre-CR-02 this Task
     /// `for await _ in channel`'d into `/dev/null` and the channel had no
     /// producer either — ME-04's contract was structurally unverifiable
@@ -724,6 +745,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wizardController = OnboardingWizardController(state: state)
         settingsWindowController = SettingsWindowController(state: state)
         let willOpenWizard = !apiKeyStored
+        startupWizardWillOpen = willOpenWizard
         if willOpenWizard {
             openWizard(firstLaunch: true)
         }
@@ -899,6 +921,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bootHealthTask = Task { @MainActor [weak self] in
             await self?.selfKnowledgeInstallTask?.value
             await self?.runBootHealth()
+            // 17. Issue #89 — open Status panel + DevOverlay alongside
+            //     the HUD on app start when the startup-surfaces mode is
+            //     `.diagnostic`. Runs after `runBootHealth` so the first
+            //     probe sweep has populated state before either panel
+            //     reads it. Skipped during the first-launch wizard so the
+            //     two panels don't stack on top of the wizard window.
+            self?.openStartupSurfacesIfDiagnostic()
         }
     }
 
@@ -2910,21 +2939,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var devOverlayWindow: DevOverlayWindow?
 
     private func toggleDevOverlay() {
-        if devOverlayWindow == nil {
-            let hudCoordinator = self.hudStateCoordinator
-            // HudState lives in the App target; the overlay package only
-            // gets a string. Closure-captured weak reference so the
-            // overlay never extends the coordinator's lifetime.
-            let reader: @MainActor () -> String = { [weak hudCoordinator] in
-                hudCoordinator?.currentStateForTests.rawValue ?? "—"
-            }
-            devOverlayWindow = DevOverlayWindow(
-                emitter: devSnapshotEmitter,
-                bootHealthOrchestrator: bootHealthOrchestrator,
-                hudStateReader: reader
-            )
-        }
+        ensureDevOverlayWindow(initialTab: 0)
         devOverlayWindow?.toggle()
+    }
+
+    /// Idempotent constructor for the lazy `DevOverlayWindow`. Returns the
+    /// existing instance on subsequent calls; `initialTab` is honored only
+    /// on the first call (later calls are ignored — SwiftUI's TabView
+    /// `selection` is `@State`-driven after first render).
+    private func ensureDevOverlayWindow(initialTab: Int) {
+        guard devOverlayWindow == nil else { return }
+        let hudCoordinator = self.hudStateCoordinator
+        // HudState lives in the App target; the overlay package only
+        // gets a string. Closure-captured weak reference so the
+        // overlay never extends the coordinator's lifetime.
+        let reader: @MainActor () -> String = { [weak hudCoordinator] in
+            hudCoordinator?.currentStateForTests.rawValue ?? "—"
+        }
+        devOverlayWindow = DevOverlayWindow(
+            emitter: devSnapshotEmitter,
+            bootHealthOrchestrator: bootHealthOrchestrator,
+            hudStateReader: reader,
+            initialTab: initialTab
+        )
+    }
+
+    /// Issue #89 — open Status panel + DevOverlay alongside the HUD on app
+    /// start when `startupSurfacesMode == .diagnostic`. Called from the
+    /// `bootHealthTask` tail so both panels read settled state. Skipped:
+    ///   - When `.minimal` (Release-build default).
+    ///   - When the onboarding wizard is open — the wizard is a blocking
+    ///     surface and stacking two panels behind it would be noisy.
+    ///   - When running under XCTest — panels would pop during unit-test
+    ///     hosts, breaking timing-sensitive tests.
+    ///
+    /// Positioning: HUD already centers itself; Status panel goes to the
+    /// top-right of the main screen's visible frame and DevOverlay goes
+    /// bottom-right so the three surfaces don't overlap on a 1440×900
+    /// display. The DevOverlay opens to the Logs tab (index 3) so the
+    /// operator sees activity stream immediately.
+    @MainActor
+    private func openStartupSurfacesIfDiagnostic() {
+        guard startupSurfacesMode == .diagnostic else { return }
+        if startupWizardWillOpen { return }
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
+
+        // Status panel — top-right.
+        openStatusPanel()
+        if let screenFrame = NSScreen.main?.visibleFrame, let panel = statusPanel {
+            let inset: CGFloat = 16
+            let size = panel.frame.size
+            let origin = NSPoint(
+                x: screenFrame.maxX - size.width - inset,
+                y: screenFrame.maxY - size.height - inset
+            )
+            panel.setFrameOrigin(origin)
+        }
+
+        // DevOverlay — bottom-right, opened to Logs tab.
+        ensureDevOverlayWindow(initialTab: 3)
+        devOverlayWindow?.show()
+        if let screenFrame = NSScreen.main?.visibleFrame, let window = devOverlayWindow {
+            let inset: CGFloat = 16
+            let size = window.frameSize
+            let origin = NSPoint(
+                x: screenFrame.maxX - size.width - inset,
+                y: screenFrame.minY + inset
+            )
+            window.setFrameOrigin(origin)
+        }
+
+        systemLogger?.info("openStartupSurfacesIfDiagnostic: opened Status + DevOverlay (mode=diagnostic)")
     }
 
     /// Copies a debug state snapshot to the system clipboard. Writes ONLY
