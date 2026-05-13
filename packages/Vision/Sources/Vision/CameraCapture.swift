@@ -29,6 +29,11 @@ public actor CameraCapture {
     private var videoOutput: AVCaptureVideoDataOutput?
     private var photoOutput: AVCapturePhotoOutput?
     private var runtimeErrorObserver: NSObjectProtocol?
+    /// Audit 2026-05-12 F-V3 — observer for `AVCaptureSessionWasInterrupted`.
+    /// macOS surfaces mid-session Camera TCC revoke via the interruption
+    /// notification, NOT `RuntimeError`. Without this observer the revoke
+    /// arrives silently and the `cameraRevoked` HUD banner never fires.
+    private var interruptionObserver: NSObjectProtocol?
 
     /// Test seam — defaults to AVCaptureDevice.authorizationStatus(for: .video).
     /// Tests inject a closure to simulate denied/notDetermined/authorized.
@@ -99,6 +104,10 @@ public actor CameraCapture {
         if let obs = runtimeErrorObserver {
             NotificationCenter.default.removeObserver(obs)
             runtimeErrorObserver = nil
+        }
+        if let obs = interruptionObserver {
+            NotificationCenter.default.removeObserver(obs)
+            interruptionObserver = nil
         }
         session?.stopRunning()
         videoSampleDelegate?.finishAllStreams()
@@ -237,6 +246,42 @@ public actor CameraCapture {
             localLogger.warning("CameraCapture mid-session error: \(err)")
             cont.yield(.midSessionRevoked)
         }
+        // Audit 2026-05-12 F-V3 — observe `AVCaptureSessionWasInterrupted`.
+        // macOS surfaces TCC revoke + device-stolen-by-other-client events
+        // through the interruption notification, NOT through RuntimeError.
+        //
+        // Important macOS quirk: `AVCaptureSessionInterruptionReasonKey` and
+        // the `AVCaptureSession.InterruptionReason` enum are
+        // **API_UNAVAILABLE(macos)** (iOS / macCatalyst / tvOS / visionOS
+        // only — see AVCaptureSession.h, macOS SDK 26). So we cannot
+        // discriminate by reason here. Any interruption on macOS means the
+        // session can't continue capturing — we surface the revoked banner
+        // unconditionally. The most common causes are user-revoke via System
+        // Settings and device-in-use-by-another-process; both warrant the
+        // banner.
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureSession.wasInterruptedNotification,
+            object: session,
+            queue: nil
+        ) { _ in
+            let localLogger = Logger(label: label)
+            localLogger.warning("CameraCapture mid-session interrupted")
+            cont.yield(.midSessionRevoked)
+        }
+    }
+
+    /// Audit 2026-05-12 F-V3 — test seam for the mid-session interruption
+    /// path. Posts an `AVCaptureSession.wasInterruptedNotification` against
+    /// the live session; the registered observer yields `.midSessionRevoked`.
+    /// Routes through the SAME code path as a real OS-fired notification,
+    /// so a passing test proves the production observer is wired correctly.
+    /// Throws when `open()` hasn't built a session yet.
+    internal func simulateInterruption() throws {
+        guard let session else { throw VisionError.sessionNotRunning }
+        NotificationCenter.default.post(
+            name: AVCaptureSession.wasInterruptedNotification,
+            object: session
+        )
     }
 
     private static func liveAuthStatus() -> AVAuthorizationStatus {

@@ -117,6 +117,39 @@ final class FrameAttachControllerTests: XCTestCase {
         let stillFalse = await controller.hasPendingFrame
         XCTAssertFalse(stillFalse)
     }
+
+    // MARK: - Test 6: rejected-submit release path (#2)
+
+    /// Audit 2026-05-12 F-V2 — when `confirmSend` produced an ImageBlock but
+    /// the orchestrator returned `.rejected`, the controller must release the
+    /// frame on demand. Without `releaseAfterRejectedSubmit()` the JPEG bytes
+    /// would sit in actor memory until the next `requestAttach` overwrites
+    /// them — privacy regression on the D-15 byte-release window.
+    func testReleaseAfterRejectedSubmitClearsPendingFrame() async throws {
+        let capture = FakeCapture(frame: fixtureFrame)
+        let sink = FakeReplaySink()
+        let controller = FrameAttachController(
+            captureSession: capture,
+            replaySink: sink,
+            config: VisionRouterConfig.default
+        )
+        await controller.requestAttach(reason: .hudButton)
+        let block = await controller.confirmSend(userText: "what is this")
+        XCTAssertNotNil(block, "confirmSend should have produced an ImageBlock")
+        // After confirmSend the slot is still populated by design — the
+        // assistant-turn-complete edge would normally release it. Simulate a
+        // rejected submit (no .turnEnd will ever fire) and assert the
+        // dedicated release entry point clears the slot.
+        let stillPending = await controller.hasPendingFrame
+        XCTAssertTrue(stillPending, "confirmSend keeps the slot populated until release")
+        await controller.releaseAfterRejectedSubmit()
+        let pending = await controller.hasPendingFrame
+        XCTAssertFalse(pending, "releaseAfterRejectedSubmit must clear pendingFrame")
+        // Idempotent.
+        await controller.releaseAfterRejectedSubmit()
+        let stillFalse = await controller.hasPendingFrame
+        XCTAssertFalse(stillFalse)
+    }
 }
 
 // MARK: - Test fakes

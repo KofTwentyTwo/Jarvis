@@ -40,6 +40,7 @@ final class AgentOrchestratorVisionDispatchTests: XCTestCase {
     private func buildOrchestrator(
         provider mock: any LLMProvider,
         visionRouter: VisionRouter? = nil,
+        hasRealT2Provider: Bool = false,
         dispatcher: any ToolDispatcher = StubToolDispatcher()
     ) async throws -> (AgentOrchestrator, ReplayLog, SessionID) {
         let replay = try ReplayLog(databaseURL: tempHome.dbURL)
@@ -52,7 +53,8 @@ final class AgentOrchestratorVisionDispatchTests: XCTestCase {
             sessionId: session,
             systemPrompt: "you are jarvis",
             availableTools: [],
-            visionRouter: visionRouter
+            visionRouter: visionRouter,
+            hasRealT2Provider: hasRealT2Provider
         )
         return (orch, replay, session)
     }
@@ -163,9 +165,14 @@ final class AgentOrchestratorVisionDispatchTests: XCTestCase {
             .messageStop,
         ]))
         let router = makeRouter(t1: t1Mock, t2: t2Mock)
-        // D-04 ships with t1Provider == t2Provider in production; this test
-        // uses distinct providers to verify the swap actually occurs.
-        let (orch, _, _) = try await buildOrchestrator(provider: t1Mock, visionRouter: router)
+        // Production today wires `MissingT2Provider` (no real T2 sidecar
+        // yet); this test passes `hasRealT2Provider: true` and a real mock
+        // T2 to exercise the escalation path.
+        let (orch, _, _) = try await buildOrchestrator(
+            provider: t1Mock,
+            visionRouter: router,
+            hasRealT2Provider: true
+        )
 
         let input = TurnInput.withImages(.text, text: "what is this", images: [Self.fakeImage])
         let outcome = await orch.submit(input)
@@ -243,6 +250,57 @@ final class AgentOrchestratorVisionDispatchTests: XCTestCase {
         _ = await collectUntilIdle(orch: orch)
         let textHad = await orch.turnHadImage(textTurnId)
         XCTAssertFalse(textHad, "text-only turn should NOT be tracked")
+    }
+
+    /// Audit 2026-05-12 F-V1 regression — when only `MissingT2Provider` is
+    /// wired (production today), a low-confidence T1 response must NOT
+    /// escalate to T2. Without the `hasRealT2Provider: false` gate, the
+    /// orchestrator would swap to `MissingT2Provider`, whose stream throws
+    /// `t2ProviderUnavailable`, and the turn would die with an error event.
+    func testLowConfidenceT1StaysOnT1WhenT2ProviderIsMissing() async throws {
+        // T1 returns a low-confidence answer that would trigger escalation if
+        // T2 were available.
+        let t1Mock = MockLLMProvider(script: .init(events: [
+            .messageStart(LLMMessageStart(messageId: "m_t1", model: "gemma4:31b", usagePrefix: nil)),
+            .textDelta("I'm not sure"),
+            .stopReason(.endTurn),
+            .messageStop,
+        ]))
+        // Production wiring: T2 is `MissingT2Provider`. If reached its stream
+        // throws `VisionError.t2ProviderUnavailable`.
+        let router = VisionRouter(
+            t1Provider: t1Mock,
+            t2Provider: MissingT2Provider(),
+            t3Provider: t1Mock
+        )
+        // Default `hasRealT2Provider: false` mirrors AppDelegate.installVision.
+        let (orch, _, _) = try await buildOrchestrator(provider: t1Mock, visionRouter: router)
+
+        let input = TurnInput.withImages(.text, text: "what is this", images: [Self.fakeImage])
+        let outcome = await orch.submit(input)
+        guard case .ran(let turnId) = outcome else { return XCTFail("expected .ran") }
+
+        let events = await collectUntilIdle(orch: orch)
+
+        // T1 was called exactly once — escalation did NOT fire, so
+        // MissingT2Provider was never streamed.
+        let t1Calls = await t1Mock.getRecordedCalls()
+        XCTAssertEqual(t1Calls.count, 1, "T1 should be the only provider invoked when hasRealT2Provider is false")
+
+        // Exactly one .turnEnd — no error event.
+        let turnEnds = events.compactMap { event -> TurnID? in
+            if case .turnEnd(let id, _) = event { return id }
+            return nil
+        }
+        XCTAssertEqual(turnEnds.count, 1, "exactly one turnEnd; the turn must not die with a provider error")
+        XCTAssertEqual(turnEnds.first, turnId)
+
+        // No error event surfaced.
+        let errored = events.contains { event in
+            if case .error = event { return true }
+            return false
+        }
+        XCTAssertFalse(errored, "no error event should surface — MissingT2Provider must never be reached")
     }
 
     /// Test 6 — escalationAttempt is a distinct ReplayEvent case from

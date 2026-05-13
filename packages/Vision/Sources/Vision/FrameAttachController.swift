@@ -134,6 +134,19 @@ public actor FrameAttachController {
         discardFrame()
     }
 
+    /// Release the pending frame when `confirmSend` returned a block but the
+    /// orchestrator rejected the submit (no turn was allocated, so the
+    /// broadcaster's `.turnEnd` watcher will never fire `onAssistantTurnComplete`).
+    /// Without this hook the JPEG bytes would sit in actor memory until the
+    /// next `requestAttach` overwrites the slot — a privacy regression on the
+    /// D-15 byte-release window. Routes through the SOLE emission site
+    /// (`discardFrame`) so the single-emission-site invariant is preserved.
+    /// Idempotent — safe to call when no frame is pending.
+    public func releaseAfterRejectedSubmit() {
+        pendingTimeoutTask?.cancel()
+        discardFrame()
+    }
+
     // MARK: - SOLE EMISSION SITE — D-15
 
     /// D-15 single emission site. The ONLY place in this file where the
