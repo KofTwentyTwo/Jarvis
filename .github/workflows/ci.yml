@@ -236,6 +236,13 @@ jobs:
           # settings (no-timeout, no-lock-on-sleep) were applied once at
           # keychain-creation time and persist; we just need to unlock.
           security list-keychains -d user -s "$KEYCHAIN_PATH" "$HOME/Library/Keychains/login.keychain-db"
+          # On the legacy file-based macOS keychain, SecItemAdd writes to the
+          # user's DEFAULT keychain — the search list only determines read
+          # order. Changing list-keychains alone leaves SecItemAdd targeting
+          # login.keychain-db (locked, returns -25308). Also redirect the
+          # default. SIDE EFFECT documented in CLAUDE.md: this is persistent
+          # for james.maes's user prefs.
+          security default-keychain -d user -s "$KEYCHAIN_PATH"
       - name: swift test
         run: swift test --package-path packages/${{ matrix.package }}
 
