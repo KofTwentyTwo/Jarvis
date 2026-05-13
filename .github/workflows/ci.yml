@@ -107,6 +107,7 @@ jobs:
   swift-packages:
     name: SPM ${{ matrix.package }}
     runs-on: macos-15
+    needs: [webview]
     strategy:
       fail-fast: false
       matrix:
@@ -133,6 +134,16 @@ jobs:
         run: |
           swift --version
           xcodebuild -version
+      # Download the production webview bundle so Bus + downstream packages
+      # (AgentCore / Harness / MCP / Voice / VoiceLog) can mount a real
+      # WKWebView with a working JS bridge. Without this, BusTests fail
+      # with `Error: bus not mounted` because index.html + the JS bundle
+      # are missing from App/Resources/webview/.
+      - name: Download webview resources
+        uses: actions/download-artifact@v4
+        with:
+          name: webview-resources
+          path: App/Resources/webview/
       - name: Cache SPM build artifacts
         uses: actions/cache@v4
         with:
@@ -153,20 +164,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.2
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "pnpm"
-          cache-dependency-path: webview/pnpm-lock.yaml
       - name: Install xcodegen
         run: brew install xcodegen
-      - name: Build webview (produces App/Resources/webview/)
-        run: bash scripts/build-webview.sh
+      # Reuse the webview build from the upstream job rather than rebuilding.
+      - name: Download webview resources
+        uses: actions/download-artifact@v4
+        with:
+          name: webview-resources
+          path: App/Resources/webview/
       - name: check-app-builds.sh
         run: bash scripts/check-app-builds.sh
       - name: verify-codesign-settings.sh
