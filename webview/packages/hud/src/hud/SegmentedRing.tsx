@@ -88,7 +88,7 @@ export function SegmentedRing({
 
     if (!appliedRef.current) {
       for (let i = 0; i < tickCount; i++) {
-        const m = initialMatrices[i]
+        const m = initialMatrices[i]!
         tmpMatrix.compose(m.pos, m.quat, m.scale)
         meshRef.current.setMatrixAt(i, tmpMatrix)
       }
