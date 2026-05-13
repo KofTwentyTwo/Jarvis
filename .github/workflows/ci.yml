@@ -122,6 +122,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # VoiceLog removed: no `packages/VoiceLog` directory exists in the
+        # repo. The matrix entry was a phantom that failed with `chdir error:
+        # No such file or directory`. Voice-log work tracked under v1.1.
         package:
           - AgentCore
           - Bus
@@ -136,20 +139,25 @@ jobs:
           - Shell
           - Vision
           - Voice
-          - VoiceLog
     steps:
       - uses: actions/checkout@v4
+      # Project targets macOS 26 Tahoe + Swift 6.2/6.3. Xcode 16 (Swift 6.0)
+      # cannot parse `mlx-audio-swift` v0.1.2's `swift-tools-version:6.2`,
+      # lacks the `withThrowingTaskGroup` overload used by MCP `swift-sdk`
+      # 0.12.0, and rejects `@MainActor` XCTestCase `super.setUp()` patterns
+      # that Swift 6.1+ accepts. Pin to the newest Xcode 26.x on macos-15.
+      # See actions/runner-images macos-15 readme for installed Xcode list.
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
       - name: Show Swift toolchain
         run: |
           swift --version
           xcodebuild -version
       # Download the production webview bundle so Bus + downstream packages
-      # (AgentCore / Harness / MCP / Voice / VoiceLog) can mount a real
-      # WKWebView with a working JS bridge. Without this, BusTests fail
-      # with `Error: bus not mounted` because index.html + the JS bundle
-      # are missing from App/Resources/webview/.
+      # (AgentCore / Harness / MCP / Voice) can mount a real WKWebView with
+      # a working JS bridge. Without this, BusTests fail with `Error: bus
+      # not mounted` because index.html + the JS bundle are missing from
+      # App/Resources/webview/.
       - name: Download webview resources
         uses: actions/download-artifact@v4
         with:
@@ -173,8 +181,10 @@ jobs:
     needs: [boundary-gates, webview]
     steps:
       - uses: actions/checkout@v4
+      # Same Xcode 26.x pin as swift-packages — Xcode 16 cannot resolve
+      # mlx-audio-swift's swift-tools-version:6.2 manifest.
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
       - name: Install xcodegen
         run: brew install xcodegen
       # Reuse the webview build from the upstream job rather than rebuilding.
