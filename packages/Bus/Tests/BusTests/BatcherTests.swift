@@ -3,7 +3,13 @@ import XCTest
 
 /// Exercises `OutboundBatcher` behaviour against a recording fake sink. All
 /// timing assertions are designed to survive CI jitter — the batcher's nominal
-/// window is 33ms; tests wait ≥60ms (≈2x) before asserting.
+/// window is 33ms; tests wait 250ms (≈7.5x) before asserting. The earlier
+/// 80ms wait was tight enough that macOS-15 GitHub Actions runners (cold
+/// build + cold WKWebView mount sharing the box) intermittently dropped
+/// `test_tokenDeltaConcat` with sendCount=0 — the 33ms `Task.sleep` had not
+/// yet hopped back through the batcher actor + main actor by the time the
+/// test resumed. 250ms gives the scheduled drain ample time without making
+/// the suite noticeably slower (the four affected tests cost ~1s total).
 ///
 /// The fake is `@MainActor`-isolated because `BusOutbound` does not cross
 /// actor boundaries by default under Swift 6 strict concurrency, and the
@@ -21,13 +27,16 @@ final class BatcherTests: XCTestCase {
         }
     }
 
-    // A small drain-wait helper. The batcher window is 33ms; wait 80ms to let
-    // the scheduled drain fire and propagate the main-actor hop.
-    // `@MainActor` because each test is main-actor-isolated and Swift 6 strict
-    // concurrency disallows sending `self` across a nonisolated boundary.
+    // A small drain-wait helper. The batcher window is 33ms; wait 250ms to
+    // let the scheduled drain fire and propagate the main-actor hop. The
+    // earlier 80ms wait was flaky on macos-15 CI runners (cold builds racing
+    // a cold WKWebView mount on the same box) — see commit message + doc
+    // comment above. `@MainActor` because each test is main-actor-isolated
+    // and Swift 6 strict concurrency disallows sending `self` across a
+    // nonisolated boundary.
     @MainActor
     private func waitForDrain() async {
-        try? await Task.sleep(for: .milliseconds(80))
+        try? await Task.sleep(for: .milliseconds(250))
     }
 
     // MARK: - Tests
