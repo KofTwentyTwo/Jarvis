@@ -11,7 +11,9 @@ final class MenuBarIconControllerTests: XCTestCase {
 
         let menu = MenuBarContextMenu.build(
             setupAction: {},
+            settingsAction: {},
             devOverlayToggleAction: {},
+            voiceLogToggleAction: {},
             stateDumpAction: {}
         )
         let controller = MenuBarIconController(statusItem: item, contextMenu: menu)
@@ -32,7 +34,9 @@ final class MenuBarIconControllerTests: XCTestCase {
 
         let menu = MenuBarContextMenu.build(
             setupAction: {},
+            settingsAction: {},
             devOverlayToggleAction: {},
+            voiceLogToggleAction: {},
             stateDumpAction: {}
         )
         let controller = MenuBarIconController(statusItem: item, contextMenu: menu)
@@ -47,13 +51,16 @@ final class MenuBarIconControllerTests: XCTestCase {
     func test_contextMenuItems() {
         let menu = MenuBarContextMenu.build(
             setupAction: {},
+            settingsAction: {},
             devOverlayToggleAction: {},
+            voiceLogToggleAction: {},
             stateDumpAction: {}
         )
         let titles = menu.items.map(\.title)
         XCTAssertTrue(titles.contains("Setup…"))
         XCTAssertTrue(titles.contains("Settings…"))
         XCTAssertTrue(titles.contains("Show Dev Overlay"))
+        XCTAssertTrue(titles.contains("Voice Log"))
         XCTAssertTrue(titles.contains("Copy State Dump"))
         XCTAssertTrue(titles.contains("Quit Jarvis"))
         // Settings… is disabled per UI-SPEC Surface 4 (P1-scope stub).

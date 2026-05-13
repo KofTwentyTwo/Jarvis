@@ -55,6 +55,9 @@ public actor VoiceController {
     private let bannerCoordinator: any VoiceBannerInterface
     private let bus: any BusOutboundEmitter
     private let voiceHudCont: AsyncStream<VoiceHudIntent>.Continuation
+    /// Optional diagnostic tap (Voice Log window). Default: no-op.
+    /// Conformers MUST NOT route payloads to OSLog or disk per T-06-05-03.
+    private let tap: any VoiceTapSink
 
     // MARK: - Internal state
 

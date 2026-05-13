@@ -8,6 +8,7 @@ public enum MenuBarContextMenu {
         setupAction: @escaping () -> Void,
         settingsAction: @escaping () -> Void,
         devOverlayToggleAction: @escaping () -> Void,
+        voiceLogToggleAction: @escaping () -> Void,
         stateDumpAction: @escaping () -> Void
     ) -> NSMenu {
         let menu = NSMenu()
@@ -23,6 +24,11 @@ public enum MenuBarContextMenu {
         menu.addItem(NSMenuItem.separator())
 
         menu.addItem(makeItem(title: "Show Dev Overlay", action: devOverlayToggleAction))
+        // Voice Log: opt-in diagnostic window streaming every voice
+        // subsystem event in real time. Mirrors DevOverlay's lazy-construct,
+        // toggle-show pattern. T-06-05-03: in-memory display only — never
+        // routed to OSLog or to disk.
+        menu.addItem(makeItem(title: "Voice Log", action: voiceLogToggleAction))
         menu.addItem(makeItem(title: "Copy State Dump", action: stateDumpAction))
 
         menu.addItem(NSMenuItem.separator())

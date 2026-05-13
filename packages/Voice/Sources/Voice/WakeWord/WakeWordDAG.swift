@@ -130,18 +130,34 @@ public actor WakeWordDAG {
 
     /// Cancels the feed Task and finishes the wake-word stream.
     ///
-    /// Called by `AudioGraphOwner.cancelInFlight` during the six-step teardown
-    /// (Plan 06-01, step 1). The Task cancels within 50 ms (one sleep cycle +
-    /// cooperative cancellation on `Task.isCancelled` check).
-    ///
-    /// After `cancel()`, the `wakeWordStream` is finished — no further events will
-    /// be emitted. Callers that iterate `wakeWordStream` will see the async for-loop
-    /// exit naturally.
+    /// Permanent shutdown — call from `VoiceController.shutdown` only. After
+    /// `cancel()`, the `wakeWordStream` is finished and no further events
+    /// will be emitted. Callers that iterate `wakeWordStream` will see the
+    /// async for-loop exit naturally.
     public func cancel() async {
         feedTask?.cancel()
         feedTask = nil
         streamCont.finish()
         logger.info("WakeWordDAG: cancelled — stream finished")
+    }
+
+    /// Cancels the feed Task WITHOUT finishing the wake-word stream.
+    ///
+    /// Use this for transient teardown across an `AudioGraphOwner` rebuild:
+    /// the producer (ring) is going away, but the public consumer stream
+    /// must remain live so `VoiceController.spawnWakeWordConsumer`'s
+    /// `for await event in stream` keeps iterating across the rebuild
+    /// boundary. After the new graph is open, call `start(ring:)` again
+    /// against the new ring.
+    ///
+    /// Wired as `AudioGraphOwner.cancelInFlight` (2026-05-05 voice-loop fix).
+    /// Previously `cancelInFlight` called `cancel()` which finished the
+    /// stream — combined with the `lastMicStatus = false` startup bug, the
+    /// wake path died ~2s after launch on every cold start.
+    public func stopFeed() async {
+        feedTask?.cancel()
+        feedTask = nil
+        logger.info("WakeWordDAG: feed stopped (stream preserved for rebuild)")
     }
 
     // MARK: - Private state
