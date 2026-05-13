@@ -238,6 +238,17 @@ JARVIS_REAL_MODELS=1 swift test --package-path packages/Voice --filter OrpheusTT
 
 Eval harness (Anthropic + local-model eval matrix; corpus in `.planning/evals/`) — pinned to `qwen2.5-coder:32b` for the local-model lane.
 
+### Self-hosted CI runner (Grogu)
+
+`swift-packages` matrix in `.github/workflows/ci.yml` runs on a self-hosted macOS runner (`Grogu-jarvis`, labels `[self-hosted, macOS, ARM64, jarvis]`) rather than the github-hosted `macos-15` pool — the public pool was the v0.1 rate-limiter (1–2h queues for 13-job matrix). See #180.
+
+- **Where it lives:** `~/actions-runner-jarvis/` on Grogu. `_work/` symlinked to `/Volumes/HD-2/jarvis-runner-work/` (1.3 TB) to keep boot-disk pressure off.
+- **Service:** launchd LaunchAgent `actions.runner.KofTwentyTwo-Jarvis.Grogu-jarvis` (`~/Library/LaunchAgents/`). Manage with `cd ~/actions-runner-jarvis && ./svc.sh {status,start,stop}`. Only runs while user is logged in.
+- **Security gate:** the job's `if:` clause blocks fork PRs from triggering it — push, workflow_dispatch, and same-repo PRs only. Belt-and-suspenders: enable "Require approval for all outside collaborators" under Settings → Actions → General.
+- **Still on github-hosted `macos-15`:** `app-build` (the xcodebuild app target) and the `real-hardware` opt-in lane. Move opportunistically once the swift-packages path is proven.
+- **Xcode selection:** uses `DEVELOPER_DIR` env (per-process), tries `Xcode_26.3.app` → `Xcode_26.app` → `Xcode.app` in order. Grogu currently has Xcode 26.5 at the bare path.
+- **When Grogu reboots or sleeps**, the LaunchAgent restarts on login but jobs queued during downtime will sit waiting. For long offline windows, push to a branch other than develop or temporarily revert `runs-on:` to `macos-15`.
+
 # CLAUDE.md
 
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
