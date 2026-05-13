@@ -187,7 +187,24 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
       - name: Install xcodegen
         run: brew install xcodegen
+      # pnpm + node need to be on PATH because Xcode.app's project has a
+      # build-phase script (Script-4B80D79B2A0254274258618C.sh) that calls
+      # scripts/build-webview.sh during the build itself. Even though we
+      # download the prebuilt artifact below, the build phase still runs
+      # and re-stamps the bundle — and would error with
+      # "[build-webview] FATAL: pnpm not found on PATH" without these.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: webview/pnpm-lock.yaml
       # Reuse the webview build from the upstream job rather than rebuilding.
+      # The Xcode build phase will re-stamp these on top.
       - name: Download webview resources
         uses: actions/download-artifact@v4
         with:
