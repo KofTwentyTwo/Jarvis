@@ -13,7 +13,7 @@
     "@jarvis/bus": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@react-three/fiber": "^9.6.0",
+    "@react-three/fiber": "^9.6.1",
     "@react-three/drei": "^10.7.0",
     "three": "^0.184.0",
     "zustand": "^5.0.0"
@@ -22,12 +22,12 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.184.0",
-    "@vitejs/plugin-react": "^5.0.0",
+    "@vitejs/plugin-react": "^6.0.1",
     "typescript": "^5.9.0",
     "vite": "^8.0.0",
     "vitest": "^3.0.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/jest-dom": "^6.6.0",
-    "jsdom": "^25.0.0"
+    "jsdom": "^29.1.1"
   }
 }
