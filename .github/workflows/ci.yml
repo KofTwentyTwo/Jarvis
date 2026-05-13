@@ -94,14 +94,13 @@ jobs:
       # both find a working HUD bundle.
       - name: Build HUD bundle (produces @jarvis/bus dist + App/Resources/webview/)
         run: bash scripts/build-webview.sh
-      # Typecheck currently surfaces ~30 pre-existing strict-undefined errors
-      # (TS18048) in src/hud/{CoreGlow,Reticle,RingMesh,SegmentedRing}.tsx and
-      # related files. These are real but pre-existed and were masked because
-      # only vitest ran locally — not `tsc --noEmit`. Marked `continue-on-error`
-      # until the focused cleanup PR lands. See v0.2 issue for the cleanup.
-      - name: Typecheck (non-blocking until v0.2 strict-undefined cleanup)
+      # Typecheck is blocking. The historical ~30 errors reported in CI run
+      # 25797533005 were almost entirely downstream of `TS2307: Cannot find
+      # module '@jarvis/bus'` and disappear once `build-webview.sh` runs above
+      # (which produces `packages/bus/dist/index.d.ts`). The one real strict-
+      # undefined error in SegmentedRing.tsx was fixed in PR #165.
+      - name: Typecheck
         working-directory: webview
-        continue-on-error: true
         run: pnpm -r typecheck
       - name: Test (vitest)
         working-directory: webview
