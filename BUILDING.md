@@ -160,6 +160,74 @@ The eval harness — Anthropic + local-model matrix, corpus in
 `.planning/evals/` — is pinned to `qwen2.5-coder:32b` for the local-model
 lane.
 
+## CI/CD
+
+GitHub Actions is the canonical CI surface. Five workflows live in
+`.github/workflows/`:
+
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| `ci.yml` | PR + push to `develop`/`main`/`rc/*`/`release/*` | Boundary gates, webview (pnpm), 14 SPM packages (matrix), app target (xcodebuild), tag publish |
+| `codeql.yml` | PR + push + weekly cron | Static analysis for Swift + JavaScript/TypeScript |
+| `semgrep.yml` | PR + push + weekly cron | Rule-based scan (`p/default`, `p/swift`, `p/typescript`, `p/secrets`) |
+| `dependency-review.yml` | PR touching `package.json` / `pnpm-lock.yaml` / `Package.swift` / `Package.resolved` | Blocks high-severity vulns + license violations |
+| `release.yml` | Push of `v*` tag | Creates a GitHub Release with auto-generated changelog |
+
+### Branch + tag conventions
+
+- **`feature/*`, `fix/*`** — open a PR against `develop`. CI runs full
+  build + test + scan; no tagging.
+- **`develop`** — integration trunk. Every push runs full CI and publishes a
+  pre-release tag `v0.X.Y-dev.<run_number>`.
+- **`rc/*` / `release/*`** — release candidates. Tag `v0.X.Y-rc.N` (N auto-
+  increments from existing tags).
+- **`main`** — production. Only updated via PR from `rc/*` or `release/*`.
+  Push to `main` produces a final tag `v0.X.Y` and a GitHub Release.
+
+Versioning bumps follow Conventional Commits since the previous final tag:
+
+- `feat:` → minor bump
+- `fix:` → patch bump
+- `feat!:` or `BREAKING CHANGE:` footer → major bump
+
+When no tags exist yet, the seed version is `v0.1.0` (current roadmap
+target).
+
+### Failed boundary gate?
+
+Each script in `scripts/check-*.sh` encodes an architectural invariant. The
+table in [Boundary-gate linters](#boundary-gate-linters) above explains
+what each one enforces. To reproduce locally:
+
+```bash
+bash scripts/check-<name>.sh
+```
+
+The script's header comments explain the "why" behind the check and point
+at the relevant audit finding or bug.
+
+### Opting into real-hardware tests
+
+The real-hardware suites (`JARVIS_REAL_MODELS=1`, `JARVIS_REAL_CAMERA=1`)
+need local Ollama and a real camera, so they don't run on GitHub-hosted
+runners. To run them in CI:
+
+1. Register a self-hosted macOS runner with `Ollama` + the necessary
+   models + camera TCC grants.
+2. Trigger `ci.yml` via the Actions tab → "Run workflow" → set
+   `run_real_hardware` to `true`.
+
+The `real-hardware` job is gated on `runs-on: [self-hosted, macOS]` and
+only fires for `workflow_dispatch` events with the input set.
+
+### Required repo secrets (optional)
+
+- `SEMGREP_APP_TOKEN` — only needed if you want findings posted to
+  Semgrep Cloud. Without it, scans still run with public rules and the
+  workflow log shows results inline.
+
+`GITHUB_TOKEN` is provided automatically by Actions; no setup needed.
+
 ## Cross-references
 
 - [README](README.md) — project overview and quick-start.

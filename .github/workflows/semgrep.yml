@@ -1,0 +1,53 @@
+# Semgrep static analysis covering default + Swift + TypeScript rule packs.
+# Runs on PRs + pushes to develop/main + weekly schedule.
+#
+# SEMGREP_APP_TOKEN is optional; without it, scans run with public rules
+# and findings appear only in the workflow log (not Semgrep Cloud).
+
+name: Semgrep
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  schedule:
+    - cron: "0 10 * * 1"
+
+concurrency:
+  group: semgrep-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  semgrep:
+    name: Semgrep scan
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    if: (github.actor != 'dependabot[bot]')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Semgrep CI
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+          SEMGREP_RULES: "p/default p/swift p/typescript p/secrets"
+        run: |
+          # If SEMGREP_APP_TOKEN is set, `semgrep ci` posts to Semgrep Cloud.
+          # Otherwise, we fall back to a local scan over SEMGREP_RULES.
+          if [ -n "${SEMGREP_APP_TOKEN:-}" ]; then
+            semgrep ci
+          else
+            semgrep scan --config "$SEMGREP_RULES" --error --sarif --output=semgrep.sarif || true
+          fi
+
+      - name: Upload SARIF (when present)
+        if: hashFiles('semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
