@@ -117,7 +117,21 @@ jobs:
 
   swift-packages:
     name: SPM ${{ matrix.package }}
-    runs-on: macos-15
+    # Self-hosted on Grogu (labels: self-hosted, macOS, ARM64, jarvis) per #180.
+    # The github-hosted macos-15 pool was the rate-limiting step for v0.1:
+    # 13 matrix jobs + 1 app-build job all needed macOS slots, GitHub
+    # scheduled them 1-3 at a time, and total wall-clock was ~1-2h per run
+    # versus actual work of <10m. Self-hosted eliminates the queue.
+    runs-on: [self-hosted, macOS, jarvis]
+    # Security gate: self-hosted runners + public repo would let a fork PR
+    # execute arbitrary code on this machine. Push events only ever come from
+    # maintainers (branch protection blocks unauthorized writes). PRs are
+    # only allowed onto the self-hosted runner when they originate from a
+    # branch on this same repo (i.e., not a fork). Also gates manual dispatch.
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     needs: [webview]
     strategy:
       fail-fast: false
@@ -145,10 +159,26 @@ jobs:
       # cannot parse `mlx-audio-swift` v0.1.2's `swift-tools-version:6.2`,
       # lacks the `withThrowingTaskGroup` overload used by MCP `swift-sdk`
       # 0.12.0, and rejects `@MainActor` XCTestCase `super.setUp()` patterns
-      # that Swift 6.1+ accepts. Pin to the newest Xcode 26.x on macos-15.
-      # See actions/runner-images macos-15 readme for installed Xcode list.
+      # that Swift 6.1+ accepts. The first two paths cover github-hosted
+      # macos-15 (which ships Xcode 26.3); the bare `Xcode.app` fallback
+      # covers self-hosted runners with whatever local Xcode 26.x is the
+      # default (Grogu currently has 26.5). Using DEVELOPER_DIR (per-process)
+      # rather than `sudo xcode-select -s` (system-wide, needs passwordless
+      # sudo on self-hosted) — both paths respect DEVELOPER_DIR identically.
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
+        run: |
+          for path in \
+            /Applications/Xcode_26.3.app/Contents/Developer \
+            /Applications/Xcode_26.app/Contents/Developer \
+            /Applications/Xcode.app/Contents/Developer; do
+            if [ -d "$path" ]; then
+              echo "DEVELOPER_DIR=$path" >> "$GITHUB_ENV"
+              echo "Using Xcode at: $path"
+              exit 0
+            fi
+          done
+          echo "No Xcode 26.x found in any expected path" >&2
+          exit 1
       - name: Show Swift toolchain
         run: |
           swift --version
@@ -163,7 +193,16 @@ jobs:
         with:
           name: webview-resources
           path: App/Resources/webview/
-      - name: Cache SPM build artifacts
+      # actions/cache@v4 restores the package's `.build/` and SwiftPM's
+      # global cache. On github-hosted this is a real perf win; on self-hosted
+      # it's both unnecessary (the _work/ dir persists between jobs naturally)
+      # and actively harmful (caches saved on github-hosted have absolute
+      # paths like /Users/runner/work/Jarvis/.../onnxruntime.xcframework
+      # baked into .build/artifacts, which don't resolve on Grogu and break
+      # Voice + Harness with "XCFramework Info.plist not found"). Restrict
+      # the cache action to github-hosted only.
+      - name: Cache SPM build artifacts (github-hosted only)
+        if: runner.environment == 'github-hosted'
         uses: actions/cache@v4
         with:
           path: |
@@ -172,6 +211,38 @@ jobs:
           key: spm-${{ matrix.package }}-${{ runner.os }}-${{ hashFiles(format('packages/{0}/Package.resolved', matrix.package), format('packages/{0}/Package.swift', matrix.package)) }}
           restore-keys: |
             spm-${{ matrix.package }}-${{ runner.os }}-
+      # On self-hosted (Grogu) the runner is a LaunchAgent with no UI session,
+      # so SecItemAdd against the locked login keychain returns
+      # errSecInteractionNotAllowed (-25308). Use a pre-created dedicated
+      # keychain `jarvis-runner.keychain-db` (one-time setup on Grogu) and
+      # prepend it to the user search list for this run so test SecItemAdd
+      # calls without an explicit keychain target write there. github-hosted
+      # bakes its own unlocked keychain into the runner image and skips this.
+      - name: Unlock runner keychain (self-hosted only)
+        if: runner.environment == 'self-hosted'
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.JARVIS_RUNNER_KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$HOME/Library/Keychains/jarvis-runner.keychain-db"
+          if [ ! -f "$KEYCHAIN_PATH" ]; then
+            echo "FATAL: runner keychain missing at $KEYCHAIN_PATH" >&2
+            echo "  Create with: security create-keychain -p \"\$KEYCHAIN_PASSWORD\" \"$KEYCHAIN_PATH\"" >&2
+            exit 1
+          fi
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          # NOTE: do NOT re-run `set-keychain-settings` here — the Security
+          # framework requires user interaction for that operation even with
+          # the keychain unlocked, and the LaunchAgent has no UI. The
+          # settings (no-timeout, no-lock-on-sleep) were applied once at
+          # keychain-creation time and persist; we just need to unlock.
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "$HOME/Library/Keychains/login.keychain-db"
+          # On the legacy file-based macOS keychain, SecItemAdd writes to the
+          # user's DEFAULT keychain — the search list only determines read
+          # order. Changing list-keychains alone leaves SecItemAdd targeting
+          # login.keychain-db (locked, returns -25308). Also redirect the
+          # default. SIDE EFFECT documented in CLAUDE.md: this is persistent
+          # for james.maes's user prefs.
+          security default-keychain -d user -s "$KEYCHAIN_PATH"
       - name: swift test
         run: swift test --package-path packages/${{ matrix.package }}
 
