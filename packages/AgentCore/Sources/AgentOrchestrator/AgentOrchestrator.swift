@@ -508,6 +508,15 @@ public actor AgentOrchestrator {
         // for the current pass. Reset on each pass restart (initial entry +
         // T1→T2 escalation re-enter via `continue outer`).
         var assistantTextSoFar: String = ""
+        // #24: text accumulated since the most recent toolUse append (or
+        // since the start of the round if no toolUse yet). Distinct from
+        // `assistantTextSoFar` which stays cumulative for D-02 vision
+        // routing on endTurn. This buffer feeds the assistant message
+        // history alongside each toolUse block so the model sees its own
+        // narration ("Let me check..." → tool_use(get_time)) on subsequent
+        // round-trips; previously the text was dropped entirely from
+        // history and the model would deny ever saying it.
+        var assistantTextSinceLastFlush: String = ""
         // D-02: escalation gets ONE shot. The second low-confidence outcome
         // stays on T1 (the user got the response we have). This mirrors the
         // AGENT-09 retry budget but is independent of it.
@@ -575,6 +584,10 @@ public actor AgentOrchestrator {
                         // can hand it to VisionRouter.evaluatePostResponse.
                         // Reset on `continue outer` from the escalation arm.
                         assistantTextSoFar += s
+                        // #24: also accumulate into the per-tool-use flush
+                        // buffer so the next toolUseRequested attaches the
+                        // preceding narration to its assistant message.
+                        assistantTextSinceLastFlush += s
                         await replayLog.record(.textDelta(s), for: currentTurnId)
                         await events.send(.tokenDelta(turnId: currentTurnId, text: s))
 
@@ -601,9 +614,29 @@ public actor AgentOrchestrator {
                         // history so providers that require the original
                         // tool_use round-trip (Anthropic) can resolve the
                         // tool_use_id when the next tool_result lands.
-                        messages.append(LLMMessage(role: .assistant, content: [
-                            .toolUse(id: req.id, name: req.name, argsJSON: req.argsJSON),
-                        ]))
+                        //
+                        // #24: bundle any text the model emitted since the
+                        // last flush — Opus 4.7 commonly narrates ("Let me
+                        // check the time...") before calling a tool. Without
+                        // this the text was dropped from history and the
+                        // model would deny ever saying it on a follow-up.
+                        // Trim whitespace-only text to avoid emitting empty
+                        // text blocks (which Anthropic rejects with a 400).
+                        var assistantContent: [LLMMessage.ContentBlock] = []
+                        let pendingText = assistantTextSinceLastFlush
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !pendingText.isEmpty {
+                            assistantContent.append(.text(pendingText))
+                        }
+                        assistantContent.append(
+                            .toolUse(id: req.id, name: req.name, argsJSON: req.argsJSON)
+                        )
+                        messages.append(LLMMessage(role: .assistant, content: assistantContent))
+                        // Consumed — the next toolUseRequested in the same
+                        // round (rare but possible) gets only the text that
+                        // came BETWEEN the two tool_use blocks. D-02's
+                        // cumulative `assistantTextSoFar` is untouched.
+                        assistantTextSinceLastFlush = ""
 
                         do {
                             let resultData = try await toolDispatcher.dispatch(toolUse: req)
