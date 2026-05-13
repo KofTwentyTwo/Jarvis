@@ -32,18 +32,36 @@ fi
 # via Logger.critical with "JarvisEntitlementsVerified missing/false".
 # Isolation eliminates the race entirely; bundle launches cleanly.
 echo "[check-app-builds] xcodebuild build (Debug, arm64, isolated DerivedData)..."
+
+# Capture the full xcodebuild log to a tempfile so we can summarise errors
+# on failure. `-quiet` + `tail -5` previously suppressed every signal except
+# `** BUILD FAILED **`, making CI failures undebuggable without re-running
+# locally. The set-pipefail + tee ensures we keep both a streamed (quiet)
+# console view and the full log for grep'ing.
+LOG="$(mktemp -t check-app-builds-XXXXXX.log)"
+trap 'rm -f "$LOG"' EXIT
+
+set +e
 xcodebuild build \
   -project Jarvis.xcodeproj \
   -scheme Jarvis \
   -destination 'platform=macOS,arch=arm64' \
   -configuration Debug \
   -derivedDataPath "$REPO_ROOT/build" \
-  -quiet 2>&1 | tail -5
+  > "$LOG" 2>&1
+status=$?
+set -e
 
-if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+if [ "$status" -eq 0 ]; then
+  tail -5 "$LOG"
   echo "[check-app-builds] PASS — App target compiles cleanly"
   exit 0
-else
-  echo "[check-app-builds] FAIL — App target compile errors above" >&2
-  exit 1
 fi
+
+# Failure path: surface every `error:` line plus a generous tail for context.
+echo "[check-app-builds] FAIL — xcodebuild exited $status. Error lines:" >&2
+grep -E "error:|fatal error:|: error " "$LOG" >&2 || true
+echo >&2
+echo "[check-app-builds] Last 80 lines of xcodebuild output:" >&2
+tail -80 "$LOG" >&2
+exit 1
