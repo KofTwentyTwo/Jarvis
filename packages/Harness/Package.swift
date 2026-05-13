@@ -64,7 +64,7 @@ let package = Package(
             ],
             path: "Sources/Harness",
             resources: [
-                .copy("../../Corpora"),
+                .copy("Corpora"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
