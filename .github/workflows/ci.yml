@@ -193,7 +193,16 @@ jobs:
         with:
           name: webview-resources
           path: App/Resources/webview/
-      - name: Cache SPM build artifacts
+      # actions/cache@v4 restores the package's `.build/` and SwiftPM's
+      # global cache. On github-hosted this is a real perf win; on self-hosted
+      # it's both unnecessary (the _work/ dir persists between jobs naturally)
+      # and actively harmful (caches saved on github-hosted have absolute
+      # paths like /Users/runner/work/Jarvis/.../onnxruntime.xcframework
+      # baked into .build/artifacts, which don't resolve on Grogu and break
+      # Voice + Harness with "XCFramework Info.plist not found"). Restrict
+      # the cache action to github-hosted only.
+      - name: Cache SPM build artifacts (github-hosted only)
+        if: runner.environment == 'github-hosted'
         uses: actions/cache@v4
         with:
           path: |
@@ -202,6 +211,27 @@ jobs:
           key: spm-${{ matrix.package }}-${{ runner.os }}-${{ hashFiles(format('packages/{0}/Package.resolved', matrix.package), format('packages/{0}/Package.swift', matrix.package)) }}
           restore-keys: |
             spm-${{ matrix.package }}-${{ runner.os }}-
+      # On self-hosted (Grogu) the runner is a LaunchAgent with no UI session,
+      # so SecItemAdd against the locked login keychain returns
+      # errSecInteractionNotAllowed (-25308). Use a pre-created dedicated
+      # keychain `jarvis-runner.keychain-db` (one-time setup on Grogu) and
+      # prepend it to the user search list for this run so test SecItemAdd
+      # calls without an explicit keychain target write there. github-hosted
+      # bakes its own unlocked keychain into the runner image and skips this.
+      - name: Unlock runner keychain (self-hosted only)
+        if: runner.environment == 'self-hosted'
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.JARVIS_RUNNER_KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$HOME/Library/Keychains/jarvis-runner.keychain-db"
+          if [ ! -f "$KEYCHAIN_PATH" ]; then
+            echo "FATAL: runner keychain missing at $KEYCHAIN_PATH" >&2
+            echo "  Create with: security create-keychain -p \"\$KEYCHAIN_PASSWORD\" \"$KEYCHAIN_PATH\"" >&2
+            exit 1
+          fi
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -t 0 "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "$HOME/Library/Keychains/login.keychain-db"
       - name: swift test
         run: swift test --package-path packages/${{ matrix.package }}
 
