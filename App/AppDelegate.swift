@@ -297,6 +297,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// so the SwiftUI model state survives the panel cycling.
     private var statusPanel: StatusPanel?
 
+    /// Issue #89 — startup-surfaces mode. `.diagnostic` opens Status panel +
+    /// DevOverlay alongside the HUD on app start; `.minimal` opens only the
+    /// HUD. Defaults to `.diagnostic` for Debug builds (developer's
+    /// observability surface is one launch away, not three menu clicks) and
+    /// `.minimal` for Release builds. Settable by injection in tests; tests
+    /// also use the `XCTestConfigurationFilePath` short-circuit below to
+    /// keep test runs from popping panels.
+    enum StartupSurfaces { case minimal, diagnostic }
+    var startupSurfacesMode: StartupSurfaces = {
+        #if DEBUG
+        return .diagnostic
+        #else
+        return .minimal
+        #endif
+    }()
+
+    /// Set to `true` when `applicationWillFinishLaunching` decided to open
+    /// the onboarding wizard. The `bootHealthTask` tail reads this to skip
+    /// auto-opening Status + DevOverlay over the top of the wizard.
+    private var startupWizardWillOpen: Bool = false
+
     /// Drains `orchToReplayChannel` into `replayLog`. Pre-CR-02 this Task
     /// `for await _ in channel`'d into `/dev/null` and the channel had no
     /// producer either — ME-04's contract was structurally unverifiable
@@ -763,6 +784,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wizardController = OnboardingWizardController(state: state)
         settingsWindowController = SettingsWindowController(state: state)
         let willOpenWizard = !apiKeyStored
+        startupWizardWillOpen = willOpenWizard
         if willOpenWizard {
             openWizard(firstLaunch: true)
         }
@@ -938,6 +960,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bootHealthTask = Task { @MainActor [weak self] in
             await self?.selfKnowledgeInstallTask?.value
             await self?.runBootHealth()
+            // 17. Issue #89 — open Status panel + DevOverlay alongside
+            //     the HUD on app start when the startup-surfaces mode is
+            //     `.diagnostic`. Runs after `runBootHealth` so the first
+            //     probe sweep has populated state before either panel
+            //     reads it. Skipped during the first-launch wizard so the
+            //     two panels don't stack on top of the wizard window.
+            self?.openStartupSurfacesIfDiagnostic()
+        }
+
+        // 18. Issue #88 / SHELL-06 — re-probe Input Monitoring on app
+        //     foreground. `NSEvent.addGlobalMonitorForEvents` silently
+        //     no-ops on TCC denial; if the user grants access in System
+        //     Settings (via our deep-link), we need to clear the
+        //     non-dismissible banner without forcing them to relaunch.
+        //     The query-only probe (`IOHIDCheckAccess`) reads the cached
+        //     TCC decision without prompting.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.reprobeInputMonitoring()
+            }
         }
     }
 
@@ -1625,9 +1671,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dormantVoiceContinuation = nil
 
         // PTT hotkey binding is deferred to the wizard / Settings UI —
-        // unbound at launch. (VOICE-13.)
+        // unbound at launch. (VOICE-13 / #87.)
         let ptt = PushToTalk(controller: vc)
         pushToTalk = ptt
+
+        // Issue #87: if `WizardState.pttHotkey` was loaded from
+        // UserDefaults during launch, bind it now that the controller is
+        // live. No-op if the user has never bound a PTT key.
+        rebindPTTFromState()
 
         // Menu-bar wake-word mute toggle. (VOICE-12.)
         if let menu = menuBarController?.contextMenu {
@@ -3263,6 +3314,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // monitor so the new shortcut takes effect immediately
                 // without requiring a relaunch.
                 self?.bindHotkeyFromWizard()
+            },
+            onPTTHotkeyChanged: { [weak self] _ in
+                // Issue #87: same pattern as the summon-Jarvis hotkey —
+                // `WizardState.pttHotkey` is already persisted; rebind
+                // PushToTalk so the new shortcut takes effect immediately.
+                self?.rebindPTTFromState()
             }
         )
     }
@@ -3283,6 +3340,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Issue #87 / VOICE-13 — bind the configured push-to-talk hotkey to
+    /// the live `PushToTalk` instance. Reads `WizardState.pttHotkey` and
+    /// `inputMonitoringGranted`, unbinds first, then re-installs the
+    /// global+local monitors. Idempotent: safe to call when nothing has
+    /// changed (PushToTalk.bind always unbinds first).
+    ///
+    /// No-op when:
+    ///   - `pushToTalk` is nil (voice subsystem still installing — the
+    ///     install tail calls this method once `pushToTalk` is live).
+    ///   - `WizardState.pttHotkey` is nil (user hasn't bound a PTT key
+    ///     yet — default ships unbound to avoid colliding with
+    ///     Cmd+Shift+J or Option+Space, which Chrome/Slack/Alfred/Raycast
+    ///     own in different combinations).
+    ///
+    /// Audio-graph isolation: binding monitors does NOT touch the audio
+    /// graph — `NSEvent.addGlobalMonitorForEvents` just installs key
+    /// callbacks. The press path routes through `VoiceController.pttDown`,
+    /// which uses the same audio graph the wake-word DAG already owns;
+    /// so rebinding is safe regardless of voice subsystem state.
+    @MainActor
+    private func rebindPTTFromState() {
+        guard let ptt = pushToTalk else { return }
+        guard let state = wizardState, let shortcut = state.pttHotkey else {
+            ptt.unbind()
+            return
+        }
+        ptt.bind(
+            keyCode: shortcut.keyCode,
+            modifiers: shortcut.modifierFlags,
+            inputMonitoringGranted: state.inputMonitoringGranted
+        )
+    }
+
+
     // MARK: - Menu-bar actions
 
     /// Lazily constructed on first toggle so the panel doesn't allocate
@@ -3294,21 +3385,118 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var devOverlayWindow: DevOverlayWindow?
 
     private func toggleDevOverlay() {
-        if devOverlayWindow == nil {
-            let hudCoordinator = self.hudStateCoordinator
-            // HudState lives in the App target; the overlay package only
-            // gets a string. Closure-captured weak reference so the
-            // overlay never extends the coordinator's lifetime.
-            let reader: @MainActor () -> String = { [weak hudCoordinator] in
-                hudCoordinator?.currentStateForTests.rawValue ?? "—"
-            }
-            devOverlayWindow = DevOverlayWindow(
-                emitter: devSnapshotEmitter,
-                bootHealthOrchestrator: bootHealthOrchestrator,
-                hudStateReader: reader
-            )
-        }
+        ensureDevOverlayWindow(initialTab: 0)
         devOverlayWindow?.toggle()
+    }
+
+    /// Idempotent constructor for the lazy `DevOverlayWindow`. Returns the
+    /// existing instance on subsequent calls; `initialTab` is honored only
+    /// on the first call (later calls are ignored — SwiftUI's TabView
+    /// `selection` is `@State`-driven after first render).
+    private func ensureDevOverlayWindow(initialTab: Int) {
+        guard devOverlayWindow == nil else { return }
+        let hudCoordinator = self.hudStateCoordinator
+        // HudState lives in the App target; the overlay package only
+        // gets a string. Closure-captured weak reference so the
+        // overlay never extends the coordinator's lifetime.
+        let reader: @MainActor () -> String = { [weak hudCoordinator] in
+            hudCoordinator?.currentStateForTests.rawValue ?? "—"
+        }
+        devOverlayWindow = DevOverlayWindow(
+            emitter: devSnapshotEmitter,
+            bootHealthOrchestrator: bootHealthOrchestrator,
+            hudStateReader: reader,
+            initialTab: initialTab
+        )
+    }
+
+    /// Issue #89 — open Status panel + DevOverlay alongside the HUD on app
+    /// start when `startupSurfacesMode == .diagnostic`. Called from the
+    /// `bootHealthTask` tail so both panels read settled state. Skipped:
+    ///   - When `.minimal` (Release-build default).
+    ///   - When the onboarding wizard is open — the wizard is a blocking
+    ///     surface and stacking two panels behind it would be noisy.
+    ///   - When running under XCTest — panels would pop during unit-test
+    ///     hosts, breaking timing-sensitive tests.
+    ///
+    /// Positioning: HUD already centers itself; Status panel goes to the
+    /// top-right of the main screen's visible frame and DevOverlay goes
+    /// bottom-right so the three surfaces don't overlap on a 1440×900
+    /// display. The DevOverlay opens to the Logs tab (index 3) so the
+    /// operator sees activity stream immediately.
+    @MainActor
+    private func openStartupSurfacesIfDiagnostic() {
+        guard startupSurfacesMode == .diagnostic else { return }
+        if startupWizardWillOpen { return }
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
+
+        // Status panel — top-right.
+        openStatusPanel()
+        if let screenFrame = NSScreen.main?.visibleFrame, let panel = statusPanel {
+            let inset: CGFloat = 16
+            let size = panel.frame.size
+            let origin = NSPoint(
+                x: screenFrame.maxX - size.width - inset,
+                y: screenFrame.maxY - size.height - inset
+            )
+            panel.setFrameOrigin(origin)
+        }
+
+        // DevOverlay — bottom-right, opened to Logs tab.
+        ensureDevOverlayWindow(initialTab: 3)
+        devOverlayWindow?.show()
+        if let screenFrame = NSScreen.main?.visibleFrame, let window = devOverlayWindow {
+            let inset: CGFloat = 16
+            let size = window.frameSize
+            let origin = NSPoint(
+                x: screenFrame.maxX - size.width - inset,
+                y: screenFrame.minY + inset
+            )
+            window.setFrameOrigin(origin)
+        }
+
+        systemLogger?.info("openStartupSurfacesIfDiagnostic: opened Status + DevOverlay (mode=diagnostic)")
+    }
+
+    /// Issue #88 / SHELL-06 — query-only Input Monitoring TCC probe wired
+    /// to the `NSApplication.didBecomeActiveNotification` observer set up
+    /// in `applicationWillFinishLaunching`. Two transitions are handled:
+    ///
+    ///   - Was-denied → now-granted (most common: user clicked the deep
+    ///     link, toggled access on, returned to Jarvis). Programmatically
+    ///     dismisses the non-dismissible `.inputMonitoringDenied` banner
+    ///     via `HUDBannerCoordinator.dismiss(id:)`. We also re-bind the
+    ///     existing global hotkey if one was previously configured, since
+    ///     the original bind happened under denied access and silently
+    ///     fell back to local-only.
+    ///
+    ///   - Was-granted → now-denied (rarer: user toggled access off in
+    ///     System Settings while Jarvis was background). Enqueues
+    ///     `.inputMonitoringDenied`. The coordinator dedupes by id so a
+    ///     re-probe while the banner is still showing is a no-op.
+    ///
+    /// `IOHIDCheckAccess` reads the cached TCC decision without prompting,
+    /// so this is safe to call on every foreground hop.
+    @MainActor
+    private func reprobeInputMonitoring() {
+        let granted = hidProbe.isListenEventAccessGranted()
+        if granted {
+            bannerCoordinator?.dismiss(id: BannerContent.inputMonitoringDenied.id)
+            // Rebind hotkey under fresh TCC: the previous bind installed
+            // local monitors only (global silently nil-tokened on denial).
+            // Re-running `bindHotkeyFromWizard` reinstalls global monitors.
+            if let state = wizardState, !state.inputMonitoringGranted {
+                state.inputMonitoringGranted = true
+                if state.hotkey != nil { bindHotkeyFromWizard() }
+                // Issue #87: same reason as the global hotkey — the
+                // initial PTT bind (if any) installed local monitors
+                // only. Rebind so the global monitor token is acquired
+                // under fresh TCC.
+                rebindPTTFromState()
+            }
+        } else {
+            bannerCoordinator?.enqueue(.inputMonitoringDenied)
+        }
     }
 
     /// Copies a debug state snapshot to the system clipboard. Writes ONLY

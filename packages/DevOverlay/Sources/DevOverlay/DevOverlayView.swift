@@ -40,12 +40,19 @@ public struct DevOverlayView: View {
     // pattern for read-only observation of an injected model.
     public let viewModel: DevOverlayViewModel
 
-    public init(viewModel: DevOverlayViewModel) {
+    /// Initial selected tab. Tag indices match the `.tag(_:)` calls below:
+    /// 0 = Agent, 1 = Tools, 2 = Health, 3 = Logs. Issue #89 / v0.1 startup
+    /// flow opens straight to Logs so the operator sees activity stream on
+    /// first launch instead of a blank Agent tab.
+    @State private var selection: Int
+
+    public init(viewModel: DevOverlayViewModel, initialTab: Int = 0) {
         self.viewModel = viewModel
+        _selection = State(initialValue: initialTab)
     }
 
     public var body: some View {
-        TabView {
+        TabView(selection: $selection) {
             AgentPane(viewModel: viewModel)
                 .tabItem { Label("Agent", systemImage: "brain") }
                 .tag(0)

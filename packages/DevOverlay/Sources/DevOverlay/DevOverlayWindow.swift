@@ -71,7 +71,8 @@ public final class DevOverlayWindow {
         emitter: DevSnapshotEmitter?,
         bootHealthOrchestrator: BootHealthOrchestrator? = nil,
         hudStateReader: (@MainActor () -> String)? = nil,
-        viewModel: DevOverlayViewModel = DevOverlayViewModel()
+        viewModel: DevOverlayViewModel = DevOverlayViewModel(),
+        initialTab: Int = 0
     ) {
         self.viewModel = viewModel
         self.bridge = DevOverlayBridge(viewModel: viewModel)
@@ -98,7 +99,9 @@ public final class DevOverlayWindow {
         p.hidesOnDeactivate = false
         p.title = "Jarvis DevOverlay"
         p.isReleasedWhenClosed = false
-        p.contentView = NSHostingView(rootView: DevOverlayView(viewModel: viewModel))
+        p.contentView = NSHostingView(
+            rootView: DevOverlayView(viewModel: viewModel, initialTab: initialTab)
+        )
         p.orderOut(nil)
         self.panel = p
 
@@ -132,6 +135,18 @@ public final class DevOverlayWindow {
     public func toggle() {
         if isVisible { hide() } else { show() }
     }
+
+    /// Issue #89: AppDelegate positions Status + DevOverlay non-overlapping
+    /// on launch. Exposes the underlying `NSPanel.setFrameOrigin` without
+    /// leaking the panel itself (KVC on the private `panel` field would
+    /// work but couples callers to the property name).
+    public func setFrameOrigin(_ origin: NSPoint) {
+        panel.setFrameOrigin(origin)
+    }
+
+    /// Read-only access to the panel frame size so callers can compute an
+    /// inset-from-screen-edge origin without poking at private state.
+    public var frameSize: NSSize { panel.frame.size }
 
     // MARK: - Polling (BootHealth + HudState)
 

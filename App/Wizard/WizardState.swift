@@ -29,7 +29,20 @@ public final class WizardState: ObservableObject {
     @Published public var inputMonitoringProbed: Bool = false
     @Published public var inputMonitoringGranted: Bool = false
     @Published public var hotkey: Shell.KeyboardShortcut? {
-        didSet { persistHotkey(hotkey) }
+        didSet { persistHotkey(hotkey, key: Self.hotkeyDefaultsKey) }
+    }
+
+    /// Issue #87 / VOICE-13 — push-to-talk hotkey. Ships unbound (nil) by
+    /// default; the user binds one via Settings. Persisted under a
+    /// distinct UserDefaults key from `hotkey` so the summon-Jarvis
+    /// shortcut and the PTT shortcut are independent.
+    ///
+    /// No default value: CLAUDE.md hotkey-hygiene guidance forbids
+    /// pre-binding because Cmd+Shift+J collides with Chrome/Slack/VSCode
+    /// and Option+Space collides with Alfred/Raycast. The user picks one
+    /// that doesn't conflict with their setup.
+    @Published public var pttHotkey: Shell.KeyboardShortcut? {
+        didSet { persistHotkey(pttHotkey, key: Self.pttHotkeyDefaultsKey) }
     }
 
     private let keychain: any KeychainStore
@@ -39,6 +52,8 @@ public final class WizardState: ObservableObject {
     /// UserDefaults key for the persisted hotkey. JSON-encoded blob under
     /// the standard registered domain so it survives quit/reopen.
     private static let hotkeyDefaultsKey = "Jarvis.hotkey"
+    /// Issue #87: PTT hotkey lives under a separate key from `hotkey`.
+    private static let pttHotkeyDefaultsKey = "Jarvis.pttHotkey"
 
     public init(
         keychain: any KeychainStore = SystemKeychainStore(),
@@ -69,7 +84,8 @@ public final class WizardState: ObservableObject {
             inputMonitoringProbed = true
         }
 
-        hotkey = loadPersistedHotkey()
+        hotkey = loadPersistedHotkey(key: Self.hotkeyDefaultsKey)
+        pttHotkey = loadPersistedHotkey(key: Self.pttHotkeyDefaultsKey)
 
         currentStage = firstUnresolvedStage
     }
@@ -83,20 +99,20 @@ public final class WizardState: ObservableObject {
 
     // MARK: - Hotkey persistence
 
-    private func loadPersistedHotkey() -> Shell.KeyboardShortcut? {
-        guard let data = userDefaults.data(forKey: Self.hotkeyDefaultsKey) else {
+    private func loadPersistedHotkey(key: String) -> Shell.KeyboardShortcut? {
+        guard let data = userDefaults.data(forKey: key) else {
             return nil
         }
         return try? JSONDecoder().decode(Shell.KeyboardShortcut.self, from: data)
     }
 
-    private func persistHotkey(_ shortcut: Shell.KeyboardShortcut?) {
+    private func persistHotkey(_ shortcut: Shell.KeyboardShortcut?, key: String) {
         guard let shortcut else {
-            userDefaults.removeObject(forKey: Self.hotkeyDefaultsKey)
+            userDefaults.removeObject(forKey: key)
             return
         }
         if let data = try? JSONEncoder().encode(shortcut) {
-            userDefaults.set(data, forKey: Self.hotkeyDefaultsKey)
+            userDefaults.set(data, forKey: key)
         }
     }
 }

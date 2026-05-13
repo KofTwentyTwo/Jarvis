@@ -54,6 +54,13 @@ public extension BannerContent {
     )
 
     /// Input Monitoring TCC denied — global hotkey degrades to local-only.
+    ///
+    /// SHELL-06 / #88: non-dismissible. The user can't click this away on
+    /// a denial because letting them silently restore the "global hotkey
+    /// silently no-ops" failure mode is the defect this banner exists to
+    /// prevent. The banner is cleared programmatically by AppDelegate's
+    /// `reprobeInputMonitoring()` on app foreground after the user grants
+    /// access in System Settings.
     static let inputMonitoringDenied = BannerContent(
         id: "input-monitoring-denied",
         priority: 2,
@@ -62,7 +69,8 @@ public extension BannerContent {
         action: .init(
             label: "Open System Settings",
             url: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
-        )
+        ),
+        nonDismissible: true
     )
 
     /// Hotkey registration failed — another app claimed the shortcut.
