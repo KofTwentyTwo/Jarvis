@@ -1,5 +1,14 @@
 import Foundation
-import SQLite3
+// D-5/D-6 closure cascade: `import SQLite3` would pull the SDK's stripped
+// `SQLite3.tbd` and its `sqlite3ext.h`, which on Xcode 26.x macOS 26.x SDKs
+// declares `set_errmsg` / `db_status64` (SQLite 3.51+ struct members).
+// `Replay`'s `SQLiteConnection` `@_exported import CSQLiteVec`s the bundled
+// jkrukowski/SQLiteVec build, whose vendored `sqlite3ext.h` does **not**
+// have those members. Importing both modules produces conflicting
+// `struct sqlite3_api_routines` definitions and the compile fails. Importing
+// `CSQLiteVec` directly here (matching `Replay`) keeps a single coherent
+// SQLite surface and the `sqlite3_*` call sites below are unchanged.
+import CSQLiteVec
 import AgentCore
 import AgentOrchestrator
 import Replay

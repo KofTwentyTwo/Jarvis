@@ -1,5 +1,12 @@
 import Foundation
-import SQLite3
+// D-5/D-6 closure cascade: `import SQLite3` (SDK overlay) conflicts with the
+// `CSQLiteVec` module that Replay's `SQLiteConnection` `@_exported import`s.
+// Xcode 26.x macOS 26 SDK adds `set_errmsg` / `db_status64` to the system
+// `sqlite3_api_routines`; the bundled jkrukowski/SQLiteVec build does not,
+// so importing both yields conflicting struct definitions. Use the bundled
+// module instead — `sqlite3_*` symbols below resolve via the same
+// statically-linked SQLite that `Replay` and `Memory` already use.
+import CSQLiteVec
 import AgentCore
 import AgentOrchestrator
 import Replay
