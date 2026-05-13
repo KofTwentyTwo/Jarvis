@@ -187,7 +187,26 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
       - name: Install xcodegen
         run: brew install xcodegen
+      # The Xcode `Build webview bundle` pre-build phase runs
+      # scripts/build-webview.sh which unconditionally invokes pnpm. Without
+      # pnpm on PATH the phase exits 1 with `[build-webview] FATAL: pnpm
+      # not found` (CI run 25806037658 / job 75809074090) and xcodebuild
+      # halts BEFORE the artifact-download bundle is consumed. Install
+      # pnpm + Node here so build-webview.sh runs cleanly; the
+      # content-hash sentinel keeps the rebuild incremental.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: webview/pnpm-lock.yaml
       # Reuse the webview build from the upstream job rather than rebuilding.
+      # The pre-build script still runs (no flag to skip it) but the lockfile
+      # sentinel makes the install + build a near no-op.
       - name: Download webview resources
         uses: actions/download-artifact@v4
         with:
