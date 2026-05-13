@@ -230,7 +230,11 @@ jobs:
             exit 1
           fi
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -t 0 "$KEYCHAIN_PATH"
+          # NOTE: do NOT re-run `set-keychain-settings` here — the Security
+          # framework requires user interaction for that operation even with
+          # the keychain unlocked, and the LaunchAgent has no UI. The
+          # settings (no-timeout, no-lock-on-sleep) were applied once at
+          # keychain-creation time and persist; we just need to unlock.
           security list-keychains -d user -s "$KEYCHAIN_PATH" "$HOME/Library/Keychains/login.keychain-db"
       - name: swift test
         run: swift test --package-path packages/${{ matrix.package }}
