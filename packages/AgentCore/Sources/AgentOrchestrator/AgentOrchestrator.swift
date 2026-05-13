@@ -220,6 +220,16 @@ public actor AgentOrchestrator {
         voiceOriginatedTurns.contains(turnId)
     }
 
+    /// #20 (audit-2026-05-12 CRIT-1) — the in-flight `TurnID`, or `nil` if
+    /// no turn is active. `ReplayingToolResultObserver.attach(...)` reads
+    /// this from a `@Sendable () async -> TurnID?` closure so the SEC-07
+    /// dual-write + ME-04 channel can correlate replay rows with the
+    /// current turn. One actor-hop per tool dispatch — acceptable cost
+    /// (tools fire 1–3× per turn).
+    public func currentTurnID() -> TurnID? {
+        currentTurn?.id
+    }
+
     /// BLOCKER-2 actor-internal populator. Called from `runTurn` after
     /// allocating the `TurnID` when `input.source == .voice`.
     private func recordVoiceTurn(_ turnId: TurnID) {

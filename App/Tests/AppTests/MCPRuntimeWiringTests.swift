@@ -309,6 +309,171 @@ final class MCPRuntimeWiringTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(lastIdx, cap * 10 - cap - 5,
             "last drained envelope should be among the most recent bursts")
     }
+
+    // MARK: - #20 (audit-2026-05-12 CRIT-1): turnIDResolver wiring
+
+    /// #20 invariant 1: under the production construction shape — the
+    /// observer is built with the `{ nil }` placeholder resolver, then
+    /// `attach(turnIDResolver:)` flips it post-orchestrator-construction
+    /// — `record(...)` MUST produce envelopes into the channel after the
+    /// attach, and MUST stay silent before it. Pre-#20 the observer's
+    /// `turnIDResolver` was a `let` set once at init, so `attach(...)`
+    /// did not exist and production calls returned at the guard forever.
+    func test_attach_turnIDResolver_flipsObserverFromDeadToLive() async throws {
+        let channel = BoundedAsyncChannel<ReplayEnvelope>(capacity: 64, policy: .dropOldest)
+
+        // Mirror MCPRuntimeWiring.build's construction: placeholder { nil }
+        // resolver. This is what production set up before #20.
+        let observer = ReplayingToolResultObserver(replayChannel: channel)
+
+        // Pre-attach record: the guard returns, nothing lands in the channel.
+        await observer.record(
+            toolUseId: "toolu_pre",
+            toolName: "get_time",
+            rawBytes: Data("RAW0".utf8),
+            sanitizedBytes: Data("SAN0".utf8)
+        )
+
+        // Drain non-blocking: peek the channel via a finish + iterate path.
+        // Since pre-attach should produce zero envelopes, finishing now and
+        // iterating must yield zero.
+        await channel.finish()
+        var preCount = 0
+        for await _ in channel { preCount += 1 }
+        XCTAssertEqual(preCount, 0,
+                       "pre-attach: observer with { nil } resolver must produce zero envelopes")
+
+        // Now exercise the post-attach side with a fresh channel.
+        let liveChannel = BoundedAsyncChannel<ReplayEnvelope>(capacity: 64, policy: .dropOldest)
+        let liveObserver = ReplayingToolResultObserver(replayChannel: liveChannel)
+        let expectedTurn = TurnID.fresh()
+        // Production wiring: AppDelegate's installAgent calls this with a
+        // closure that reads orchestrator.currentTurnID().
+        liveObserver.attach(turnIDResolver: { expectedTurn })
+
+        await liveObserver.record(
+            toolUseId: "toolu_post",
+            toolName: "get_time",
+            rawBytes: Data("RAW".utf8),
+            sanitizedBytes: Data("SAN".utf8)
+        )
+
+        var liveIter = liveChannel.makeAsyncIterator()
+        let first = await liveIter.next()
+        let second = await liveIter.next()
+        guard
+            case .toolResultFull(let id1, let bytes1) = first?.event,
+            case .toolResultFull(let id2, let bytes2) = second?.event
+        else {
+            XCTFail("post-attach: expected two .toolResultFull envelopes")
+            return
+        }
+        XCTAssertEqual(id1, "toolu_post")
+        XCTAssertEqual(bytes1, Data("SAN".utf8))
+        XCTAssertEqual(id2, "toolu_post:raw")
+        XCTAssertEqual(bytes2, Data("RAW".utf8))
+        XCTAssertEqual(first?.turnId, expectedTurn,
+                       "envelope must carry the attached resolver's TurnID")
+        XCTAssertEqual(second?.turnId, expectedTurn)
+    }
+
+    /// #20 invariant 2: end-to-end through the production observer wiring —
+    /// observer constructed with the `{ nil }` placeholder (like
+    /// `MCPRuntimeWiring.build` does), then `attach(turnIDResolver:)` flips
+    /// it (like `installAgent` does), then a simulated dispatcher call
+    /// `record(...)` drives the SEC-07 dual-write into the channel; the
+    /// drain Task pulls envelopes onto a real ephemeral `ReplayLog` and we
+    /// assert by reading the SQLite `events` table directly that both the
+    /// sanitized and the `:raw` rows landed correlated to the attached
+    /// `TurnID`. Pre-#20 the guard returned, the channel stayed empty, and
+    /// the table had zero `tool_result_full` rows.
+    func test_attach_replayLogReceivesSECDualWriteCorrelatedToTurnID() async throws {
+        let tmpDB = FileManager.default.temporaryDirectory
+            .appendingPathComponent("issue20-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: tmpDB) }
+
+        let log = try ReplayLog(databaseURL: tmpDB)
+        let sessionId = try await log.beginSession(appVersion: "test", buildSHA: "abc")
+        let turnId = TurnID.fresh()
+        try await log.startTurn(
+            turnId: turnId, sessionId: sessionId, retryOf: nil,
+            turnNonce: UUID().uuidString, source: .text,
+            provider: "test", modelId: "test"
+        )
+
+        // Production-shape composition. The observer is built with the
+        // `{ nil }` placeholder, matching `MCPRuntimeWiring.build`'s
+        // construction-time call. Pre-attach, the observer's guard returns
+        // at every `record(...)` call.
+        let channel = BoundedAsyncChannel<ReplayEnvelope>(capacity: 64, policy: .dropOldest)
+        let observer = ReplayingToolResultObserver(replayChannel: channel)
+
+        // Mirror the AppDelegate drain Task — pulls envelopes off the
+        // channel and writes them to ReplayLog under the per-envelope TurnID.
+        let drainTask = Task.detached {
+            for await env in channel {
+                await log.record(env.event, for: env.turnId)
+            }
+        }
+
+        // STEP 1: pre-attach record. Simulates a dispatcher's
+        // `observer.record(...)` call before `installAgent` had a chance
+        // to wire the resolver. The observer logs and returns; nothing
+        // lands in the channel.
+        await observer.record(
+            toolUseId: "pre-id",
+            toolName: "get_time",
+            rawBytes: Data("raw-pre".utf8),
+            sanitizedBytes: Data("san-pre".utf8)
+        )
+
+        // STEP 2: simulate installAgent's wiring — attach a resolver that
+        // yields the known `turnId` (the production closure reads
+        // `orchestrator.currentTurnID()` instead).
+        observer.attach(turnIDResolver: { turnId })
+
+        // STEP 3: post-attach record. The same code path; this time the
+        // resolver yields a non-nil TurnID and envelopes flow through the
+        // channel to the drain Task to ReplayLog.
+        await observer.record(
+            toolUseId: "live-id",
+            toolName: "get_time",
+            rawBytes: Data("raw-live".utf8),
+            sanitizedBytes: Data("san-live".utf8)
+        )
+
+        // Allow drain + ReplayLog batch flush.
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await channel.finish()
+        _ = await drainTask.value
+        await log.endTurn(turnId, stopReason: "test")
+        await log.flush()
+        try await log.close()
+
+        // Open the SQLite file directly and assert exactly the post-attach
+        // envelopes landed (two: sanitized + `:raw`). Pre-attach must have
+        // produced zero rows for `pre-id` because the guard returned.
+        let conn = try SQLiteConnection.open(at: tmpDB)
+        defer { try? conn.close() }
+        let rows: [(turnId: String, payload: Data)] = try conn.query(
+            "SELECT turn_id, payload_bytes FROM events WHERE kind='tool_result_full';",
+            map: { ($0.columnText(at: 0) ?? "", $0.columnBlob(at: 1) ?? Data()) }
+        )
+        XCTAssertEqual(rows.count, 2,
+                       "post-attach: SEC-07 dual-write produces 2 rows (sanitized + :raw); pre-attach produced 0")
+        for r in rows {
+            XCTAssertEqual(r.turnId, turnId.rawValue,
+                           "every row must carry the attached resolver's TurnID")
+        }
+        let ids: [String] = rows.compactMap { row in
+            guard let json = try? JSONSerialization.jsonObject(with: row.payload) as? [String: String] else {
+                return nil
+            }
+            return json["tool_use_id"]
+        }.sorted()
+        XCTAssertEqual(ids, ["live-id", "live-id:raw"],
+                       "rows must reference the post-attach record's toolUseId — pre-attach `pre-id` was silently dropped")
+    }
 }
 
 // Actor extension to set broker — pattern matches the JarvisMCP test fixtures.
