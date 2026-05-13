@@ -236,4 +236,102 @@ final class VADGatedSessionTests: XCTestCase {
 
         await controller.shutdown()
     }
+
+    // MARK: - VAD-6 (Issue #34): startSTTSession resets cached VAD
+
+    /// Regression for audit-2026-05-12 P1-3 / Issue #34: production
+    /// `vadFactory` closure caches a single `SileroVAD` instance. Without
+    /// `reset()` on each new session, hidden state (specifically
+    /// `wasSpeech`) leaks across sessions. End of session N with
+    /// `.speechEnd` leaves `wasSpeech == false`; the first window of
+    /// session N+1 that crosses threshold then emits `.speechStart`
+    /// (correct only if reset happened). But end of session N in the
+    /// `.speech` state leaves `wasSpeech == true`, so session N+1's
+    /// first sub-threshold window emits `.speechEnd` and the second
+    /// emits `.silence` — soft-spoken opening syllables are misclassified.
+    ///
+    /// Test strategy: drive a session that ends with `wasSpeech == true`
+    /// (the controller calls `shutdown` mid-speech, then we restart and
+    /// PTT-down again). On the second session, the first chunk's prob is
+    /// SILENCE — pre-fix the VAD would emit `.speechEnd` (carrying over
+    /// from session 1's `.speech`); post-fix it emits `.silence` (clean
+    /// state via `reset()`).
+    ///
+    /// We observe the effect indirectly via the orchestrator submit
+    /// behaviour: session 2 fed a long silence run after one short
+    /// silence chunk should NOT submit (no speech ever started). Pre-fix
+    /// the `.speechEnd → silence` run would arm a finalize that submits
+    /// the empty STT result. Post-fix, the session stays in pre-speech
+    /// state and no submit lands.
+    func testVAD6_cachedVADResetBetweenSessions() async throws {
+        // Single SileroVAD instance reused across sessions — mirrors
+        // AppDelegate's `vadFactory: { sileroVAD }` production wiring.
+        let mockEngine = MockVADEngine(probabilities: [])
+        let cachedVAD = SileroVAD(engine: mockEngine)
+
+        let stt = CapturingSTTProvider(finalResult: "should not submit")
+        let orchestrator = MockOrchestratorForController()
+        let tts = MockTTSForController()
+        let banner = MockBannerForController()
+        let bus = MockBusEmitter()
+        let (_, hudCont) = AsyncStream<VoiceHudIntent>.makeStream()
+        let (wwStream, _) = AsyncStream<WakeWordEvent>.makeStream()
+
+        // Session 1: speech run that leaves `wasSpeech == true` at the
+        // SileroVAD level. We feed 3 speech chunks, then shut down
+        // mid-speech.
+        mockEngine.setProbabilities([0.9, 0.9, 0.9])
+        let controller1 = VoiceController(
+            wakeWordStream: wwStream,
+            vadFactory: { cachedVAD },
+            sttFactory: { stt },
+            tts: tts,
+            orchestrator: orchestrator,
+            bannerCoordinator: banner,
+            bus: bus,
+            voiceHudCont: hudCont,
+            chunkPump: makePump(chunkCount: 3)
+        )
+        await controller1.startForTests()
+        await controller1.pttDown()
+        try await Task.sleep(for: .milliseconds(80))
+        // PttUp triggers `endSTTSession` — cleanly exits session 1.
+        await controller1.pttUp()
+        try await Task.sleep(for: .milliseconds(80))
+        await controller1.shutdown()
+
+        // Snapshot any submits from session 1.
+        let session1Submits = await orchestrator.submitCallTexts.count
+
+        // Session 2: feed pure silence (one chunk). Pre-fix, the cached
+        // VAD's `wasSpeech == true` would mean the first silence chunk
+        // emits `.speechEnd`, arming the finalize. Post-fix, `reset()`
+        // clears `wasSpeech` before the session starts, so the first
+        // silence chunk emits `.silence` (no finalize armed).
+        mockEngine.setProbabilities([0.1])
+        let controller2 = VoiceController(
+            wakeWordStream: wwStream,
+            vadFactory: { cachedVAD },
+            sttFactory: { stt },
+            tts: tts,
+            orchestrator: orchestrator,
+            bannerCoordinator: banner,
+            bus: bus,
+            voiceHudCont: hudCont,
+            chunkPump: makePump(chunkCount: 1)
+        )
+        await controller2.startForTests()
+        await controller2.pttDown()
+        try await Task.sleep(for: .milliseconds(120))
+        // Don't pttUp — let VAD finalize OR not based on its own decision.
+        try await Task.sleep(for: .milliseconds(120))
+
+        let session2Submits = await orchestrator.submitCallTexts.count - session1Submits
+        XCTAssertEqual(
+            session2Submits, 0,
+            "Session 2 must not auto-submit when the only chunk is silence — pre-fix the cached VAD's wasSpeech=true would have emitted .speechEnd and armed a stale finalize."
+        )
+
+        await controller2.shutdown()
+    }
 }

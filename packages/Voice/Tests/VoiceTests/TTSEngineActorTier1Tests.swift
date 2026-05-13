@@ -107,6 +107,50 @@ final class TTSEngineActorTier1Tests: XCTestCase {
         }
     }
 
+    /// TET1-5 (Issue #30): natural completion emits `.ttsStopped` after
+    /// `.finished` so any downstream ducking consumer can release the
+    /// input duck. Before the fix only the barge-in path
+    /// (`InterruptSequence.run`) yielded `.ttsStopped`, so a normal
+    /// spoken reply would have left ducking engaged forever.
+    func test_TET1_5_naturalCompletion_emitsTTSStopped() async throws {
+        let engine = TTSEngineActor(
+            orpheus: nil,
+            tier1: AVSpeechSynth(),
+            fallback: nil
+        )
+
+        // Collector that does NOT short-circuit on `.finished` — it must
+        // see `.ttsStopped` after `.finished` and exit on `.ttsStopped`.
+        let stream = engine.ttsEventStream
+        let collector = Task.detached {
+            var got: [TTSEvent] = []
+            let deadline = Date().addingTimeInterval(4.0)
+            for await ev in stream {
+                got.append(ev)
+                if case .ttsStopped = ev { break }
+                if Date() > deadline { break }
+            }
+            return got
+        }
+
+        try await engine.synthesize("ok", tier: .tier1, voice: "en-US")
+
+        let collected = await collector.value
+        // Assert ordering: `.finished` must precede `.ttsStopped`.
+        let finishedIdx = collected.firstIndex(where: {
+            if case .finished = $0 { return true } else { return false }
+        })
+        let stoppedIdx = collected.firstIndex(where: {
+            if case .ttsStopped = $0 { return true } else { return false }
+        })
+        XCTAssertNotNil(finishedIdx, "expected .finished in event stream; got \(collected)")
+        XCTAssertNotNil(stoppedIdx,
+            "natural completion must emit .ttsStopped after .finished (audit-2026-05-12 P0-3 / Issue #30); got \(collected)")
+        if let f = finishedIdx, let s = stoppedIdx {
+            XCTAssertLessThan(f, s, ".finished must precede .ttsStopped")
+        }
+    }
+
     /// TET1-4: rapid-fire tier-1 calls cancel prior in-flight synthesis.
     /// The actor's serial executor + reentrancy guard handles this.
     func test_TET1_4_rapidFire_cancelsPriorSynthesis() async throws {

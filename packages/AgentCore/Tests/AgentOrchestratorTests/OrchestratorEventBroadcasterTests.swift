@@ -298,6 +298,20 @@ final class OrchestratorEventBroadcasterTests: XCTestCase {
                 ".bus priority protection wrong for \(label)"
             )
         }
+
+        // agentHud (audit-2026-05-12 P1-5 / Issue #36): protects
+        // .stateChange, .turnEnd, .error — these drive ring lifecycle
+        // transitions and must not be tail-dropped. All other classes
+        // (tokenDelta / thinkingDelta / toolCardUpdate / usage) are
+        // drop-eligible — the HUD doesn't render them.
+        for (label, event) in allEvents {
+            let isProtected = await broadcaster.isProtectedForPriority(event, priority: .agentHud)
+            let expected = (label == "stateChange" || label == "turnEnd" || label == "error")
+            XCTAssertEqual(
+                isProtected, expected,
+                ".agentHud priority protection wrong for \(label)"
+            )
+        }
     }
 
     // MARK: - Helpers

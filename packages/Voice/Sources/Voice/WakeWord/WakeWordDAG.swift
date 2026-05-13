@@ -161,6 +161,18 @@ public actor WakeWordDAG {
         logger.info("WakeWordDAG: feed stopped (stream preserved for rebuild)")
     }
 
+    /// Whether a feed Task is currently armed against a ring.
+    ///
+    /// Used by `VoiceBootHealthProbe` (audit-2026-05-12 P1-2 / Issue #33)
+    /// as a cheap watchdog — the prior probe only checked
+    /// `currentVariant != nil` and reported `ok` even after `cancel()`
+    /// had finished the stream. `true` here means a feed Task exists and
+    /// hasn't been cancelled.
+    public var isFeedArmed: Bool {
+        guard let task = feedTask else { return false }
+        return !task.isCancelled
+    }
+
     // MARK: - Private state
 
     private let session: OpenWakeWordSession

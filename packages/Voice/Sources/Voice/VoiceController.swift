@@ -48,7 +48,7 @@ public actor VoiceController {
 
     private let wakeWordStream: AsyncStream<WakeWordEvent>
     private let vadFactory: @Sendable () -> SileroVAD
-    private let sttFactory: @Sendable () -> any STTProvider
+    private let sttFactory: @Sendable () async -> any STTProvider
     private let chunkPump: @Sendable (AsyncStream<AudioChunk>.Continuation) async -> Void
     private let tts: any VoiceTTSInterface
     private let orchestrator: any VoiceOrchestratorInterface
@@ -126,7 +126,7 @@ public actor VoiceController {
     public init(
         wakeWordStream: AsyncStream<WakeWordEvent>,
         vadFactory: @escaping @Sendable () -> SileroVAD,
-        sttFactory: @escaping @Sendable () -> any STTProvider,
+        sttFactory: @escaping @Sendable () async -> any STTProvider,
         tts: any VoiceTTSInterface,
         orchestrator: any VoiceOrchestratorInterface,
         bannerCoordinator: any VoiceBannerInterface,
@@ -395,7 +395,7 @@ public actor VoiceController {
         sttSessionId &+= 1
         let sessionId = sttSessionId
 
-        let provider = sttFactory()
+        let provider = await sttFactory()
         let (chunkStream, cont) = AsyncStream<AudioChunk>.makeStream()
         sttChunkCont = cont
 
@@ -424,6 +424,14 @@ public actor VoiceController {
         }
 
         let vad = vadFactory()
+        // Reset Silero LSTM hidden state between sessions
+        // (audit-2026-05-12 P1-3 / Issue #34). The vadFactory closure
+        // typically caches a single `SileroVAD` instance per process —
+        // without `reset()`, hidden state from session N's `.speechEnd`
+        // (encoding "we just exited speech") biases session N+1's
+        // first 1–3 windows toward `.silence`, dropping soft-spoken
+        // opening syllables from STT input.
+        vad.reset()
         let hangover = Self.vadHangoverChunks
         vadInterceptorTask = Task { [weak self] in
             await self?.runVADInterceptor(

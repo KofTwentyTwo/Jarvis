@@ -40,9 +40,19 @@ public protocol InterruptStepRecorder: Sendable {
 //   5. Emit `.ttsStopped`                       — THIS is the ducking-release gate
 //
 // VOICE-11 / Pitfall #6:
-//   `.ttsStopped` at step 5 is the ONLY site that triggers ducking release.
-//   DO NOT release ducking on `.finished` — producer done ≠ sink empty.
-//   The 100–200 ms tail of scheduled buffers would clip if ducking released early.
+//   `.ttsStopped` is the ducking-release gate (NEVER `.finished` —
+//   producer done ≠ sink empty; the 100–200 ms tail of scheduled
+//   buffers would clip if ducking released early).
+//
+//   Two emit sites cooperate to cover the full lifecycle:
+//     - Natural completion: `TTSEngineActor.synthesize` yields it
+//       after `.finished` when the tier path has fully drained.
+//     - Barge-in: this `InterruptSequence.run` yields it at step 5
+//       after the 5-step interrupt sequence has run.
+//
+//   Before audit-2026-05-12 P0-3 (Issue #30) only this barge-in site
+//   emitted `.ttsStopped`, so natural completion left any future
+//   ducking consumer with ducks engaged forever on a normal reply.
 //
 // Idempotency:
 //   If `engine.hasSynthInFlight == false`, the sequence is a no-op.
@@ -92,10 +102,10 @@ public enum InterruptSequence {
             group.cancelAll()
         }
 
-        // STEP 5: Emit .ttsStopped — THE ducking-release gate (VOICE-11 / Pitfall #6).
-        // This is the ONLY site that emits .ttsStopped (single source of truth).
-        // grep gate: grep -nE '\.ttsStopped' TTSInterrupt.swift | grep -v '//' | wc -l == 1
+        // STEP 5: Emit .ttsStopped — the barge-in ducking-release gate.
+        // (Natural completion emits the corresponding `.ttsStopped` from
+        // `TTSEngineActor.synthesize`; see the file-level note above.)
         stepLog?.record("5-ttsStopped")
-        eventBus.yield(.ttsStopped)  // single .ttsStopped emission site
+        eventBus.yield(.ttsStopped)
     }
 }

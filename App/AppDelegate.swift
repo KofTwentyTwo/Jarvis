@@ -581,6 +581,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `emitTurnEnded` / `emitError` hooks. (Plan 09-04.)
     private var voiceOrchestratorAdapter: VoiceOrchestratorAdapter?
 
+    /// Stored handle to the wake-word DAG so `WakeWordBootHealthProbe`
+    /// (audit-2026-05-12 P1-2 / Issue #33) can query `isFeedArmed`.
+    /// Nil before `installVoice` succeeds (model files missing, etc.).
+    private var wakeWordDAG: WakeWordDAG?
+
+    /// Stored handle to the production TTS adapter so
+    /// `TTSBootHealthProbe` can query whether a real `TTSEngineActor`
+    /// is wired. Nil before `installVoice` succeeds.
+    /// (audit-2026-05-12 P1-2 / Issue #33.)
+    private var voiceTTSAdapter: VoiceTTSAdapter?
+
     /// Drains the broadcaster's `.voice` priority subscription. Maintains
     /// a per-turn assistant-text accumulator gated by
     /// `agentOrchestrator.turnSourceWasVoice` — text-originated turns
@@ -605,6 +616,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the voice DAG short-circuits on missing models. (Plan 09-04 +
     /// Phase E hoist.)
     private var outboundBatcher: OutboundBatcher?
+
+    /// Drains the broadcaster's `.agentHud` priority subscription and
+    /// maps `.stateChange` / `.turnEnd` to `AgentHudIntent` values
+    /// yielded into the dormant continuation. Pre-fix, the
+    /// `dormantAgentContinuation` was constructed but never yielded —
+    /// the HUD ring stayed `.silent` during thinking and speaking.
+    /// (audit-2026-05-12 P1-5 / Issue #36.)
+    private var agentHudSubscriberTask: Task<Void, Never>?
 
     /// Filename of the HTML entry the webview loads. Production value is
     /// `"index"` (the R3F bundle); `installBus` assigns it on construction.
@@ -1089,6 +1108,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             VoiceBootHealthProbe(audioGraphOwner: self.audioGraphOwner)
         )
 
+        // Three voice-watchdog probes — fill the gap surfaced by
+        // audit-2026-05-12 P1-2 / Issue #33. `VoiceBootHealthProbe`
+        // alone checked `audioGraphOwner` + `micStatus` + `currentVariant`
+        // and reported `ok` even after the wake-word DAG died (P0-1) or
+        // TTS was never wired (Track B-3 pre-fix). These probes
+        // distinguish "voice is plumbed" from "voice will actually work".
+        await bootHealthOrchestrator.register(
+            WakeWordBootHealthProbe(isArmed: { [weak self] in
+                guard let dag = await MainActor.run(body: { self?.wakeWordDAG })
+                else { return nil }
+                return await dag.isFeedArmed
+            })
+        )
+
+        await bootHealthOrchestrator.register(STTBootHealthProbe())
+
+        await bootHealthOrchestrator.register(
+            TTSBootHealthProbe(engineAlive: { [weak self] in
+                guard let adapter = await MainActor.run(body: { self?.voiceTTSAdapter })
+                else { return false }
+                return await adapter.hasEngine
+            })
+        )
+
         await bootHealthOrchestrator.register(VisionBootHealthProbe())
 
         await bootHealthOrchestrator.register(
@@ -1245,6 +1288,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         frameAttachReleaseTask?.cancel()
         voiceEventTranslatorTask?.cancel()
         busSubscriberTask?.cancel()
+        agentHudSubscriberTask?.cancel()
         if let broadcaster = eventBroadcaster {
             Task { await broadcaster.stop() }
         }
@@ -1321,6 +1365,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let wakeWordDAG = WakeWordDAG(session: wakeWordSession)
+        self.wakeWordDAG = wakeWordDAG  // expose to BootHealthProbe (Issue #33)
 
         // The degradation + rebuild consumer Tasks MUST be spawned before
         // `graphOwner.open()` because `open()` may immediately yield
@@ -1357,9 +1402,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `.reconfiguring(reason:)` on each rebuild start; the variant flip
         // is observable via `await graphOwner.currentVariant`. We poll the
         // variant after each rebuild event.
-        audioGraphRebuildTask = Task { @MainActor [weak self] in
+        //
+        // Re-arm the wake-word DAG against the new ring on every rebuild.
+        // The `cancelInFlight` slot (set below) calls `stopFeed()` to halt
+        // the old feed task; the public `wakeWordStream` survives, but the
+        // DAG has no producer until we call `start(ring:)` again. Without
+        // this, wake-word stops working after any device-change /
+        // mic-regrant / ring-overflow event.
+        // (audit-2026-05-12 P0-1 / Issue #28.)
+        audioGraphRebuildTask = Task { @MainActor [weak self, wakeWordDAG] in
             for await _ in rebuildStream {
                 guard let self else { return }
+                if let newRing = await self.audioGraphOwner?.ringBuffer {
+                    await wakeWordDAG.start(ring: newRing)
+                }
                 let variant = await self.audioGraphOwner?.currentVariant
                 if case .aecOn = variant {
                     await self.voiceController?.handleAECRestored()
@@ -1423,8 +1479,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Cancel wake-word inference before the engine stops — otherwise
         // the detached feed Task races the ring deallocation during graph
         // rebuilds. (VOICE-10.)
+        //
+        // Use `stopFeed()` (not `cancel()`) so the public wakeWordStream
+        // survives the rebuild — `VoiceController.spawnWakeWordConsumer`
+        // keeps iterating across the boundary. The rebuild completion
+        // consumer below re-arms the DAG against the new ring.
+        // (audit-2026-05-12 P0-1 / Issue #28: cancel() permanently
+        // finished the stream, killing wake-word on first device-change /
+        // mic-regrant / ring-overflow event.)
         await graphOwner.setCancelInFlight { [wakeWordDAG] in
-            await wakeWordDAG.cancel()
+            await wakeWordDAG.stopFeed()
         }
 
         // The production adapter triad replaces the three earlier Null
@@ -1462,7 +1526,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // wires alone here; tier-2 (Orpheus) is gated behind the ~6 GB
         // weight download and degrades to tier-1 transparently.
         // (audit trail: 2026-05-03 voice audit / Track B-3.)
-        let ttsAdapter = VoiceTTSAdapter(engine: VoiceOutputWiring.makeTier1Engine())
+        // Resolve TTS tier from PerTurnSnapshot per synthesis. Defaults
+        // to `.tier1` when configStore is nil or `tts.tier` is anything
+        // other than "tier2". Today this is decorative — Orpheus weights
+        // aren't shipped, so the engine resolves tier-2 back to tier-1
+        // inside `synthesize` — but the moment weights arrive, this
+        // closure becomes the user-facing tier switch.
+        // (audit-2026-05-12 P0-4 / Issue #31: was unwired; the default
+        // `{ .tier1 }` constant masked any `tts.tier = "tier2"` config.)
+        let ttsAdapter = VoiceTTSAdapter(
+            engine: VoiceOutputWiring.makeTier1Engine(),
+            tierResolver: { [configStore = self.configStore] in
+                guard let configStore else { return .tier1 }
+                let snap = await configStore.perTurn()
+                return snap.tts.tier == "tier2" ? .tier2 : .tier1
+            }
+        )
+        self.voiceTTSAdapter = ttsAdapter  // expose to BootHealthProbe (Issue #33)
 
         // Reuse the `OutboundBatcher` constructed by `installAgent`. The
         // batcher coalesces high-frequency audio-level RMS at ~30 Hz
@@ -1497,7 +1577,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let vc = VoiceController(
             wakeWordStream: wakeWordDAG.wakeWordStream,
             vadFactory: { sileroVAD },
-            sttFactory: { STTBackendSelector.make(backend: "speech_analyzer") },
+            sttFactory: { [configStore = self.configStore] in
+                // Read STT backend from PerTurnSnapshot. Defaults to
+                // SpeechAnalyzer when the snapshot disables WhisperKit
+                // fallback (today's default) or when configStore is nil.
+                // (audit-2026-05-12 P0-2 / Issue #29: was hard-coded to
+                // "speech_analyzer", making `stt.whisperKitFallback`
+                // unreachable from config.)
+                let backend: String
+                if let configStore {
+                    let snap = await configStore.perTurn()
+                    backend = snap.stt.whisperKitFallback
+                        ? STTBackendSelector.backendWhisperKit
+                        : STTBackendSelector.backendSpeechAnalyzer
+                } else {
+                    backend = STTBackendSelector.backendSpeechAnalyzer
+                }
+                return STTBackendSelector.make(backend: backend)
+            },
             tts: ttsAdapter,
             orchestrator: orchAdapter,
             bannerCoordinator: bannerAdapter,
@@ -2237,8 +2334,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // 5g. Agent HUD intent pump (audit-2026-05-12 P1-5 / Issue #36).
+        //     Pre-fix the `dormantAgentContinuation` was constructed but
+        //     never yielded into — `grep -rn dormantAgentContinuation App/`
+        //     returned only the declaration + assignment. Combined with
+        //     `VoiceController.hudIntentFor` mapping `.thinking` /
+        //     `.speaking` to `.silent`, the HUD ring saw `.listening` on
+        //     wake, `.reconfiguring` during rebuilds, and `.silent`
+        //     everywhere else. Thinking and speaking looked identical to
+        //     idle.
+        //
+        //     This subscriber maps the orchestrator's `.stateChange` /
+        //     `.turnEnd` to `AgentHudIntent` values yielded into the
+        //     continuation so the HUD ring reflects agent activity. The
+        //     `.agentHud` priority protects `.stateChange` / `.turnEnd` /
+        //     `.error` — the ring's lifecycle transitions can't be
+        //     tail-dropped under overload.
+        let agentHudSub = await broadcaster.subscribe(priority: .agentHud, capacity: 32)
+        self.agentHudSubscriberTask = Task { [weak self] in
+            guard let self else { return }
+            // Capture the continuation on entry; the `dormantAgentContinuation`
+            // is `@MainActor`-isolated so reads need an actor hop.
+            let cont = await MainActor.run { self.dormantAgentContinuation }
+            guard let cont else { return }
+            for await event in agentHudSub.stream {
+                if Task.isCancelled { break }
+                switch event {
+                case .stateChange(let state):
+                    // Translate TurnState → AgentHudIntent. Tier-1 TTS
+                    // (AVSpeech) emits the user-audible portion of an
+                    // assistant reply; today we don't have a distinct
+                    // `.speaking` state on the orchestrator (it stays
+                    // `.thinking` until terminal `.idle`), so map
+                    // everything non-idle/non-reconfiguring to `.thinking`.
+                    // M-6 wires a richer state machine.
+                    switch state {
+                    case .idle:                       cont.yield(.idle)
+                    case .thinking:                   cont.yield(.thinking)
+                    case .speaking:                   cont.yield(.speaking)
+                    case .booting, .listening,
+                         .awaitingConfirmation,
+                         .reconfiguring:
+                        break  // HUD owns these from other sources
+                    }
+                case .turnEnd, .error:
+                    cont.yield(.idle)
+                default:
+                    break
+                }
+            }
+        }
+
         systemLogger?.info(
-            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach + voice + bus subscribers active)"
+            "installAgent: AgentOrchestrator + broadcaster + transcript store wired (memory + transcript + devOverlay + frameAttach + voice + bus + agentHud subscribers active)"
         )
     }
 
@@ -2345,9 +2493,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return snap.tts.tier
         }
         let sttBackend: @Sendable () async -> String = {
-            guard let configStore else { return "speechAnalyzer" }
+            // Returns the canonical backend identifier matching
+            // `STTBackendSelector.backendSpeechAnalyzer` /
+            // `STTBackendSelector.backendWhisperKit` (snake_case). The
+            // pre-2026-05-12 strings ("speechAnalyzer" / "whisperKit"
+            // camelCase) did not match the selector's accepted values —
+            // any consumer routing through `STTBackendSelector.make`
+            // landed in the `unknown backend` default branch.
+            // (audit-2026-05-12 P0-2 / P2-1 / Issue #29.)
+            guard let configStore else { return STTBackendSelector.backendSpeechAnalyzer }
             let snap = await configStore.perTurn()
-            return snap.stt.whisperKitFallback ? "whisperKit" : "speechAnalyzer"
+            return snap.stt.whisperKitFallback
+                ? STTBackendSelector.backendWhisperKit
+                : STTBackendSelector.backendSpeechAnalyzer
         }
         let wakeWordMuted: @Sendable () async -> Bool = {
             UserDefaults.standard.bool(forKey: "features.voice.wakeWordMuted")
