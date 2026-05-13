@@ -114,19 +114,19 @@ final class TTSInterruptTests: XCTestCase {
         let (stream, cont) = AsyncStream<TTSEvent>.makeStream()
 
         let (avEngine, playerNode, format) = makeAudioComponents()
-        // Stall widened from 100ms → 400ms (CI-jitter buffer). The semantic
-        // under test is "InterruptSequence's 20ms completion timeout fires
-        // before the sink stall would have completed on its own" — measured
-        // by `elapsed < stallDuration`. The previous 100ms stall + 80ms
-        // budget was too tight for macos-15 GitHub Actions runners; CI run
-        // 25801448991 observed elapsed=108ms (already past the 100ms stall),
-        // meaning the assertion was self-defeating under CI load. Widening
-        // the stall to 400ms gives the 20ms timeout ample headroom while
-        // keeping the semantic intact.
+        // Stall widened 100 → 400 → 800 ms over successive CI runs. The
+        // semantic under test is "InterruptSequence's 20ms completion timeout
+        // fires before the sink stall would have completed on its own" —
+        // measured by `elapsed < stallDuration`. CI run 25801448991 observed
+        // elapsed=108ms (already past the 100ms stall); CI run 25805500292
+        // observed elapsed=263ms (already past the 250ms budget but still
+        // under the 400ms stall). Widening stall to 800ms keeps the
+        // semantic intact while giving the cold macos-15 GitHub Actions
+        // runner generous headroom.
         let sink = StallingSink(
             playerNode: playerNode,
             format: format,
-            stallDuration: .milliseconds(400)
+            stallDuration: .milliseconds(800)
         )
         try avEngine.start()
         playerNode.play()
@@ -151,14 +151,14 @@ final class TTSInterruptTests: XCTestCase {
         var events: [TTSEvent] = []
         for await e in stream { events.append(e) }
 
-        // .ttsStopped must fire before the 400 ms stall completes (20 ms timeout
-        // + CI overhead). Budget = 250 ms: 20 ms timeout + ~230 ms of allowable
+        // .ttsStopped must fire before the 800 ms stall completes (20 ms timeout
+        // + CI overhead). Budget = 500 ms: 20 ms timeout + ~480 ms of allowable
         // actor-hop / scheduling overhead on a cold CI runner, still well
-        // under the 400 ms stall ceiling that would invalidate the semantic.
+        // under the 800 ms stall ceiling that would invalidate the semantic.
         XCTAssertLessThan(
             elapsed,
-            0.250,
-            "InterruptSequence must complete within ~250 ms (20 ms timeout + CI overhead), got \(elapsed * 1000) ms"
+            0.500,
+            "InterruptSequence must complete within ~500 ms (20 ms timeout + CI overhead), got \(elapsed * 1000) ms"
         )
         XCTAssertTrue(events.contains(.ttsStopped), ".ttsStopped must fire on timeout")
 
