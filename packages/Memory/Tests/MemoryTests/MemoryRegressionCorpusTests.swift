@@ -12,7 +12,7 @@ import OllamaProvider
 //
 // Gated by JARVIS_REAL_MODELS=1 — skipped in CI. Runs interactively against
 // a real local Ollama with both `nomic-embed-text` (embedding) and
-// `qwen2.5-coder:32b` (extractor) pulled.
+// `qwen3.6:latest` (extractor, per commit 8d0a959) pulled.
 //
 // Run interactively on the developer's Apple Silicon Mac:
 //   JARVIS_REAL_MODELS=1 swift test --package-path packages/Memory --filter MemoryRegressionCorpusTests
@@ -37,7 +37,7 @@ final class MemoryRegressionCorpusTests: XCTestCase {
     private func skipIfNotRealModels() throws {
         try XCTSkipUnless(
             ProcessInfo.processInfo.environment["JARVIS_REAL_MODELS"] == "1",
-            "Set JARVIS_REAL_MODELS=1 to run memory regression corpus (requires local Ollama with nomic-embed-text + qwen2.5-coder:32b, plus a loadable vec0.dylib)"
+            "Set JARVIS_REAL_MODELS=1 to run memory regression corpus (requires local Ollama with nomic-embed-text + qwen3.6:latest, plus a loadable vec0.dylib)"
         )
     }
 

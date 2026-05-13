@@ -64,7 +64,7 @@ The top-level shape is fixed and agreed. Push back with specific reasoning only 
   - New tokenizer produces ~35% more tokens than Opus 3.x for the same text. Instrument token budgets accordingly; cap `tool_result` content at 8 KB.
   - Cache TTL default is 5 minutes ephemeral. For 1-hour TTL, pass `ttl: "1h"` explicitly on `cache_control` blocks **AND** include the request header `anthropic-beta: extended-cache-ttl-2025-04-11`. Without the beta header, 1h is silently ignored. Verify via DevOverlay watching `cache_creation_input_tokens` vs `cache_read_input_tokens` per turn.
   - Tool-use and extended thinking both stream; the SSE parser must handle `content_block_start` with `input_json_delta` for tool args. Close on `message_stop`, not `message_delta`; swallow `ping`; route `thinking_delta` to its own case; treat `stop_reason: "refusal"` as first-class; emit `partial_tool_use_at_disconnect` on mid-delta termination.
-- **Ollama caveat:** as of April 2026, Qwen 3 / 3.5 / Gemma 4 tool-calling is broken in Ollama — confirmed via live issue tracker (ollama/ollama#14493 Qwen 3.5 27B non-functional; #14601 Qwen3 malformed tool defs via `/api/chat`; #14745 qwen3.5:9b print-not-execute; #15315 Gemma 4 tool parser). Root cause: Ollama's renderer/parser maps Qwen 3.5 through a Hermes-style JSON pipeline, but the model was trained on Qwen3-Coder XML format; unclosed `<think>` tags corrupt multi-turn. **Known-good local tool-calling baseline: `qwen2.5-coder:32b`.** Qwen3 stays disabled as opt-in until upstream closes these issues. Llama 4 with the `llama4_pythonic` parser is worth testing but not yet trusted. Document the local model in use alongside every eval run.
+- **Ollama caveat:** as of April 2026, Qwen 3 / 3.5 / Gemma 4 tool-calling is broken in Ollama — confirmed via live issue tracker (ollama/ollama#14493 Qwen 3.5 27B non-functional; #14601 Qwen3 malformed tool defs via `/api/chat`; #14745 qwen3.5:9b print-not-execute; #15315 Gemma 4 tool parser). Root cause: Ollama's renderer/parser maps Qwen 3.5 through a Hermes-style JSON pipeline, but the model was trained on Qwen3-Coder XML format; unclosed `<think>` tags corrupt multi-turn. **Known-good local tool-calling baseline: `qwen2.5-coder:32b-instruct-q8_0`** (the variant pinned by `ModelID.qwen25coder32b`; vanilla `qwen2.5-coder:32b` is not used). Qwen3 stays disabled as opt-in until upstream closes these issues. Llama 4 with the `llama4_pythonic` parser is worth testing but not yet trusted. Document the local model in use alongside every eval run.
 - **Ollama transport gotcha:** `/api/chat` (native NDJSON) emits `tool_calls` on the chunk **preceding** the `done: true` terminator, not with it. Decoder must read `tool_calls` whenever seen and never gate on `done`. Separate decoders for `/api/chat` vs `/v1/chat/completions` (OpenAI-compat SSE with atomic `tool_calls`).
 - **Tool-choice discipline:** `LLMProvider.stream(..., toolChoice:)` is mandatory. Cap-recovery "one more call" sets `.none` (Anthropic: `{type: "none"}`; Ollama: drop `tools` array entirely). Eval asserts zero `.toolUseRequested` on recovery call.
 
@@ -87,7 +87,7 @@ The top-level shape is fixed and agreed. Push back with specific reasoning only 
 **Memory stack:**
 - **Store:** SQLite with **FTS5** (keyword search) + **sqlite-vec** extension (vector search), single file under `~/Library/Application Support/Jarvis/`.
 - **Embeddings:** `nomic-embed-text` via Ollama (local, free, 768-dim).
-- **Extraction:** mem0's `ADD / UPDATE / NOOP` pattern — after each turn, a local extractor (Qwen 2.5-Coder 32B via Ollama) decides what facts to commit/update/ignore. **Fully local; no user data ever leaves the machine for memory.**
+- **Extraction:** mem0's `ADD / UPDATE / NOOP` pattern — after each turn, a local extractor (`qwen3.6:latest` via Ollama, per commit `8d0a959`) decides what facts to commit/update/ignore. **Fully local; no user data ever leaves the machine for memory.**
 - **Temporal validity:** record `valid_from` / `valid_to` on facts (Zep/Graphiti style) so "Sarah works at Acme" can be superseded without deleting history.
 - **Scope tiers:** `UserDefaults` for trivial prefs, JSON for tool configs/feature flags, SQLite for everything conversational.
 - Secrets (API keys) → macOS **Keychain**, never plaintext, never checked in.
@@ -227,7 +227,7 @@ Codesign + entitlement verification: `bash scripts/verify-entitlements.sh --pre-
 
 ```bash
 JARVIS_REAL_MODELS=1 swift test --package-path packages/Memory --filter MemoryRegressionCorpusTests
-# requires: local Ollama with nomic-embed-text + qwen2.5-coder:32b + loadable vec0.dylib
+# requires: local Ollama with nomic-embed-text + qwen3.6:latest (extractor) + qwen2.5-coder:32b-instruct-q8_0 (agent fallback) + loadable vec0.dylib
 
 JARVIS_REAL_CAMERA=1 swift test --package-path packages/Vision --filter CameraCaptureRealHardwareTests
 # requires: real AVCaptureDevice + .authorized TCC
@@ -236,7 +236,7 @@ JARVIS_REAL_MODELS=1 swift test --package-path packages/Voice --filter OrpheusTT
 # requires: ~6 GB Orpheus weights downloaded; produces empirical TTFA measurement
 ```
 
-Eval harness (Anthropic + local-model eval matrix; corpus in `.planning/evals/`) — pinned to `qwen2.5-coder:32b` for the local-model lane.
+Eval harness (Anthropic + local-model eval matrix; corpus in `.planning/evals/`) — pinned to `qwen2.5-coder:32b-instruct-q8_0` for the local-model lane (matches `ModelID.qwen25coder32b`).
 
 ### Self-hosted CI runner (Grogu)
 
