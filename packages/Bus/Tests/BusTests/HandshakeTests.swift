@@ -103,6 +103,93 @@ final class HandshakeTests: XCTestCase {
         XCTAssertEqual(alerts.count, 0, "armed handshake must suppress timeout alert")
     }
 
+    // MARK: - Audit-2026-05-12 S1 / #40 — failHandshake(reason:)
+
+    /// `failHandshake` from `.sentHello` transitions to `.loadFailed`, cancels
+    /// the pending 2s timeout, and fires exactly one alert.
+    func test_failHandshakeTransitionsToLoadFailedAndAlerts() async {
+        let alerts = AlertCollector()
+        let bridge = makeBridge(alertCollector: alerts)
+
+        bridge.startHandshake()
+        bridge.failHandshake(reason: "bundle 404: assets/index-XYZ.js")
+
+        XCTAssertEqual(
+            bridge.handshakeState,
+            .loadFailed(reason: "bundle 404: assets/index-XYZ.js")
+        )
+        XCTAssertEqual(alerts.count, 1, "exactly one alert on load failure")
+        XCTAssertEqual(alerts.titles.first, "Jarvis HUD couldn't start")
+        XCTAssertTrue(
+            alerts.bodies.first?.contains("assets/index-XYZ.js") ?? false,
+            "alert body should mention the underlying reason"
+        )
+
+        // The cancelled timeout must not fire — wait past the 2s deadline
+        // and confirm no second alert lands.
+        try? await Task.sleep(for: .milliseconds(2100))
+        XCTAssertEqual(
+            alerts.count,
+            1,
+            "cancelled timeout must not surface a second alert"
+        )
+        if case .loadFailed = bridge.handshakeState {
+            // ok
+        } else {
+            XCTFail("state must remain .loadFailed past 2s deadline, got \(bridge.handshakeState)")
+        }
+    }
+
+    /// `failHandshake` from `.idle` (before `startHandshake`) is still valid —
+    /// the navigation can fail before `didFinish` would have been called.
+    func test_failHandshakeFromIdleTransitions() {
+        let alerts = AlertCollector()
+        let bridge = makeBridge(alertCollector: alerts)
+
+        XCTAssertEqual(bridge.handshakeState, .idle)
+        bridge.failHandshake(reason: "provisional nav failed: -1100")
+
+        XCTAssertEqual(
+            bridge.handshakeState,
+            .loadFailed(reason: "provisional nav failed: -1100")
+        )
+        XCTAssertEqual(alerts.count, 1)
+    }
+
+    /// `failHandshake` is idempotent — once in a terminal state, calling
+    /// again no-ops (no second alert, no state change).
+    func test_failHandshakeIsIdempotent() {
+        let alerts = AlertCollector()
+        let bridge = makeBridge(alertCollector: alerts)
+
+        bridge.failHandshake(reason: "first")
+        bridge.failHandshake(reason: "second")
+
+        XCTAssertEqual(
+            bridge.handshakeState,
+            .loadFailed(reason: "first"),
+            "subsequent failHandshake calls must not overwrite the first reason"
+        )
+        XCTAssertEqual(alerts.count, 1, "subsequent failHandshake calls must not re-alert")
+    }
+
+    /// `failHandshake` after `.armed` no-ops — once the handshake succeeds,
+    /// a late navigation-failure callback (which would normally never fire)
+    /// must not transition out of `.armed`.
+    func test_failHandshakeAfterArmedNoOps() {
+        let alerts = AlertCollector()
+        let bridge = makeBridge(alertCollector: alerts)
+
+        bridge.startHandshake()
+        bridge.handleHelloAck(BUS_PROTOCOL_VERSION)
+        XCTAssertEqual(bridge.handshakeState, .armed)
+
+        bridge.failHandshake(reason: "late didFail")
+
+        XCTAssertEqual(bridge.handshakeState, .armed, "armed handshake must not regress to .loadFailed")
+        XCTAssertEqual(alerts.count, 0)
+    }
+
     func test_startHandshakeMovesToSentHello() {
         let alerts = AlertCollector()
         let bridge = makeBridge(alertCollector: alerts)

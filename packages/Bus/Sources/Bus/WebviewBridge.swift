@@ -141,6 +141,35 @@ public final class WebviewBridge: NSObject {
 
     // MARK: - Handshake surface
 
+    /// Audit-2026-05-12 S1 / #40 — surfaces a navigation-layer failure
+    /// (bundle 404, JS parse error before mount, etc.) where `didFinish`
+    /// will never fire and `startHandshake` would otherwise never run.
+    ///
+    /// Idempotent: only transitions on the first call (subsequent calls
+    /// no-op, matching `handleTimeout`'s idempotency guard). Cancels any
+    /// in-flight timeout Task. Routes through the same `alertPresenter`
+    /// surface as `.timedOut` and `.mismatched` so production wiring
+    /// (`TCCAlertService.presentHardBlock` + AppDelegate's banner
+    /// coordinator enqueue) lights up consistently across all three
+    /// terminal-failure paths.
+    public func failHandshake(reason: String) {
+        // Idempotent: once we've reached a terminal state, stay there.
+        switch handshakeState {
+        case .armed, .mismatched, .timedOut, .loadFailed:
+            return
+        case .idle, .sentHello:
+            break
+        }
+        timeoutTask?.cancel()
+        timeoutTask = nil
+        logger.critical("bus handshake load-failed: \(reason)")
+        handshakeState = .loadFailed(reason: reason)
+        alertPresenter(
+            "Jarvis HUD couldn't start",
+            "The HUD bundle failed to load: \(reason). Rebuild Jarvis from source."
+        )
+    }
+
     /// Transitions to `.sentHello`, schedules the 2s timeout, and sends the
     /// `hello` frame over the outbound path. Called by `AppDelegate` on
     /// `WKNavigationDelegate.webView(_:didFinish:)`.
