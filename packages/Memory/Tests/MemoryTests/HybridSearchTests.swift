@@ -42,6 +42,91 @@ final class HybridSearchTests: XCTestCase {
         )
     }
 
+    // MARK: - Audit 2026-05-12 / M-5 — FTS5 query sanitization (Issue #16)
+    //
+    // `hybridSearchSQL` binds the query string directly to `facts_fts MATCH ?`.
+    // Real user queries like "what is my dog's name?" contain `?`, `'`, and
+    // other FTS5-reserved characters that throw `fts5: syntax error` at the
+    // SQLite layer. Sanitization in HybridSearch.searchFacts is the smallest
+    // safe rewrite: strip punctuation, split on whitespace, double-quote each
+    // term, join with spaces. Turns "what is my dog's name?" into
+    // `"what" "is" "my" "dog" "s" "name"`. FTS5-safe phrase-OR query.
+
+    func testSearchFactsSanitizesPunctuationBeforeFTS5() async throws {
+        let embedder = MockEmbedder()
+        let store = MockStore()
+        await store.setRows([])
+        let search = HybridSearch(store: store, embedder: embedder)
+
+        _ = try await search.searchFacts(
+            query: "what is my dog's name?",
+            k: 5,
+            triggerTurnId: 1
+        )
+
+        let captured = await store.capturedQuery
+        XCTAssertNotNil(captured, "store must receive a sanitized query")
+        let safeQuery = captured ?? ""
+        // Must NOT contain raw FTS5-reserved punctuation that breaks MATCH.
+        XCTAssertFalse(safeQuery.contains("?"),
+                       "Issue #16: sanitized query must not contain raw `?` — FTS5 syntax error")
+        XCTAssertFalse(safeQuery.contains("'"),
+                       "Issue #16: sanitized query must not contain raw `'` — FTS5 syntax error")
+        // Must preserve the meaningful tokens so search remains useful.
+        XCTAssertTrue(safeQuery.contains("dog"),
+                      "Sanitization must preserve `dog` token")
+        XCTAssertTrue(safeQuery.contains("name"),
+                      "Sanitization must preserve `name` token")
+    }
+
+    func testSearchFactsSanitizesQuotesAndOperators() async throws {
+        let embedder = MockEmbedder()
+        let store = MockStore()
+        await store.setRows([])
+        let search = HybridSearch(store: store, embedder: embedder)
+
+        // FTS5 operators (NEAR, AND, OR, NOT, *, :, parens) + embedded quote.
+        _ = try await search.searchFacts(
+            query: "remember when I said \"hi\" *or* something?",
+            k: 5,
+            triggerTurnId: 1
+        )
+
+        let captured = await store.capturedQuery
+        XCTAssertNotNil(captured)
+        let safeQuery = captured ?? ""
+        // The embedded raw quote must be escaped (FTS5 doubles internal "
+        // inside a phrase) so we don't ship an unterminated phrase to SQLite.
+        // The wrapper double-quotes EACH token so any token containing a raw
+        // " gets the inner " doubled per FTS5 grammar.
+        // Sanity: must still be non-empty (we didn't strip everything).
+        XCTAssertFalse(safeQuery.isEmpty, "sanitized query must not be empty")
+        // Star alone gets stripped (it's a prefix operator without a term);
+        // useful tokens like `remember`, `said`, `hi`, `something` survive.
+        XCTAssertTrue(safeQuery.contains("remember"))
+        XCTAssertTrue(safeQuery.contains("something"))
+    }
+
+    func testSearchFactsEmptyAfterSanitizeReturnsEmpty() async throws {
+        let embedder = MockEmbedder()
+        let store = MockStore()
+        await store.setRows([])
+        let search = HybridSearch(store: store, embedder: embedder)
+
+        // All-punctuation query → after stripping, no terms remain.
+        // Must short-circuit: never call store (would bind empty MATCH which
+        // is itself an FTS5 syntax error).
+        let refs = try await search.searchFacts(
+            query: "??!?...",
+            k: 5,
+            triggerTurnId: 1
+        )
+        XCTAssertEqual(refs.count, 0)
+        let captured = await store.capturedQuery
+        XCTAssertNil(captured,
+                     "Issue #16: when sanitization yields no terms, search must short-circuit and never bind an empty MATCH to FTS5.")
+    }
+
     func testSearchFactsCallsEmbedderOnce() async throws {
         let embedder = MockEmbedder()
         let store = MockStore()

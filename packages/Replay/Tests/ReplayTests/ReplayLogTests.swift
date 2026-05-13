@@ -316,4 +316,63 @@ final class ReplayLogTests: XCTestCase {
         let s = String(data: payload, encoding: .utf8)
         XCTAssertEqual(s, secret, "replay log is the authoritative byte record; redaction belongs to the viewer (P8)")
     }
+
+    // MARK: - Audit 2026-05-12 / M-2 (Issue #13) — batch-splitting defense
+    //
+    // Live failure mode pre-fix: a single poisoned event (FK violation from
+    // a synthetic memory-trigger-<hash> turn_id) took down every other event
+    // in the same flush transaction. The replay log re-buffered the whole
+    // batch, retried, failed again, and at 3 consecutive failures escalated
+    // to CRITICAL. By the end of the day batch_size had grown to 31+ and
+    // consecutive_failures was 23+. Real turn events queued behind the
+    // poison were silently lost.
+    //
+    // Defense layer 2 (audit recommendation): when a batch transaction
+    // fails, ReplayLog now retries events individually so one poisoned row
+    // can only take itself down, not 30 siblings.
+
+    func test_L10_batchSplitOnFKFailurePreservesOtherEvents() async throws {
+        let log = try ReplayLog(databaseURL: dbURL)
+        let session = try await log.beginSession(appVersion: "v", buildSHA: "s")
+        let goodTurn = TurnID.fresh()
+        try await log.startTurn(
+            turnId: goodTurn, sessionId: session, retryOf: nil,
+            turnNonce: "n", source: .text,
+            provider: "anthropic", modelId: "claude-opus-4-7"
+        )
+
+        // Two good events + one poison (synthetic turn_id not in `turns`).
+        // The whole batch will go through `flushPending` on endTurn.
+        await log.record(.textDelta("hello"), for: goodTurn)
+        await log.record(.textDelta("world"), for: goodTurn)
+        let poisonTurn = TurnID(rawValue: "memory-trigger-7747877241524896942")
+        await log.record(.memoryMutation(Data("{\"op\":\"ADD\"}".utf8)), for: poisonTurn)
+        await log.record(.textDelta("after"), for: goodTurn)
+
+        await log.endTurn(goodTurn, stopReason: "end_turn")
+
+        let conn = try SQLiteConnection.open(at: dbURL)
+        defer { try? conn.close() }
+        // The three good events + the turn_end event must persist even
+        // though the poison row could not be written.
+        let goodCount: Int64 = try conn.query(
+            "SELECT COUNT(*) FROM events WHERE turn_id=?;",
+            bindings: [.text(goodTurn.rawValue)],
+            map: { $0.columnInt(at: 0) }
+        ).first ?? 0
+        XCTAssertEqual(
+            goodCount, 4,
+            "Issue #13: batch-splitting must preserve good events when one row in the batch FK-fails (3 textDelta + 1 turn_end)."
+        )
+
+        let poisonCount: Int64 = try conn.query(
+            "SELECT COUNT(*) FROM events WHERE turn_id=?;",
+            bindings: [.text(poisonTurn.rawValue)],
+            map: { $0.columnInt(at: 0) }
+        ).first ?? 0
+        XCTAssertEqual(
+            poisonCount, 0,
+            "Poisoned row must NOT persist (FK violation) — but it also must not take its batch-siblings down."
+        )
+    }
 }

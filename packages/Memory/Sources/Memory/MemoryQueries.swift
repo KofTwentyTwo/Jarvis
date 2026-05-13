@@ -115,4 +115,60 @@ public enum MemoryQueries {
     ORDER BY created_at DESC
     LIMIT ?;
     """
+
+    /// Audit 2026-05-12 / M-5 (Issue #16) — FTS5-safe query rewriter.
+    ///
+    /// `hybridSearchSQL` binds the query text directly to `facts_fts MATCH ?`.
+    /// FTS5's MATCH grammar accepts terms, AND/OR/NOT/NEAR, column filters,
+    /// and phrase quoting — but raw natural language with `?`, `'`, `:`, `-`,
+    /// `*`, or other reserved characters throws `fts5: syntax error` at the
+    /// SQLite layer. Live probe before this fix:
+    ///   sqlite3 jarvis.db "SELECT rowid FROM facts_fts
+    ///     WHERE facts_fts MATCH 'what is my dog name?'"
+    ///   → Error: stepping, fts5: syntax error near "?"
+    ///
+    /// Rewriter strategy (simplest defensible):
+    ///   1. Replace anything that isn't a unicode letter or digit with a
+    ///      space. This drops `?`, `'`, `:`, `-`, `*`, `(`, `)`, `"`, etc.
+    ///   2. Split on whitespace.
+    ///   3. Wrap each remaining token in double quotes, escaping any
+    ///      embedded `"` per FTS5 grammar (doubled `""`). The class-1
+    ///      filter strips `"` characters, so step (3) escape is belt-and-
+    ///      suspenders against future relaxation of the class filter.
+    ///   4. Join tokens with spaces.
+    ///
+    /// Turns `"what is my dog's name?"` into
+    /// `"what" "is" "my" "dog" "s" "name"` — a FTS5-safe phrase-OR query.
+    /// Returns nil if no usable tokens remain (caller short-circuits to
+    /// empty results rather than binding an empty MATCH that would itself
+    /// be a syntax error).
+    ///
+    /// Long-term we want a real query AST; this is the minimum fix that
+    /// stops the footgun #14 (preamble add) is about to wire up.
+    public static func sanitizeFTS5Query(_ raw: String) -> String? {
+        // Step 1: replace non-alphanumeric (per Unicode) with space.
+        let scalarsKept = raw.unicodeScalars.map { scalar -> Character in
+            if CharacterSet.alphanumerics.contains(scalar) {
+                return Character(scalar)
+            }
+            return " "
+        }
+        let scrubbed = String(scalarsKept)
+
+        // Step 2: split on whitespace, drop empties.
+        let tokens = scrubbed
+            .split(whereSeparator: { $0.isWhitespace })
+            .map { String($0) }
+            .filter { !$0.isEmpty }
+
+        guard !tokens.isEmpty else { return nil }
+
+        // Step 3 + 4: double-quote each token (escape any internal " per
+        // FTS5 — doubled), join with spaces.
+        let quoted = tokens.map { token -> String in
+            let escaped = token.replacingOccurrences(of: "\"", with: "\"\"")
+            return "\"\(escaped)\""
+        }
+        return quoted.joined(separator: " ")
+    }
 }

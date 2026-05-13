@@ -383,6 +383,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (audit trail: Track-D D-1; semantics unchanged after D-5/D-6.)
     var memorySearchAvailable: Bool = false
 
+    /// Audit 2026-05-12 / M-2 (Issue #13): per-process sentinel TurnID for
+    /// memory-mutation / memory-retrieval events that don't have a real
+    /// per-turn TurnID (the extraction orchestrator runs after `.turnEnd`
+    /// and isn't pinned to a specific turn). Generated once at delegate
+    /// construction; `installAgent` writes the matching row into
+    /// `replay.sqlite/turns` so `events.turn_id REFERENCES turns(turn_id)`
+    /// resolves. Pre-fix the sink synthesized a fake TurnID per call which
+    /// broke the FK on every emission.
+    let memorySentinelTurnID: TurnID = TurnID.fresh()
+
     /// Background memory-extraction orchestrator. Drains a bounded
     /// `AsyncChannel(capacity: 32, .dropOldest)` one job at a time so a
     /// stalled 32B-model extraction never back-pressures `.turnEnd`
@@ -1568,12 +1578,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .deletingLastPathComponent()
             .appendingPathComponent("jarvis.db")
 
-        // 2. MemoryStore. Hard-block on failure per D-5/D-6 — see method
+        // 2a. Embedder. Constructed BEFORE MemoryStore so both the writer
+        //     side (Issue #12: populating `facts_vec` after every fact
+        //     INSERT) and the reader side (HybridSearch) share one
+        //     instance. Embedder construction is permissive — only fails
+        //     on a non-loopback URL — but if the constructor somehow
+        //     throws, we proceed with a nil embedder so the store still
+        //     opens (degraded mode: FTS5-only search). Loopback host is
+        //     hardcoded; the OllamaEmbeddingClient.assertLoopback check
+        //     will never reject `127.0.0.1`.
+        let memoryEmbedder: OllamaEmbeddingClient?
+        do {
+            memoryEmbedder = try OllamaEmbeddingClient(
+                baseURL: URL(string: "http://127.0.0.1:11434")!
+            )
+        } catch {
+            systemLogger?.warning(
+                "installMemory: embedder init failed — facts_vec writes will be skipped (degraded mode): \(String(describing: error))"
+            )
+            memoryEmbedder = nil
+        }
+
+        // 2b. MemoryStore. Hard-block on failure per D-5/D-6 — see method
         //    docstring above for the policy + the prior Track-D D-1 era
         //    that this reversed.
         let store: MemoryStore
         do {
-            store = try MemoryStore(databaseURL: dbURL)
+            store = try MemoryStore(databaseURL: dbURL, embedder: memoryEmbedder)
         } catch {
             let description = String(describing: error)
             systemLogger?.critical(
@@ -1594,9 +1625,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let searchAvailable = true
 
         // 3. Wire the replay sink. `store` is non-optional after D-5/D-6
-        //    (we'd have terminated above if init had failed).
+        //    (we'd have terminated above if init had failed). Issue #13:
+        //    the sink attributes every memory event to the per-process
+        //    sentinel TurnID (memorySentinelTurnID); `installAgent` writes
+        //    the matching `turns` row after `beginSession`. Until that row
+        //    exists, sink emissions still flow but fail the FK and get
+        //    dropped via the batch-split path — chain stays uncorrupted.
         if let log = replayLog {
-            await store.setReplayLog(AppDelegateMemoryReplaySink(replayLog: log))
+            await store.setReplayLog(AppDelegateMemoryReplaySink(
+                replayLog: log,
+                sentinelTurnID: memorySentinelTurnID
+            ))
         } else {
             systemLogger?.warning("installMemory: replayLog absent — memory mutation rows won't persist")
         }
@@ -1649,18 +1688,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //    `MemoryStore.forgetFact`. (audit trail: Track-D D-2.)
         let forgetDispatcher: any ForgetFactDispatching = ForgetFactStoreAdapter(store: store)
         var searchDispatcher: (any HybridSearchDispatching)? = nil
-        if searchAvailable {
-            do {
-                let embedder = try OllamaEmbeddingClient(
-                    baseURL: URL(string: "http://127.0.0.1:11434")!
-                )
-                let hybrid = HybridSearch(store: store, embedder: embedder)
-                searchDispatcher = HybridSearchAdapter(hybrid: hybrid)
-            } catch {
-                systemLogger?.warning(
-                    "installMemory: embedder init failed — search_memory not registered: \(String(describing: error))"
-                )
-            }
+        if searchAvailable, let embedder = memoryEmbedder {
+            // Audit 2026-05-12 / M-1 (Issue #12): the SAME embedder
+            // instance powers both writer-side (facts_vec inserts) and
+            // reader-side (HybridSearch.searchFacts) so the vector space
+            // stays consistent. Pre-fix this constructed a second
+            // OllamaEmbeddingClient for search only; the writer side
+            // never had one, which is why facts_vec was empty.
+            let hybrid = HybridSearch(store: store, embedder: embedder)
+            searchDispatcher = HybridSearchAdapter(hybrid: hybrid)
+        } else {
+            systemLogger?.warning(
+                "installMemory: search_memory not registered — embedder absent (degraded mode)"
+            )
         }
 
         // Register INTO the shared `inProcessToolRegistry` — never
@@ -1827,6 +1867,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "installAgent: replayLog.beginSession failed — turns will be rejected: \(String(describing: error))"
             )
             return
+        }
+
+        // Audit 2026-05-12 / M-2 (Issue #13): write the memory-sentinel turn
+        // row so subsequent memory-mutation / memory-retrieval events emit
+        // against a turn_id that exists in `turns`. Without this row, every
+        // memory event would FK-fail and (pre-Issue-#13-batch-split-fix) take
+        // every batch-sibling down with it. The sentinel never `endTurn`s —
+        // its `ended_at` stays NULL for the life of the session.
+        do {
+            try await replayLog.startTurn(
+                turnId: memorySentinelTurnID,
+                sessionId: sessionId,
+                retryOf: nil,
+                turnNonce: "memory-sentinel",
+                source: .text,
+                provider: "memory-system",
+                modelId: "memory-system"
+            )
+        } catch {
+            systemLogger?.warning(
+                "installAgent: memory-sentinel startTurn failed — memory events will FK-fail and be dropped via batch-split: \(String(describing: error))"
+            )
         }
         // Plan 10-02b / B-01: source the tool catalog lazily from BOTH
         // the in-process registry (memory + self-knowledge tools) AND
@@ -3222,25 +3284,33 @@ struct DormantVoiceBusEmitter: BusOutboundEmitter {
 /// Bridges `Memory.MemoryReplaySink` → `Replay.ReplayLog`.
 ///
 /// The Memory module deliberately does not import `Replay.ReplayLog` directly
-/// (07-02 design); AppDelegate is the only place that bridges the two. The
-/// adapter forwards a recorded `ReplayEvent` from MemoryStore.applyOp into the
-/// on-disk replay log. The log records are TurnID-keyed; the orchestrator
-/// records `ReplayEvent.memoryMutation` against an Int64 turnId hash, but the
-/// replay log indexes on TurnID. This adapter generates a synthetic TurnID
-/// stub from the Int64 hash — once AgentOrchestrator wiring lands the real
-/// turn-id correlation will be in place.
+/// (07-02 design); AppDelegate is the only place that bridges the two.
+///
+/// Audit 2026-05-12 / M-2 (Issue #13): pre-fix this sink synthesized a fake
+/// TurnID per call (`"memory-trigger-<int>"`) from the Int64 triggerTurnId
+/// the Memory module passed in. That synthetic TurnID had no row in the
+/// replay-DB's `turns` table, so EVERY emission fired the foreign-key
+/// constraint on `events.turn_id REFERENCES turns(turn_id)`. The whole
+/// batch transaction rolled back, the log re-buffered, and consecutive
+/// failures climbed to chronic-critical within minutes. Real turn events
+/// queued behind the poison were silently lost.
+///
+/// New design: the sink holds a single optional **sentinel TurnID** that
+/// `installAgent` writes into the `turns` table once per session (a turn
+/// row with `ended_at=NULL`, `stop_reason=NULL`, source = `.text`). Memory
+/// emissions use this sentinel — the FK resolves, the events land, and the
+/// Int64 triggerTurnId travels in the JSON payload for forensic queries.
 struct AppDelegateMemoryReplaySink: MemoryReplaySink {
     let replayLog: ReplayLog
+    let sentinelTurnID: TurnID
 
     func record(_ event: ReplayEvent, forTriggerTurnId triggerTurnId: Int64) {
-        // The replay log's `record(_:for:)` is async; fire-and-forget through
-        // a detached Task so the synchronous MemoryReplaySink contract stays
-        // intact. The Int64 trigger-turn-id is encoded as a TurnID's UUID
-        // string deterministically (FNV-1a hash → reverse stub) so replay
-        // queries can correlate later.
-        let synthetic = TurnID(rawValue: "memory-trigger-\(triggerTurnId)")
-        Task.detached { [replayLog] in
-            await replayLog.record(event, for: synthetic)
+        // Fire-and-forget through a detached Task so the synchronous
+        // MemoryReplaySink contract stays intact. The Int64 triggerTurnId
+        // is already encoded into the event's JSON payload by MemoryStore;
+        // we attribute the row to the sentinel turn so the FK resolves.
+        Task.detached { [replayLog, sentinelTurnID] in
+            await replayLog.record(event, for: sentinelTurnID)
         }
     }
 }

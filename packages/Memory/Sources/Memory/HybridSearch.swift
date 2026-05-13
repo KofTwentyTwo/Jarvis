@@ -31,8 +31,18 @@ public actor HybridSearch {
 
     public func searchFacts(query: String, k: Int = 10, triggerTurnId: Int64) async throws -> [FactRef] {
         guard !query.isEmpty else { return [] }
+        // Audit 2026-05-12 / M-5 (Issue #16): FTS5 MATCH grammar rejects raw
+        // natural-language punctuation. Sanitize before binding to the
+        // positional parameter; short-circuit if no usable tokens remain
+        // (binding an empty MATCH is itself a syntax error). Embedding still
+        // runs on the raw query so semantic recall isn't degraded by the
+        // FTS-safe rewrite.
+        guard let safeQuery = MemoryQueries.sanitizeFTS5Query(query) else {
+            logger.debug("searchFacts: sanitize returned no tokens; short-circuit queryLen=\(query.count) k=\(k) triggerTurnId=\(triggerTurnId)")
+            return []
+        }
         let embedding = try await embedder.embed(query)
-        let rows = try await store.runHybridSearchSQL(query: query, embedding: embedding, k: k)
+        let rows = try await store.runHybridSearchSQL(query: safeQuery, embedding: embedding, k: k)
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         var refs: [FactRef] = []
         refs.reserveCapacity(rows.count)

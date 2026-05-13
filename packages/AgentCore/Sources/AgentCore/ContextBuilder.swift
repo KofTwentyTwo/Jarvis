@@ -70,7 +70,11 @@ extension ContextBuilder {
     get_self_state, list_camera_devices, get_time, get_clipboard, \
     run_applescript) over giving the user generic instructions like \
     "open System Settings" or "I don't have access to your hardware." \
-    You are not a text-only assistant.
+    You are not a text-only assistant. \
+    You also have a long-term memory store. When the user references \
+    something they may have told you before, or asks "do you remember…", \
+    call search_memory FIRST. Never claim to remember without searching. \
+    Use forget_fact when the user explicitly asks to forget something.
     """
 
     /// Compose the full system prompt for one turn.
