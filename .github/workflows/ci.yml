@@ -154,6 +154,28 @@ jobs:
           - Vision
           - Voice
     steps:
+      # Grogu is a shared workstation, not an ephemeral VM. Interactive
+      # Xcode test sessions, debugging, or aborted `swift test` runs can
+      # leave orphan xctest/swift-test/swift-driver processes around for
+      # hours, holding Mach services + sockets + ports that a new
+      # WKWebView mount or test-target launch then blocks on (observed:
+      # AgentCore hung 34min on develop CI 25824607025 with 6 zombie
+      # xctests aged 22-24h from prior interactive use). The runner only
+      # executes one job at a time, so any such process at job-start
+      # belongs to no live job and is safe to kill. github-hosted VMs
+      # start clean, so this step is gated to self-hosted.
+      - name: Reap orphan xctest/swift-test processes (self-hosted only)
+        if: runner.environment == 'self-hosted'
+        run: |
+          /bin/ps -A -o pid,etime,comm \
+            | awk '/(xctest|swift-test|swift-driver)$/ && !/awk/ {print $1}' \
+            | xargs -r -I{} kill -TERM {} 2>/dev/null || true
+          sleep 2
+          /bin/ps -A -o pid,etime,comm \
+            | awk '/(xctest|swift-test|swift-driver)$/ && !/awk/ {print $1}' \
+            | xargs -r -I{} kill -9 {} 2>/dev/null || true
+          echo "Surviving xctest/swift-test processes after cleanup:"
+          /bin/ps -A -o pid,etime,comm | grep -E '(xctest|swift-test|swift-driver)$' || echo "  (none)"
       - uses: actions/checkout@v4
       # Project targets macOS 26 Tahoe + Swift 6.2/6.3. Xcode 16 (Swift 6.0)
       # cannot parse `mlx-audio-swift` v0.1.2's `swift-tools-version:6.2`,
