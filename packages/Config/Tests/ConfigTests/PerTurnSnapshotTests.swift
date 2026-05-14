@@ -71,6 +71,16 @@ final class PerTurnSnapshotEscalationTests: XCTestCase {
         XCTAssertTrue(snapshot.escalationEnabled)
     }
 
+    func test_default_config_resource_is_local_first() throws {
+        let url = ConfigLoader.bundledDefaultConfigURL()!
+        let data = try Data(contentsOf: url)
+        let snapshot = try JSONDecoder().decode(PerTurnSnapshot.self, from: data)
+        XCTAssertEqual(snapshot.provider, .ollama,
+            "default-config.json must specify ollama as the default chat-turn provider (local-first)")
+        XCTAssertTrue(snapshot.escalationEnabled,
+            "default-config.json must enable escalation for new users (local-first)")
+    }
+
     func test_escalation_enabled_survives_encode_decode_round_trip_when_false() throws {
         // Catches a future regression where someone adds a custom encode(to:)
         // that drops escalationEnabled — encoder must continue emitting the

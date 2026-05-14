@@ -10,7 +10,7 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertEqual(launch.schemaVersion, 1)
         XCTAssertEqual(perTurn.schemaVersion, 1)
         XCTAssertEqual(launch.ollama.baseURL.host, "127.0.0.1")
-        XCTAssertEqual(perTurn.provider, .anthropic)
+        XCTAssertEqual(perTurn.provider, .ollama)
     }
 
     func test_malformedConfigThrowsMalformed() throws {

@@ -6,7 +6,8 @@
   "applescript": {
     "confirmationRequired": true
   },
-  "provider": "anthropic",
+  "provider": "ollama",
+  "escalationEnabled": true,
   "tts": { "tier": "tier1" },
   "stt": { "whisperKitFallback": false },
   "featureFlags": {
