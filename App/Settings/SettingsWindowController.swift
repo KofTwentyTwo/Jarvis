@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Keychain
 import Shell
+import Config
 
 /// Hosts the `SettingsView` in an `NSWindow`. Distinct from the first-run
 /// wizard:
@@ -31,7 +32,8 @@ public final class SettingsWindowController {
         validator: AnthropicKeyValidator,
         onGrantInputMonitoring: @escaping () -> Bool,
         onHotkeyChanged: @escaping (Shell.KeyboardShortcut?) -> Void,
-        onPTTHotkeyChanged: @escaping (Shell.KeyboardShortcut?) -> Void = { _ in }
+        onPTTHotkeyChanged: @escaping (Shell.KeyboardShortcut?) -> Void = { _ in },
+        configStore: ConfigStore? = nil
     ) {
         // Refresh truth before view creation: TCC grants and Keychain entries
         // can change between sessions, same reasoning as the wizard's
@@ -51,6 +53,7 @@ public final class SettingsWindowController {
             onGrantInputMonitoring: onGrantInputMonitoring,
             onHotkeyChanged: onHotkeyChanged,
             onPTTHotkeyChanged: onPTTHotkeyChanged,
+            configStore: configStore,
             onClose: { [weak self] in self?.close() }
         )
         let hosting = NSHostingController(rootView: rootView)

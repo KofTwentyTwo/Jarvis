@@ -1,6 +1,54 @@
 import SwiftUI
 import Keychain
 import Shell
+import Config
+
+/// Local-first LLM routing (Task 9 / spec §6): three-way picker that maps
+/// to `{provider, escalationEnabled}` pairs on `PerTurnSnapshot`.
+///
+/// | Mode             | provider   | escalationEnabled        |
+/// |------------------|------------|--------------------------|
+/// | Local-first      | .ollama    | true                     |
+/// | Anthropic only   | .anthropic | false (moot, pinned)     |
+/// | Ollama only      | .ollama    | false                    |
+///
+/// `escalationEnabled` is "moot" for `.anthropic` because escalation is
+/// an Ollama→Anthropic-only fallback path; we normalize it to `false` so
+/// the persisted state is unambiguous.
+enum ProviderMode: String, CaseIterable, Identifiable {
+    case localFirst
+    case anthropicOnly
+    case ollamaOnly
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .localFirst: return "Local-first (recommended)"
+        case .anthropicOnly: return "Anthropic only"
+        case .ollamaOnly: return "Ollama only"
+        }
+    }
+
+    static func from(
+        provider: ProviderSelection,
+        escalationEnabled: Bool
+    ) -> ProviderMode {
+        switch (provider, escalationEnabled) {
+        case (.ollama, true): return .localFirst
+        case (.anthropic, _): return .anthropicOnly
+        case (.ollama, false): return .ollamaOnly
+        }
+    }
+
+    var pair: (provider: ProviderSelection, escalationEnabled: Bool) {
+        switch self {
+        case .localFirst: return (.ollama, true)
+        case .anthropicOnly: return (.anthropic, false)
+        case .ollamaOnly: return (.ollama, false)
+        }
+    }
+}
 
 /// Real Settings panel — single window, three rows, every row independently
 /// editable. Distinct from the first-run wizard:
@@ -28,6 +76,11 @@ struct SettingsView: View {
     /// this still compile.
     let onPTTHotkeyChanged: (Shell.KeyboardShortcut?) -> Void
 
+    /// Local-first LLM routing (Task 9 / spec §6): optional because the
+    /// SwiftUI preview/test seams may instantiate the view without a live
+    /// `ConfigStore`. When nil, the provider-mode section is hidden.
+    let configStore: ConfigStore?
+
     let onClose: () -> Void
 
     init(
@@ -37,6 +90,7 @@ struct SettingsView: View {
         onGrantInputMonitoring: @escaping () -> Bool,
         onHotkeyChanged: @escaping (Shell.KeyboardShortcut?) -> Void,
         onPTTHotkeyChanged: @escaping (Shell.KeyboardShortcut?) -> Void = { _ in },
+        configStore: ConfigStore? = nil,
         onClose: @escaping () -> Void
     ) {
         self.state = state
@@ -45,6 +99,7 @@ struct SettingsView: View {
         self.onGrantInputMonitoring = onGrantInputMonitoring
         self.onHotkeyChanged = onHotkeyChanged
         self.onPTTHotkeyChanged = onPTTHotkeyChanged
+        self.configStore = configStore
         self.onClose = onClose
     }
 
@@ -61,6 +116,13 @@ struct SettingsView: View {
     @State private var pttHotkeyDraft: Shell.KeyboardShortcut?
     @State private var pttHotkeyError: String?
 
+    /// Local-first LLM routing (Task 9 / spec §6): derived from the
+    /// `ConfigStore`'s current `PerTurnSnapshot`. Hydrated on `.onAppear`
+    /// from `configStore.perTurn()`; mutated through the `Picker`.
+    /// `nil` until hydrated so the picker doesn't flash a wrong default.
+    @State private var providerMode: ProviderMode = .localFirst
+    @State private var providerModeHydrated: Bool = false
+
     enum APIKeyStatus: Equatable {
         case unchanged
         case validating
@@ -76,6 +138,10 @@ struct SettingsView: View {
 
                 apiKeySection
                 Divider()
+                if configStore != nil {
+                    providerModeSection
+                    Divider()
+                }
                 permissionsSection
                 Divider()
                 hotkeySection
@@ -99,6 +165,54 @@ struct SettingsView: View {
             state.refresh()
             hotkeyDraft = state.hotkey
             pttHotkeyDraft = state.pttHotkey
+            // Local-first LLM routing (Task 9): hydrate the picker from
+            // the live ConfigStore. The `providerModeHydrated` flag
+            // suppresses the spurious .onChange fire that would otherwise
+            // immediately write back the (just-read) snapshot.
+            if let configStore {
+                Task {
+                    let snap = await configStore.perTurn()
+                    await MainActor.run {
+                        providerMode = ProviderMode.from(
+                            provider: snap.provider,
+                            escalationEnabled: snap.escalationEnabled
+                        )
+                        providerModeHydrated = true
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Provider mode (Local-first LLM routing, Task 9 / spec §6)
+
+    private var providerModeSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(
+                "Provider",
+                subtitle: "Local-first runs the agent on Ollama and only reaches Anthropic if Ollama can't handle the turn. Anthropic only / Ollama only pin to a single backend."
+            )
+
+            Picker("Mode", selection: $providerMode) {
+                ForEach(ProviderMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+            .onChange(of: providerMode) { _, newValue in
+                // Suppress the initial fire from hydration; only persist
+                // user-driven edits.
+                guard providerModeHydrated, let configStore else { return }
+                let pair = newValue.pair
+                Task {
+                    let current = await configStore.perTurn()
+                    let next = current.with(
+                        provider: pair.provider,
+                        escalationEnabled: pair.escalationEnabled
+                    )
+                    await configStore.updatePerTurn(next)
+                }
+            }
         }
     }
 

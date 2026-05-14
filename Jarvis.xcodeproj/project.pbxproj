@@ -77,6 +77,7 @@
 		B72852E1EF52C0E6F8170852 /* Memory in Frameworks */ = {isa = PBXBuildFile; productRef = 59F56604A76635EC59D2671B /* Memory */; };
 		B8F411ADE70402B71887E377 /* VoiceOrchestratorAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590D5A359A5C3E915D274436 /* VoiceOrchestratorAdapter.swift */; };
 		BBD8BBC82E0D3C57E0DB4ED0 /* HudStateEnumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */; };
+		95D90BA0F99D46E7A3715F0E /* ProviderModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B66305B3801453E88D2341F /* ProviderModeTests.swift */; };
 		BEFC509502C7940A21001F9F /* JarvisHUDPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4424DD9447F84F35372A48FF /* JarvisHUDPanel.swift */; };
 		C336B40332A148A5A1F2DDC8 /* WebviewBundleLoadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16929275D5323F505DF12E9 /* WebviewBundleLoadTests.swift */; };
 		C3917516BFFF438A4AD5CE80 /* BrandColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */; };
@@ -178,6 +179,7 @@
 		4BC1E50BF31BB6CCF895FCA3 /* BrandColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandColors.swift; sourceTree = "<group>"; };
 		4DFECDF801143C9F672B5FB7 /* MenuBarIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconController.swift; sourceTree = "<group>"; };
 		510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateEnumTests.swift; sourceTree = "<group>"; };
+		4B66305B3801453E88D2341F /* ProviderModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderModeTests.swift; sourceTree = "<group>"; };
 		511D7B2406F485ED0D4B9E0D /* HudStateIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HudStateIntent.swift; sourceTree = "<group>"; };
 		528FED2A364DE6BD1F2BA20F /* AppBusForwarderSink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBusForwarderSink.swift; sourceTree = "<group>"; };
 		54B2C24637464D380D4450AF /* BootHealthProbes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootHealthProbes.swift; sourceTree = "<group>"; };
@@ -380,6 +382,7 @@
 				46CB8B7693CEA625D7331C3E /* HudStateCoordinatorBusWiringTests.swift */,
 				8B7E85856B679CE0788D38DB /* HudStateCoordinatorTests.swift */,
 				510B6A716A10A8B7CEEC1D3F /* HudStateEnumTests.swift */,
+				4B66305B3801453E88D2341F /* ProviderModeTests.swift */,
 				3527AF52C1E81BAC4EF70766 /* JarvisHUDPanelTests.swift */,
 				6639284829C6DB4F69ED47F7 /* MCPBusGatewayAdapterTests.swift */,
 				0B5B16BDAC02919861AA4B0B /* MCPRuntimeWiringTests.swift */,
@@ -1298,6 +1301,7 @@
 				C9F3B34208084769106C4B07 /* HudStateCoordinatorBusWiringTests.swift in Sources */,
 				8E4590089A7955545E2146D3 /* HudStateCoordinatorTests.swift in Sources */,
 				BBD8BBC82E0D3C57E0DB4ED0 /* HudStateEnumTests.swift in Sources */,
+				95D90BA0F99D46E7A3715F0E /* ProviderModeTests.swift in Sources */,
 				461A5FACC5A3C2025FB0A233 /* JarvisHUDPanelTests.swift in Sources */,
 				70D09A556654E11B140AFBD4 /* MCPBusGatewayAdapterTests.swift in Sources */,
 				5AD556F5095852328E72BE36 /* MCPRuntimeWiringTests.swift in Sources */,

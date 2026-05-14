@@ -54,4 +54,23 @@ public struct PerTurnSnapshot: Sendable, Codable, Equatable {
             featureFlags: featureFlags
         )
     }
+
+    /// Local-first LLM routing (Task 9 / spec §6): convenience copy that
+    /// mutates the `{provider, escalationEnabled}` pair atomically. Used
+    /// by the Settings provider-mode picker so a single toggle persists
+    /// both fields through `ConfigStore.updatePerTurn(_:)`. Other fields
+    /// are preserved verbatim.
+    public func with(
+        provider: ProviderSelection,
+        escalationEnabled: Bool
+    ) -> PerTurnSnapshot {
+        PerTurnSnapshot(
+            schemaVersion: schemaVersion,
+            provider: provider,
+            escalationEnabled: escalationEnabled,
+            tts: tts,
+            stt: stt,
+            featureFlags: featureFlags
+        )
+    }
 }
