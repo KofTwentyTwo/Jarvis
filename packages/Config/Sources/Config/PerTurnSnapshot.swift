@@ -38,4 +38,20 @@ public struct PerTurnSnapshot: Sendable, Codable, Equatable {
         self.stt = try c.decode(STTConfig.self, forKey: .stt)
         self.featureFlags = try c.decode(FeatureFlags.self, forKey: .featureFlags)
     }
+
+    /// Local-first LLM routing (Task 6 / spec §2): convenience copy with a
+    /// different provider. Used by `AgentOrchestrator` on reactive
+    /// escalation to swap `.ollama` → `.anthropic` for the same turn
+    /// without mutating the underlying `ConfigStore` (the escalation is a
+    /// per-turn decision, not a config update).
+    public func with(provider: ProviderSelection) -> PerTurnSnapshot {
+        PerTurnSnapshot(
+            schemaVersion: schemaVersion,
+            provider: provider,
+            escalationEnabled: escalationEnabled,
+            tts: tts,
+            stt: stt,
+            featureFlags: featureFlags
+        )
+    }
 }

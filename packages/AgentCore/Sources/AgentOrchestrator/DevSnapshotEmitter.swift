@@ -157,6 +157,15 @@ public actor DevSnapshotEmitter {
             current = current.with(state: .idle, turnId: turnId)
             thinkingStartedAt = nil
             firstTokenAt = nil
+
+        case .escalated:
+            // Local-first LLM routing (Task 6): the dev overlay's snapshot
+            // shape predates escalation. Treat as a no-op here — Task 8
+            // adds a dedicated HUD badge for the user-visible signal, and
+            // Plan 04-05's DevOverlay can read the `.escalated` event off
+            // its own subscription if needed. No latency/usage fields to
+            // update at this seam.
+            break
         }
         await output.send(current)
     }
