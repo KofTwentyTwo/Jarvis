@@ -920,6 +920,10 @@ public actor AgentOrchestrator {
             return .transport(description: Redact.apply(description))
         case .streamTruncatedFinal:
             return .streamTruncatedFinal
+        case .malformedToolCall(let reason):
+            return .malformedToolCall(reason: Redact.apply(reason))
+        case .emptyResponse:
+            return .emptyResponse
         }
     }
 
