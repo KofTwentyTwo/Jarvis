@@ -70,6 +70,28 @@ final class PerTurnSnapshotEscalationTests: XCTestCase {
         let snapshot = try JSONDecoder().decode(PerTurnSnapshot.self, from: json)
         XCTAssertTrue(snapshot.escalationEnabled)
     }
+
+    func test_escalation_enabled_survives_encode_decode_round_trip_when_false() throws {
+        // Catches a future regression where someone adds a custom encode(to:)
+        // that drops escalationEnabled — encoder must continue emitting the
+        // field so decoder reads the user's explicit `false` rather than
+        // defaulting back to `true`.
+        let original = PerTurnSnapshot(
+            schemaVersion: 1,
+            provider: .ollama,
+            escalationEnabled: false,
+            tts: TTSConfig(tier: "tier1"),
+            stt: STTConfig(whisperKitFallback: false),
+            featureFlags: FeatureFlags(["orpheusTTSEnabled": false, "whisperKitSTTEnabled": false])
+        )
+
+        let encoded = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(PerTurnSnapshot.self, from: encoded)
+
+        XCTAssertFalse(decoded.escalationEnabled,
+            "Encoder must emit escalationEnabled so round-trip preserves the user's explicit false")
+        XCTAssertEqual(decoded, original)
+    }
 }
 
 enum ConfigTestFixtures {
