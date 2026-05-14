@@ -43,6 +43,20 @@ public struct CacheHints: Sendable, Equatable {
     /// Once the system prompt grows past the threshold (e.g. memory
     /// hydration adds context, presence enrichment lengthens the prompt)
     /// the hint resumes automatically.
+    ///
+    /// **Current production state (as of v0.1):** `selfAwarePreamble` is
+    /// ~700 chars and the orchestrator is constructed with an `.empty`
+    /// initial context, so the threshold is never crossed on a healthy
+    /// boot — `eligibleForSystemPrompt` returns `nil` on every turn and
+    /// the prompt cache is effectively dormant. This is intentional
+    /// cost-acceptance: padding the preamble to ≥4096 chars would
+    /// require real prompt-engineering work and risks bleeding
+    /// irrelevant context into the model. Cache hits resume naturally
+    /// once Memory M-4 (v0.8 milestone) lands `searchFacts`-driven
+    /// hydration that grows the prompt past 1024 tokens organically;
+    /// see #23 for the audit context. Until then, every turn pays full
+    /// input-token cost — a ~30–80% cost reduction is on the table once
+    /// M-4 ships.
     public static func eligibleForSystemPrompt(
         _ systemPromptText: String,
         ttl: CacheTTL = .extended1h
