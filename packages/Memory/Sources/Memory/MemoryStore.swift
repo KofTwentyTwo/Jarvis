@@ -12,7 +12,7 @@ import Replay
 
 /// Test seam over `Replay.ReplayLog`. The Memory module deliberately does NOT
 /// depend on a concrete `ReplayLog` instance — `AppDelegate.installMemory`
-/// (Plan 07-06) hands a wrapper through `setReplayLog`. Tests inject a
+/// hands a wrapper through `setReplayLog` at startup. Tests inject a
 /// mock conforming to this protocol.
 public protocol MemoryReplaySink: Sendable {
     func record(_ event: ReplayEvent, forTriggerTurnId triggerTurnId: Int64)
@@ -34,8 +34,10 @@ public protocol MemoryReplaySink: Sendable {
 /// memory store the app refuses to launch. This eliminates the silent
 /// dormancy that hid B-02 / B-04-class substrate failures.
 ///
-/// The actor is the only writer. Plan 07-02 wires the bounded extraction
-/// channel; Plan 07-03 wires the search path + ReplayEvent emission.
+/// The actor is the only writer. The bounded extraction channel writes
+/// here via `applyOp`; the hybrid (FTS5 + vec0) search path reads through
+/// `MemoryReadStore` conformance and emits `ReplayEvent.memoryRetrieval`
+/// via `recordRetrieval`.
 public actor MemoryStore {
 
     public static let logChannel = "memory"
@@ -331,11 +333,11 @@ public actor MemoryStore {
         sink.record(.memoryMutation(bytes), forTriggerTurnId: triggerTurnId)
     }
 
-    // MARK: - Read path (Plan 07-03 — MEM-07 + TEXT-03 + D-02 + D-05)
+    // MARK: - Read path (MEM-07 + TEXT-03 + D-02 + D-05)
 
     /// SOLE production emission site for ReplayEvent.memoryRetrieval (D-05).
-    /// Mirrors recordMemoryMutation from 07-02. Best-effort; if no replay
-    /// sink has been injected, the call is a silent no-op.
+    /// Mirrors `recordMemoryMutation` on the write path. Best-effort; if no
+    /// replay sink has been injected, the call is a silent no-op.
     public func recordRetrieval(_ ref: FactRef, triggerTurnId: Int64) {
         guard let sink = replayLog else { return }
         let stamp: Int64 = ref.timestamp == 0
@@ -538,13 +540,13 @@ public actor MemoryStore {
     }
 }
 
-// MARK: - HybridSearch + SessionHistory conformance (Plan 07-03 Task 2)
+// MARK: - HybridSearch + SessionHistory conformance
 
 extension MemoryStore: MemoryReadStore {}
 extension MemoryStore: SessionHistoryReading {}
 extension OllamaEmbeddingClient: EmbeddingProviding {}
 
-// MARK: - Plan 07-06 / Regression corpus test seams
+// MARK: - Regression corpus test seams
 //
 // These small read-only seams are exercised exclusively by the env-gated
 // MemoryRegressionCorpusTests suite (JARVIS_REAL_MODELS=1). They wrap raw
