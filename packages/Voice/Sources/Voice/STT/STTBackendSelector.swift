@@ -28,6 +28,16 @@ public protocol STTWarningLogger: Sendable {
 public enum STTBackendSelector {
 
     // MARK: - Valid backend strings
+    //
+    // Canonical backend identifiers. Snake_case is the wire shape stored in
+    // `PerTurnSnapshot.stt.backend`. Call sites (`AppDelegate.sttBackend`)
+    // SHOULD reference these constants rather than the bare string literals;
+    // `STTBackendSwitchTests.testB5_canonicalConstantsRoundTripThroughMake`
+    // locks the round-trip contract by asserting both that the constants
+    // map to the right `STTProvider` AND that camelCase string literals
+    // (the pre-2026-05-12 anti-pattern from Issue #29 / #37) fall through
+    // to the default branch with a warning. Do not rename without updating
+    // `PerTurnSnapshot` and the regression test in lockstep.
 
     public static let backendSpeechAnalyzer = "speech_analyzer"
     public static let backendWhisperKit = "whisperkit"
