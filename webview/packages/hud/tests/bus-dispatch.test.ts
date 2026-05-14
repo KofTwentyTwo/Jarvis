@@ -10,6 +10,9 @@ function resetStore() {
   useJarvisStore.setState({
     hudState: 'booting',
     chatEvents: [],
+    currentTurnId: null,
+    activeTextPartId: null,
+    pendingEscalation: null,
     a11y: { reduceMotion: false, reduceTransparency: false },
     theme: { arcReactorGlow: '#1E88E5' },
     connection: 'booting',
@@ -86,6 +89,55 @@ describe('bus dispatcher — submitRejected pushes error event (B5)', () => {
     if (ev?.kind === 'error') {
       expect(ev.message).toBe('Local model unreachable.')
     }
+  })
+})
+
+describe('bus dispatcher — escalated attaches to last assistant text (Task 8)', () => {
+  beforeEach(() => {
+    resetStore()
+    installWebkitMock()
+    clearBus()
+  })
+
+  it('attaches the decision to the most-recent assistant text event', () => {
+    attachBus()
+    // Synthesize a turn with an assistant text event in flight.
+    window.jarvisBus.receive('{"type":"turnStarted","id":"t1"}')
+    window.jarvisBus.receive('{"type":"tokenDelta","text":"partial..."}')
+    window.jarvisBus.receive(
+      '{"type":"escalated","decision":{"from":"ollama","to":"anthropic","reason":"streamTruncated","firedAt":"2026-05-14T16:00:00Z"}}',
+    )
+    const events = useJarvisStore.getState().chatEvents
+    const textEv = events.find((e) => e.kind === 'text' && e.role === 'assistant')
+    expect(textEv).toBeDefined()
+    if (textEv && textEv.kind === 'text') {
+      expect(textEv.escalation?.reason).toBe('streamTruncated')
+      expect(textEv.escalation?.from).toBe('ollama')
+      expect(textEv.escalation?.to).toBe('anthropic')
+    }
+  })
+
+  it('parks the decision when no assistant text exists yet, then stamps the next text event', () => {
+    attachBus()
+    window.jarvisBus.receive('{"type":"turnStarted","id":"t2"}')
+    // Escalation fires before any tokenDelta (e.g. connectionFailure).
+    window.jarvisBus.receive(
+      '{"type":"escalated","decision":{"from":"ollama","to":"anthropic","reason":"connectionFailure","firedAt":"2026-05-14T16:00:00Z"}}',
+    )
+    // No text event yet; decision is parked.
+    expect(useJarvisStore.getState().chatEvents.length).toBe(0)
+    expect(useJarvisStore.getState().pendingEscalation?.reason).toBe('connectionFailure')
+
+    // First post-escalation tokenDelta creates the text event and inherits the badge.
+    window.jarvisBus.receive('{"type":"tokenDelta","text":"hello from opus"}')
+    const events = useJarvisStore.getState().chatEvents
+    const textEv = events.find((e) => e.kind === 'text' && e.role === 'assistant')
+    expect(textEv).toBeDefined()
+    if (textEv && textEv.kind === 'text') {
+      expect(textEv.escalation?.reason).toBe('connectionFailure')
+    }
+    // Pending slot was consumed.
+    expect(useJarvisStore.getState().pendingEscalation).toBe(null)
   })
 })
 
