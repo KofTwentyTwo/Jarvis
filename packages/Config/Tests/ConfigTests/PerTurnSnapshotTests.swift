@@ -38,6 +38,40 @@ final class PerTurnSnapshotTests: XCTestCase {
     }
 }
 
+final class PerTurnSnapshotEscalationTests: XCTestCase {
+    func test_escalation_enabled_round_trips() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "provider": "ollama",
+          "escalationEnabled": true,
+          "tts": { "tier": "tier1" },
+          "stt": { "whisperKitFallback": false },
+          "featureFlags": { "orpheusTTSEnabled": false, "whisperKitSTTEnabled": false }
+        }
+        """.data(using: .utf8)!
+
+        let snapshot = try JSONDecoder().decode(PerTurnSnapshot.self, from: json)
+        XCTAssertEqual(snapshot.provider, .ollama)
+        XCTAssertTrue(snapshot.escalationEnabled)
+    }
+
+    func test_escalation_enabled_defaults_to_true_when_absent() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "provider": "ollama",
+          "tts": { "tier": "tier1" },
+          "stt": { "whisperKitFallback": false },
+          "featureFlags": { "orpheusTTSEnabled": false, "whisperKitSTTEnabled": false }
+        }
+        """.data(using: .utf8)!
+
+        let snapshot = try JSONDecoder().decode(PerTurnSnapshot.self, from: json)
+        XCTAssertTrue(snapshot.escalationEnabled)
+    }
+}
+
 enum ConfigTestFixtures {
     static func launch() throws -> LaunchSnapshot {
         let json = """
