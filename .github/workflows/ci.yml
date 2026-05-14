@@ -431,3 +431,51 @@ jobs:
           fi
           git tag -a "$TAG" -m "Automated tag from CI for $GH_REF"
           git push origin "$TAG"
+      # GitHub Actions GITHUB_TOKEN cannot trigger downstream workflows. The
+      # separate `release.yml` workflow listens for `push: tags:` events but
+      # never sees a CI-pushed tag — observed on v0.1.0-dev.50 (tag created,
+      # Release object missing, had to be manually created). Create the
+      # Release object directly here in the same job so the Releases page
+      # reflects CI-pushed tags without a manual step. `release.yml` stays
+      # as a fallback for manually-pushed tags (which CAN trigger workflows).
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          RUN_URL: ${{ format('https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) }}
+        run: |
+          set -euo pipefail
+          if ! git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG not present locally; nothing to release." >&2
+            exit 0
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — skipping create (idempotent)."
+            exit 0
+          fi
+          prev=$(git tag --list 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -n 1 || true)
+          notes_file=$(mktemp)
+          {
+            echo "## Changes"
+            echo
+            if [ -n "$prev" ]; then
+              git log --pretty='format:- %s (%h)' "${prev}..${TAG}"
+            else
+              git log --pretty='format:- %s (%h)' -20
+            fi
+            echo
+            echo
+            echo "## Verification"
+            echo
+            echo "- CI build: $RUN_URL"
+            echo "- Boundary gates, webview, app-build, 13/13 SPM packages: all green on this commit"
+          } > "$notes_file"
+          flag=()
+          if [ "$PRERELEASE" = "true" ]; then
+            flag+=("--prerelease")
+          fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file "$notes_file" \
+            "${flag[@]}"
