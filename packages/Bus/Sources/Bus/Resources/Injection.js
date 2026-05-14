@@ -1,6 +1,7 @@
-// Injected at document-start in WKContentWorld("JarvisBusWorld").
-// Installs window.jarvisBus with the minimum surface needed to complete
-// the handshake.
+// Injected at document-start in the page world (the default
+// `WKContentWorld.page` since `fb41c5f` retired the prior isolated named
+// world; see WebviewBridge.swift). Installs window.jarvisBus with the
+// minimum surface needed to complete the handshake.
 //
 // IMPORTANT — protocolVersion drift hazard: the full TS bundle's installer
 // (Vy() in the minified output) shape-checks window.jarvisBus and SKIPS

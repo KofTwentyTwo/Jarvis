@@ -6,8 +6,9 @@ import JarvisLogging
 /// Main-actor-bound bridge between Swift and the webview's JS layer.
 ///
 /// Responsibilities:
-/// - Install a `WKScriptMessageHandlerWithReply` in an isolated content world
-///   (`JarvisBusWorld`) so page scripts cannot observe or post to it.
+/// - Install a `WKScriptMessageHandlerWithReply` on the page world
+///   (`WKContentWorld.page`, the default since `fb41c5f`) so page scripts
+///   in the loaded HUD bundle can address it via `window.webkit.messageHandlers.jarvisBus`.
 /// - Inject a `WKUserScript` at `.atDocumentStart` in the same world so
 ///   `window.jarvisBus` exists before any page script runs (pitfall 3).
 /// - Decode inbound JSON into `BusInbound` and either (a) handle the handshake

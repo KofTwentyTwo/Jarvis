@@ -209,6 +209,7 @@ bash scripts/check-corpus-secrets.sh
 bash scripts/check-embedding-dim-literal.sh
 bash scripts/check-install-order.sh
 bash scripts/check-no-evaluate-javascript.sh
+bash scripts/check-no-jarvis-bus-world-references.sh
 bash scripts/check-no-leftover-stubs.sh
 bash scripts/check-no-modal-presentation.sh
 bash scripts/check-no-null-voice-adapters.sh

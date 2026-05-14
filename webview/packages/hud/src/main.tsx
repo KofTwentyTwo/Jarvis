@@ -5,15 +5,15 @@ import { attachBus } from './bus/client'
 import './theme/tokens.css'
 
 // `attachBus()` runs in the page's default JS world (this module loads via
-// `<script type="module" src="…">` in index.html). Swift installed the real
-// `window.jarvisBus` inside `JarvisBusWorld` via Injection.js — WebKit
-// content worlds isolate `webkit.messageHandlers`, so the default-world
-// bundle can't reach them directly. `window.jarvisBus` IS visible though,
-// because WebKit keeps `window` as one cross-world object (only *variables*
-// are world-scoped). The H-02 fix in `@jarvis/bus` detects the pre-existing
-// `window.jarvisBus` and attaches to it instead of replacing it, which
-// routes every outbound `send()` back through the JarvisBusWorld-captured
-// message handler reference. See `packages/bus/src/bridge.ts` for details.
+// `<script type="module" src="…">` in index.html). Swift's
+// `WebviewBridge.installScriptHandlers` (since `fb41c5f`) registers the
+// message handler on the same `WKContentWorld.page`, and Injection.js — also
+// in the page world — has already stamped a minimal `window.jarvisBus` at
+// document-start. `installJarvisBus()` here detects that pre-existing
+// instance via a duck-type shape guard and returns early, leaving the
+// Injection.js bus untouched so its captured handshake state and queued
+// early messages are preserved. See `packages/bus/src/bridge.ts` for the
+// full defensive-double-install rationale.
 attachBus()
 
 const rootEl = document.getElementById('root')

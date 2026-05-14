@@ -160,11 +160,14 @@ final class WebviewBridgeTests: XCTestCase {
         // Re-adding a handler with the same (contentWorld, name) pair would
         // raise `NSInvalidArgumentException`. The constructor succeeding is
         // itself evidence of registration. As a double-check, `remove` on a
-        // registered handler must succeed without throwing.
+        // registered handler must succeed without throwing. We remove from
+        // `WKContentWorld.page` because that is the default world
+        // `WebviewBridge.init` registers the handler against since `fb41c5f`
+        // unified bus and bundle into the same page world.
         let controller = webView.configuration.userContentController
         controller.removeScriptMessageHandler(
             forName: "jarvisBus",
-            contentWorld: WKContentWorld.world(name: "JarvisBusWorld")
+            contentWorld: .page
         )
         // No XCTAssert needed — the remove call succeeding on a registered
         // handler is the assertion.

@@ -78,8 +78,8 @@ final class WebviewBridgeOutboundTests: XCTestCase {
             .decode(BusOutbound.self, from: Data((payload ?? "").utf8))
         XCTAssertEqual(decoded, .hudState(.idle))
         // F-A2-01: production WebviewBridge uses `WKContentWorld.page` (the
-        // default since `fb41c5f`); the prior `JarvisBusWorld` named-world
-        // assertion was retired in that commit but this test wasn't updated.
+        // default since `fb41c5f`); the prior named-world assertion was
+        // retired in that commit but this test wasn't updated until #45.
         XCTAssertEqual(call.contentWorld, .page)
     }
 

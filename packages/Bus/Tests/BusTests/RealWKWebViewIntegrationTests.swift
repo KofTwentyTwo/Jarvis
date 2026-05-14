@@ -15,7 +15,7 @@ import WebKit
 /// **Why this exists** — Phase D-Phase-2 / Phase F1 of
 /// `.planning/AUDIT-AND-FIX-PLAN.md`. The 2026-05-02 audit-and-fix
 /// session uncovered a `WKContentWorld` isolation bug
-/// (`Injection.js` ran in `WKContentWorld(name: "JarvisBusWorld")`
+/// (`Injection.js` ran in a prior isolated named content world
 /// while the bundle ran in the page world; `window.jarvisBus`
 /// properties were per-world isolated; bundle's `attachBus()` saw
 /// `undefined` and created a SECOND fresh bus object; two stubs, two
@@ -127,13 +127,13 @@ final class RealWKWebViewIntegrationTests: XCTestCase {
 
     /// **The test that would have caught the WKContentWorld bug.**
     ///
-    /// On the bug branch, `Injection.js` ran in
-    /// `WKContentWorld(name: "JarvisBusWorld")` while
-    /// `WebviewBridge.sendRaw` invoked `callAsyncJavaScript` against
-    /// the same named world — but the message *handler* was registered
-    /// against `WKContentWorld.page`, so JS-side `postMessage` calls
-    /// from the named-world stub never reached Swift. Handshake hung
-    /// at `.sentHello`, eventually timed out with an `NSAlert`.
+    /// On the bug branch, `Injection.js` ran in the prior named
+    /// content world while `WebviewBridge.sendRaw` invoked
+    /// `callAsyncJavaScript` against the same named world — but the
+    /// message *handler* was registered against `WKContentWorld.page`,
+    /// so JS-side `postMessage` calls from the named-world stub never
+    /// reached Swift. Handshake hung at `.sentHello`, eventually timed
+    /// out with an `NSAlert`.
     ///
     /// On the fixed branch (fb41c5f), Injection.js auto-acks `hello`
     /// at the stub layer in the unified `.page` world, the bridge's

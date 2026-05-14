@@ -740,10 +740,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 4.5 Bus wiring — construct the `WebviewBridge` around the HUD's
         //     `WKWebView`, install the `WKUserScript` at document-start in
-        //     the isolated `JarvisBusWorld`, start the single-writer
-        //     `HudStateCoordinator`, and load the R3F bundle's
-        //     `index.html` so the handshake kicks off. See `installBus`
-        //     for the seven-step sequence.
+        //     the page world (the shared `WKContentWorld.page` used by
+        //     Injection.js and the HUD bundle alike since `fb41c5f`),
+        //     start the single-writer `HudStateCoordinator`, and load the
+        //     R3F bundle's `index.html` so the handshake kicks off. See
+        //     `installBus` for the seven-step sequence.
         installBus()
 
         // 5. Keychain probe. Banner suppression: when the API key is

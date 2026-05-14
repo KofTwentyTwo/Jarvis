@@ -74,14 +74,13 @@ describe("installJarvisBus", () => {
     expect(b).toHaveBeenCalledOnce();
   });
 
-  // H-02: the HUD bundle (`main.tsx`) runs in the default JS world, but
-  // Swift registered `webkit.messageHandlers.jarvisBus` in JarvisBusWorld,
-  // so a default-world `send()` cannot reach the message handler. The
-  // Injection.js-installed bus in JarvisBusWorld CAN reach it (it captured
-  // the reference at document-start inside that world), and because
-  // `window.jarvisBus` is a cross-world-shared property the default world
-  // observes the Injection.js bus. Therefore `installJarvisBus()` must
-  // attach to — not replace — a pre-existing bus.
+  // H-02: both `Injection.js` (`WKUserScript` at document-start) and this
+  // bundle's `installJarvisBus()` run in the SAME page world since `fb41c5f`
+  // retired the prior isolated named content world. Injection.js fires first
+  // and stamps a minimal `window.jarvisBus`; if `installJarvisBus()` naively
+  // overwrote it, the early handshake state and queued messages captured
+  // against the original closure would be orphaned. Therefore the bundle's
+  // installer must attach to — not replace — a pre-existing bus.
   describe("H-02 attach-to-existing (pre-installed window.jarvisBus)", () => {
     it("returns the pre-existing bus unchanged when one is already installed", () => {
       const preExistingSend = vi.fn().mockResolvedValue(undefined);
@@ -96,9 +95,10 @@ describe("installJarvisBus", () => {
       // @ts-expect-error — test shim: seed a pre-installed bus shape matching Injection.js
       globalThis.window = {
         jarvisBus: preExisting,
-        // Note: webkit is intentionally absent — in real JarvisBusWorld the
-        // pre-existing bus captured webkit at install time; the default world
-        // never sees webkit. The fix MUST NOT touch the pre-existing bus.
+        // Note: webkit is intentionally absent — Injection.js's pre-existing
+        // bus captures a reference to `window.webkit` at install time, and the
+        // shape guard must trust the pre-existing bus to route through that
+        // captured reference rather than re-resolving `webkit` here.
       };
 
       installJarvisBus();
@@ -110,7 +110,7 @@ describe("installJarvisBus", () => {
       expect(window.jarvisBus.onOutbound).toBe(preExistingOnOutbound);
     });
 
-    it("routes send() through the pre-existing bus's send (reaches JarvisBusWorld-captured handler)", async () => {
+    it("routes send() through the pre-existing bus's send (reaches Injection.js-captured handler)", async () => {
       const preExistingSend = vi.fn().mockResolvedValue({ ok: true });
       const preExisting = {
         protocolVersion: "2.0.0",
