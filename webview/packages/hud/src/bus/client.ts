@@ -155,6 +155,12 @@ export function attachBus(): void {
         // hydrate (= WARN-INT-2). Until then we acknowledge but no-op so the
         // exhaustiveness sentinel below remains tight.
         break
+      case 'escalated':
+        // Local-first LLM routing Task 7 — additive case carrying an
+        // `EscalationDecision`. The HUD EscalationBadge is wired in Task 8;
+        // acknowledging here keeps the exhaustiveness sentinel tight without
+        // pulling the badge component forward.
+        break
       default: {
         const _exhaustive: never = msg
         void _exhaustive

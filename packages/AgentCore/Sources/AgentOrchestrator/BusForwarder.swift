@@ -27,6 +27,10 @@ import AgentCore
 ///   error event in the chat panel — without this branch, mid-stream
 ///   failures (401 / network drop / streamTruncated) leave the panel
 ///   silent and the user has no idea their turn died.
+/// - `escalated(decision)` — emits `sendEscalated(decision:)`. Local-first
+///   LLM routing Task 7 — the HUD renders an EscalationBadge keyed by the
+///   `decision.reason`. App-side sink translates the AgentCore type into
+///   the Bus wire type.
 /// - All other cases (`stateChange`, `thinkingDelta`, `toolCardUpdate`,
 ///   `usage`) — ignored. They have dedicated subscribers elsewhere.
 public enum BusForwarder {
@@ -93,6 +97,13 @@ public enum BusForwarder {
                     let reason = "Turn failed: \(String(describing: error))"
                     await sink.sendSubmitRejected(reason: reason)
 
+                case let .escalated(decision):
+                    // Local-first LLM routing Task 7 — translate to
+                    // BusOutbound.escalated downstream. The sink owns the
+                    // AgentCore → Bus type translation so this file stays
+                    // free of the Bus dependency.
+                    await sink.sendEscalated(decision: decision)
+
                 default:
                     break
                 }
@@ -114,4 +125,8 @@ public protocol BusForwarderSink: Sendable {
     func sendTurnStarted(id: UUID) async
     func sendTurnEnded(id: UUID, terminator: BusForwarder.Terminator) async
     func sendSubmitRejected(reason: String) async
+    /// Local-first LLM routing Task 7 — emits `BusOutbound.escalated`. The
+    /// App-side conformer translates `AgentCore.EscalationDecision` into the
+    /// `Bus.EscalationDecision` wire type before flushing.
+    func sendEscalated(decision: EscalationDecision) async
 }

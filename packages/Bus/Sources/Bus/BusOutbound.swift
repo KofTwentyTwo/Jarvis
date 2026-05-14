@@ -29,6 +29,59 @@ public enum BusOutbound: Equatable, Sendable {
     /// — byte-identical to the voice-path HUD banner so users see the same
     /// wording regardless of input source.
     case submitRejected(reason: String)
+    /// Local-first LLM routing (spec §4 / Task 7) — emitted exactly once per
+    /// logical turn when the orchestrator reactively escalates from Ollama
+    /// to Anthropic Claude on a detected failure. The HUD renders an
+    /// EscalationBadge keyed by `EscalationDecision.reason`.
+    case escalated(EscalationDecision)
+}
+
+/// Local mirror of `Config.ProviderSelection` used by `EscalationDecision`.
+///
+/// Bus deliberately does NOT depend on the Config or AgentCore packages —
+/// adding those edges would pull their transitive deps into the lightweight
+/// bridge layer. This mirrors `Config.ProviderSelection` one-for-one; the
+/// App-side `AppBusForwarderSink` translates between the two when emitting.
+public enum BusProviderSelection: String, Codable, Sendable, CaseIterable, Equatable {
+    case anthropic
+    case ollama
+}
+
+/// Local mirror of `AgentCore.OllamaFailureKind` used by `EscalationDecision`.
+///
+/// Same dependency-isolation rationale as `BusProviderSelection`. Adding a
+/// new case is a breaking change for the bus wire format; mirror it on the
+/// TS side at the same time.
+public enum BusOllamaFailureKind: String, Codable, Sendable, CaseIterable, Equatable {
+    case streamTruncated
+    case malformedToolCall
+    case unknownTool
+    case refusal
+    case connectionFailure
+    case emptyResponse
+}
+
+/// Local mirror of `AgentCore.EscalationDecision` carried by
+/// `BusOutbound.escalated(_:)`. Same dependency-isolation rationale as
+/// `TurnRow`. App-side `AppBusForwarderSink` translates between the two
+/// when emitting.
+public struct EscalationDecision: Codable, Equatable, Sendable {
+    public let from: BusProviderSelection
+    public let to: BusProviderSelection
+    public let reason: BusOllamaFailureKind
+    public let firedAt: Date
+
+    public init(
+        from: BusProviderSelection,
+        to: BusProviderSelection,
+        reason: BusOllamaFailureKind,
+        firedAt: Date
+    ) {
+        self.from = from
+        self.to = to
+        self.reason = reason
+        self.firedAt = firedAt
+    }
 }
 
 /// Local mirror of Memory.TurnRow used by `BusOutbound.sessionHistory`.
@@ -79,6 +132,7 @@ extension BusOutbound: Codable {
         case turnEnded
         case sessionHistory
         case submitRejected
+        case escalated
     }
 
     /// All `CodingKeys` across every case. Swift's keyed container does not
@@ -98,6 +152,7 @@ extension BusOutbound: Codable {
         case terminator
         case turns
         case reason
+        case decision
     }
 
     public init(from decoder: Decoder) throws {
@@ -139,6 +194,9 @@ extension BusOutbound: Codable {
         case .submitRejected:
             let reason = try container.decode(String.self, forKey: .reason)
             self = .submitRejected(reason: reason)
+        case .escalated:
+            let decision = try container.decode(EscalationDecision.self, forKey: .decision)
+            self = .escalated(decision)
         }
         // NO default branch — adding a Discriminator case without also adding
         // a matching switch arm here is a compile error. That is the entire
@@ -196,6 +254,9 @@ extension BusOutbound: Codable {
         case .submitRejected(let reason):
             try container.encode(Discriminator.submitRejected, forKey: .type)
             try container.encode(reason, forKey: .reason)
+        case .escalated(let decision):
+            try container.encode(Discriminator.escalated, forKey: .type)
+            try container.encode(decision, forKey: .decision)
         }
         // Exhaustive at encode site — adding a case without encoding it is a
         // compile error, mirroring the init(from:) drift preventer.

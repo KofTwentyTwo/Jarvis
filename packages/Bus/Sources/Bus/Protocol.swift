@@ -25,7 +25,11 @@ import Foundation
 /// `chatSubmit(text:)` + `chatCancelAndSubmit(text:)` (chat-panel submit +
 /// barge-in) and additive BusOutbound case `submitRejected(reason:)` (D-10
 /// text-path rejection toast, byte-identical body to voice-path HUD banner).
-public let BUS_PROTOCOL_VERSION: String = "2.3.0"
+///
+/// Local-first LLM routing Task 7 — bumped 2.3.0 → 2.4.0 for additive
+/// BusOutbound case `escalated(EscalationDecision)`. MINOR per HUD-05
+/// (additive; older webviews can still decode the outbound shape).
+public let BUS_PROTOCOL_VERSION: String = "2.4.0"
 
 /// UI states the HUD can occupy. Encoded as its `rawValue` inside
 /// `BusOutbound.hudState(_:)` — see `BusOutbound.encode(to:)`.
