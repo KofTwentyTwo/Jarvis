@@ -123,6 +123,44 @@ final class CodableRoundTripTests: XCTestCase {
         )
     }
 
+    /// Issue #47: `BusOutbound.audioLevel` encodes a `Float`, and Foundation's
+    /// default `JSONEncoder.NonConformingFloatEncodingStrategy` is `.throw`.
+    /// A non-finite `rms` (NaN from a CoreAudio over-/underflow, or ±∞ from a
+    /// pathological emitter buffer) would crash the per-frame bus path inside
+    /// `WebviewBridge.sendRaw`. The encode site in `BusOutbound.swift` clamps
+    /// non-finite floats to `0.0`; this test pins the contract so the clamp
+    /// can't silently regress.
+    func test_audioLevel_nanIsClampedToZero() throws {
+        let encoded = try BusCoder.makeEncoder().encode(BusOutbound.audioLevel(rms: .nan))
+        let decoded = try BusCoder.makeDecoder().decode(BusOutbound.self, from: encoded)
+        guard case .audioLevel(let rms) = decoded else {
+            XCTFail("expected .audioLevel after round-trip, got \(decoded)")
+            return
+        }
+        XCTAssertEqual(rms, 0.0, "NaN rms must be clamped to 0.0 at encode time (#47)")
+        XCTAssertTrue(rms.isFinite, "post-clamp rms must be finite")
+    }
+
+    /// Companion to `test_audioLevel_nanIsClampedToZero` — covers the ±∞
+    /// edge cases. CoreAudio drivers don't normally emit infinities, but the
+    /// encode-time clamp is sourced from `Float.isFinite`, which covers both
+    /// NaN and ±∞ via one check; locking the contract here prevents a future
+    /// refactor from narrowing the guard to NaN-only.
+    func test_audioLevel_infinityIsClampedToZero() throws {
+        let encoder = BusCoder.makeEncoder()
+        let decoder = BusCoder.makeDecoder()
+
+        for value in [Float.infinity, -Float.infinity] {
+            let encoded = try encoder.encode(BusOutbound.audioLevel(rms: value))
+            let decoded = try decoder.decode(BusOutbound.self, from: encoded)
+            guard case .audioLevel(let rms) = decoded else {
+                XCTFail("expected .audioLevel for \(value)")
+                continue
+            }
+            XCTAssertEqual(rms, 0.0, "±∞ rms (\(value)) must be clamped to 0.0 (#47)")
+        }
+    }
+
     func test_roundTrip_toolCallStart() throws {
         let id = UUID(uuidString: "550e8400-e29b-41d4-a716-446655440000")!
         try assertOutboundRoundTrips(

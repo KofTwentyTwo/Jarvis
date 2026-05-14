@@ -159,7 +159,20 @@ extension BusOutbound: Codable {
             try container.encode(text, forKey: .text)
         case .audioLevel(let rms):
             try container.encode(Discriminator.audioLevel, forKey: .type)
-            try container.encode(rms, forKey: .rms)
+            // Issue #47: JSON has no canonical encoding for `Float.nan` or
+            // `±Float.infinity`. Foundation's `JSONEncoder` defaults to
+            // throwing for non-finite floats (`JSONEncoder.NonConformingFloat-
+            // EncodingStrategy.throw`), which would crash the per-frame bus
+            // path the moment `AudioLevelEmitter` produces a NaN — easy to
+            // hit on a CoreAudio over-/underflow or a buffer of all-zero
+            // samples. Clamp non-finite to 0.0 inline at the encode site so
+            // the rms float in the wire JSON is always a finite, ring-shader-
+            // safe number. The HUD-side consumer (`webview/packages/hud/src/
+            // bus/client.ts`) currently no-ops on audioLevel; the clamp is
+            // defensive against the bug becoming active once the consumer is
+            // wired up.
+            let safe = rms.isFinite ? rms : 0.0
+            try container.encode(safe, forKey: .rms)
         case .toolCallStart(let id, let name, let argsPreview):
             try container.encode(Discriminator.toolCallStart, forKey: .type)
             try container.encode(id.uuidString.lowercased(), forKey: .id)
