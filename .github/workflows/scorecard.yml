@@ -1,0 +1,62 @@
+# OpenSSF Scorecard — security supply-chain posture for KofTwentyTwo/Jarvis.
+#
+# Issue #178. Scorecard scores 18 security checks (Branch-Protection, Code-Review,
+# Pinned-Dependencies, SAST, Token-Permissions, etc.) and publishes results as
+# SARIF to GitHub code-scanning. A weekly schedule keeps the score fresh; we
+# also re-run on every push to develop so significant posture regressions show
+# up promptly. The badge in README.md links back to the public scorecard page.
+#
+# Permissions are the canonical Scorecard set:
+#   - id-token: write          OIDC for publish-results
+#   - contents: read           read repo tree
+#   - security-events: write   upload SARIF to code-scanning
+#
+# This workflow runs on github-hosted ubuntu-latest. Self-hosted Grogu is not
+# used here -- Scorecard is short, network-bound, and benefits from a clean
+# ephemeral environment.
+#
+# Workflow consumes no untrusted user inputs (no github.event.* interpolation
+# in run: blocks), so it is safe from workflow-injection patterns.
+
+name: OpenSSF Scorecard
+
+on:
+  schedule:
+    # Mondays at 06:00 UTC. Off-peak relative to weekday push spikes.
+    - cron: "0 6 * * 1"
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # publish_results: true uploads anonymized scores to the OpenSSF
+          # public dataset, which is what powers the README badge URL
+          # (api.scorecard.dev). Safe for a public repo; would need
+          # reconsidering if the repo were ever made private.
+          publish_results: true
+
+      - name: Upload SARIF to code-scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif

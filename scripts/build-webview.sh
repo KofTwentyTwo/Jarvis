@@ -77,6 +77,16 @@ pnpm --filter @jarvis/hud build
 
 DEST="$REPO_ROOT/App/Resources/webview"
 mkdir -p "$DEST"
+mkdir -p "$DEST/assets"
+
+# Issue #46: Vite emits content-hashed asset names (e.g. `index-CXPb0I5z.js`),
+# so the active bundle filename changes on every dependency or source edit.
+# Without explicit cleanup, stale chunks accumulate in `assets/` because we
+# don't pass `--delete` to rsync below. Sweep the asset glob (JS + maps + CSS)
+# before the rsync drops the fresh bundle. `bus-harness.html`, `index.html`,
+# and the directory's `.gitignore` live one level up (in $DEST), not in
+# $DEST/assets, so they are not at risk from this rm.
+rm -f "$DEST"/assets/*.js "$DEST"/assets/*.js.map "$DEST"/assets/*.css "$DEST"/assets/*.css.map
 
 echo "[build-webview] rsync dist/ -> $DEST"
 # --exclude bus-harness.html: keep 02-03's committed copy intact (parity
@@ -85,6 +95,7 @@ echo "[build-webview] rsync dist/ -> $DEST"
 # --exclude .gitignore: preserve the App/Resources/webview/.gitignore that
 #   lets index.html stay source-committed while assets/ regenerates.
 # We do NOT pass --delete: other vendored assets coexist in this dir.
+# (The explicit `rm -f` above handles stale `assets/` chunks; see #46.)
 rsync -a \
       --exclude=bus-harness.html \
       --exclude=.gitignore \

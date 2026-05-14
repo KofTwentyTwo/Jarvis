@@ -8,6 +8,7 @@
 [![Issues](https://img.shields.io/github/issues/KofTwentyTwo/Jarvis)](https://github.com/KofTwentyTwo/Jarvis/issues)
 [![Platform: macOS 26](https://img.shields.io/badge/platform-macOS%2026%20Tahoe-blue)](https://www.apple.com/macos/)
 [![Swift 6](https://img.shields.io/badge/swift-6.0-orange)](https://swift.org)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/KofTwentyTwo/Jarvis/badge)](https://scorecard.dev/viewer/?uri=github.com/KofTwentyTwo/Jarvis)
 
 Jarvis is a hybrid native + embedded-web macOS app that runs as an ambient
 menu-bar presence. A Swift host owns the operating system (mic, camera,
