@@ -57,27 +57,28 @@ export interface InstallOptions {
  * - `send(msg)` JSON-encodes and posts to `webkit.messageHandlers.jarvisBus`.
  *   Callers await the returned Promise to observe Swift's reply.
  *
- * ## WKContentWorld attach-to-existing path (H-02)
+ * ## Defensive double-install guard (H-02)
  *
- * When the HUD bundle runs in the page's default JS world (via
- * `<script type="module" src="…">`), `webkit.messageHandlers.jarvisBus` is
- * NOT visible — Swift registered the handler `in: JarvisBusWorld` and
- * WebKit isolates message handlers per content world. However,
- * `window.jarvisBus` is a property on the (cross-world-shared) `window`
- * object, so the bus instance installed by `Injection.js` inside
- * `JarvisBusWorld` IS observable from the default world.
+ * Both `Injection.js` (a `WKUserScript` injected at `.atDocumentStart`) and
+ * this bundle's `installJarvisBus()` run in the SAME page world — the
+ * default `WKContentWorld.page` since `fb41c5f` retired the prior
+ * isolated named world. Injection.js fires first and stamps a
+ * minimal `window.jarvisBus` with `protocolVersion`, `_handler`, plus the
+ * `send` / `receive` / `onOutbound` surface needed for the handshake.
+ * The bundle's installer fires later (top-level side-effect of `main.tsx`),
+ * and if we naively overwrote `window.jarvisBus` we would orphan
+ * Injection.js's queued early messages and any handshake state already
+ * captured against the original closure.
  *
- * If we detect a pre-existing `window.jarvisBus` with the expected
- * `send` + `onOutbound` + `receive` shape, we attach our options to it
- * and return it verbatim rather than overwriting it. This routes every
- * outbound `send()` through the JarvisBusWorld-captured message handler
- * reference and keeps `onOutbound` hooked to the same `_handler` slot the
- * Injection.js bus exposes. Without this branch the default-world bundle
- * replaces `window.jarvisBus` with a bus whose `send()` cannot reach
- * `webkit.messageHandlers.jarvisBus` and every outbound frame — including
- * the first `uiReady` — is lost.
+ * The shape check below (`isJarvisBusShape`) is therefore a defensive
+ * double-install guard inside one page world, not a cross-world attach.
+ * When we detect a pre-existing `window.jarvisBus` with the canonical
+ * `send` + `onOutbound` + `receive` surface, we return early and leave
+ * Injection.js's instance in place. Outbound `send()` calls still reach
+ * `window.webkit.messageHandlers.jarvisBus` because that handler lives on
+ * the same page world too.
  *
- * bus-harness.html (Phase 2) loads its marker script in a page where
+ * `bus-harness.html` (Phase 2) loads its marker script in a page where
  * Injection.js has installed the same bus; the harness never called `send()`
  * so the regression wasn't observed until Phase 3. For that path this
  * function still returns the pre-installed bus, which is exactly what the
@@ -93,10 +94,11 @@ export function installJarvisBus(options: InstallOptions = {}): () => void {
       console.error("[bus] decode failed:", error, raw);
     });
 
-  // H-02: attach-to-existing path. Injection.js in JarvisBusWorld installs a
-  // minimal bus with the same surface; if it's already on window we MUST NOT
-  // replace it (that would orphan webkit.messageHandlers.jarvisBus, which is
-  // only visible inside JarvisBusWorld).
+  // H-02: defensive double-install guard. Injection.js runs first (at
+  // document-start in the same page world) and stamps a minimal bus with the
+  // same surface; if it's already on `window`, we MUST NOT replace it — doing
+  // so would orphan Injection.js's queued early messages and captured handshake
+  // state. See the class doc above for the full rationale.
   const existing: unknown =
     typeof window !== "undefined"
       ? (window as unknown as { jarvisBus?: unknown }).jarvisBus
@@ -156,7 +158,7 @@ export function installJarvisBus(options: InstallOptions = {}): () => void {
 /**
  * Duck-type guard for a pre-existing `window.jarvisBus`. Matches the shape
  * installed by `packages/Bus/Sources/Bus/Resources/Injection.js` at
- * document-start in JarvisBusWorld. Intentionally narrow: if the shape
+ * document-start in the page world. Intentionally narrow: if the shape
  * doesn't match (e.g. a left-over test stub), we fall through to the
  * fresh-install branch and overwrite it.
  */
