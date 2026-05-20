@@ -75,7 +75,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10.30.2
       - name: Setup Node.js
@@ -293,7 +293,7 @@ jobs:
       # and re-stamps the bundle — and would error with
       # "[build-webview] FATAL: pnpm not found on PATH" without these.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10.30.2
       - name: Setup Node.js
