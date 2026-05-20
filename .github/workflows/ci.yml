@@ -47,7 +47,7 @@ jobs:
     name: Boundary gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run all scripts/check-*.sh (excluding app-builds)
         run: |
           fail=0
@@ -73,7 +73,7 @@ jobs:
     name: Webview (pnpm test + build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -182,7 +182,7 @@ jobs:
             | xargs -r -I{} kill -9 {} 2>/dev/null || true
           echo "Surviving xctest/swift-test processes (any age — includes concurrent CI work on sibling runners):"
           /bin/ps -A -o pid,etime,comm | grep -E '(xctest|swift-test|swift-driver)$' || echo "  (none)"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Project targets macOS 26 Tahoe + Swift 6.2/6.3. Xcode 16 (Swift 6.0)
       # cannot parse `mlx-audio-swift` v0.1.2's `swift-tools-version:6.2`,
       # lacks the `withThrowingTaskGroup` overload used by MCP `swift-sdk`
@@ -279,7 +279,7 @@ jobs:
     runs-on: macos-15
     needs: [boundary-gates, webview]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Same Xcode 26.x pin as swift-packages — Xcode 16 cannot resolve
       # mlx-audio-swift's swift-tools-version:6.2 manifest.
       - name: Select Xcode
@@ -327,7 +327,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_real_hardware == 'true'
     needs: [swift-packages]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: JARVIS_REAL_MODELS Memory regression corpus
         env:
           JARVIS_REAL_MODELS: "1"
@@ -353,7 +353,7 @@ jobs:
         startsWith(github.ref, 'refs/heads/release/')
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Compute next version
