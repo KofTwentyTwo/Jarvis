@@ -221,7 +221,7 @@ jobs:
         with:
           name: webview-resources
           path: App/Resources/webview/
-      # actions/cache@v4 restores the package's `.build/` and SwiftPM's
+      # actions/cache@v5 restores the package's `.build/` and SwiftPM's
       # global cache. On github-hosted this is a real perf win; on self-hosted
       # it's both unnecessary (the _work/ dir persists between jobs naturally)
       # and actively harmful (caches saved on github-hosted have absolute
@@ -231,7 +231,7 @@ jobs:
       # the cache action to github-hosted only.
       - name: Cache SPM build artifacts (github-hosted only)
         if: runner.environment == 'github-hosted'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             packages/${{ matrix.package }}/.build
