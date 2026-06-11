@@ -243,8 +243,9 @@ Eval harness (Anthropic + local-model eval matrix; corpus in `.planning/evals/`)
 
 `swift-packages` matrix in `.github/workflows/ci.yml` runs on a self-hosted macOS runner (`Grogu-jarvis`, labels `[self-hosted, macOS, ARM64, jarvis]`) rather than the github-hosted `macos-15` pool — the public pool was the v0.1 rate-limiter (1–2h queues for 13-job matrix). See #180.
 
-- **Where it lives:** `~/actions-runner-jarvis/` on Grogu. `_work/` symlinked to `/Volumes/HD-2/jarvis-runner-work/` (1.3 TB) to keep boot-disk pressure off.
-- **Service:** launchd LaunchAgent `actions.runner.KofTwentyTwo-Jarvis.Grogu-jarvis` (`~/Library/LaunchAgents/`). Manage with `cd ~/actions-runner-jarvis && ./svc.sh {status,start,stop}`. Only runs while user is logged in.
+- **Where they live:** three runners on Grogu — `~/actions-runner-jarvis/` (Grogu-jarvis), `~/actions-runner-jarvis-2/` (Grogu-jarvis-2), `~/actions-runner-jarvis-3/` (Grogu-jarvis-3). Each `_work/` symlinked to `/Volumes/HD-2/jarvis-runner-work{,-2,-3}/` (1.3 TB available, ~10 GB peak per runner) to keep boot-disk pressure off.
+- **Service:** one launchd LaunchAgent per runner — `actions.runner.KofTwentyTwo-Jarvis.Grogu-jarvis{,-2,-3}.plist` in `~/Library/LaunchAgents/`. Manage individually with `cd ~/actions-runner-jarvis-N && ./svc.sh {status,start,stop}` (omit `-N` for runner 1). All three only run while user is logged in.
+- **Why three:** the 13-package SPM matrix parallelizes across runners. Single-runner serial ≈ ~13 min CI; three-runner parallel ≈ ~5 min. Grogu has 24 cores / 128 GB RAM; 3 concurrent SwiftPM cold builds peak at ~24 cores + ~24 GB, well within budget. See `docs/superpowers/specs/2026-05-13-multi-runner-grogu-design.md`.
 - **Security gate:** the job's `if:` clause blocks fork PRs from triggering it — push, workflow_dispatch, and same-repo PRs only. Belt-and-suspenders: enable "Require approval for all outside collaborators" under Settings → Actions → General.
 - **Still on github-hosted `macos-15`:** `app-build` (the xcodebuild app target) and the `real-hardware` opt-in lane. Move opportunistically once the swift-packages path is proven.
 - **Xcode selection:** uses `DEVELOPER_DIR` env (per-process), tries `Xcode_26.3.app` → `Xcode_26.app` → `Xcode.app` in order. Grogu currently has Xcode 26.5 at the bare path.
