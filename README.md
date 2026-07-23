@@ -54,46 +54,7 @@ view, the Bus is the only legal way they talk. Subsystems live in
 single-purpose SPM packages; **18 boundary-gate scripts** keep the
 isolation honest.
 
-```mermaid
-flowchart TB
-    User[User<br/>voice / text / hotkey]
-
-    subgraph Swift["Swift host (AppKit + SwiftUI)"]
-        AppDel[AppDelegate<br/>install DAG + lifecycle]
-        Orch[AgentOrchestrator<br/>tool-loop + streaming]
-        Bridge[WebviewBridge<br/>typed JSON Bus]
-        Voice[Voice<br/>wake / STT / TTS]
-        Vision[Vision<br/>camera + frame-attach]
-        Memory[Memory<br/>SQLite + vec + mem0]
-        MCP[MCPRuntime<br/>helpers + in-proc tools]
-        Replay[Replay<br/>turn-by-turn audit log]
-        Boot[BootHealth<br/>NOT FAKED probes]
-    end
-
-    LLM["LLMProvider<br/>Anthropic Opus 4.7 / Ollama"]
-
-    subgraph Web["WKWebView (React + R3F)"]
-        Ring[Particle ring]
-        Chat[Chat panel]
-        DevOv[Dev Overlay]
-    end
-
-    User --> Voice
-    User --> Bridge
-    AppDel --> Vision
-    AppDel --> Orch
-    AppDel --> Voice
-    AppDel --> Boot
-    Voice --> Orch
-    Orch <--> LLM
-    Orch --> MCP
-    Orch --> Memory
-    Orch --> Vision
-    Orch --> Replay
-    Orch --> Bridge
-    Boot --> Bridge
-    Bridge <-->|Bus protocol| Web
-```
+![Jarvis 2-Process Architecture Topology](docs/architecture.png)
 
 The deep architecture doc is [`ARCHITECTURE.md`](ARCHITECTURE.md) (subsystem
 deep-dives, anti-patterns, navigation cheat sheet). The v1.0 typed-API
