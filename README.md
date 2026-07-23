@@ -97,21 +97,7 @@ asserts the spawn-line ordering AND that `voiceInstallTask` awaits
 `agentInstallTask?.value` (a strictly stronger guarantee than spawn-order
 alone).
 
-```mermaid
-flowchart LR
-    Boot([applicationWillFinishLaunching]) --> Vision[installVision]
-    Boot --> Memory[installMemory]
-    Boot --> MCP[installMCP]
-    Boot --> Replay[installReplay]
-    Vision --> Agent[installAgent]
-    Memory --> Agent
-    MCP --> Agent
-    Replay --> Agent
-    Agent --> Voice[installVoice]
-    Voice --> Probes[registerBootHealthProbes]
-    Probes --> Bridge[Webview handshake]
-    Bridge --> Ready([HUD ready])
-```
+![Jarvis Install Order Sequence](docs/install_order.png)
 
 ## Build & run
 
@@ -177,21 +163,7 @@ subscribers that need it. If a subsystem is degraded, the orchestrator
 **injects a system-prompt preamble** so the agent doesn't promise to
 remember things the memory store can't actually persist.
 
-```mermaid
-flowchart LR
-    In[User input<br/>text / voice transcript] --> Orch[AgentOrchestrator]
-    Health[BootHealth.rollup] -->|degradation preamble| Orch
-    Orch --> Provider[LLMProvider.stream]
-    Provider --> Events[(streaming events<br/>token / thinking / tool-use / stop)]
-    Events --> Bcast[Broadcaster<br/>single consumer]
-    Bcast --> Tx[Transcript]
-    Bcast --> Mem[Memory extractor]
-    Bcast --> Dev[DevOverlay]
-    Bcast --> Voice[Voice / TTS]
-    Bcast --> Bus[WebviewBridge → HUD]
-    Orch --> Tools[MCP tool calls]
-    Tools --> Provider
-```
+![Jarvis Agent Turn Lifecycle](docs/turn_lifecycle.png)
 
 ## Boot-health probes
 
@@ -202,32 +174,7 @@ failures turn the menu-bar icon **red**, raise a non-dismissible HUD
 banner, and inject the degradation preamble into the agent's system
 prompt.
 
-```mermaid
-flowchart LR
-    M[MemoryBootHealthProbe<br/>vec0 + FTS5 reachable]
-    A[AnthropicBootHealthProbe<br/>keychain has API key]
-    O[OllamaBootHealthProbe<br/>service reachable + model loaded]
-    Vc[VoiceBootHealthProbe<br/>audio graph alive]
-    Vi[VisionBootHealthProbe<br/>AVCapture authorized]
-    Mc[MCPBootHealthProbe<br/>helper apps + in-proc tools]
-    R[ReplayBootHealthProbe<br/>WAL writable]
-    W[WebviewBootHealthProbe<br/>handshake completed]
-    Roll[BootHealthOrchestrator.rollup]
-    Icon[Menu-bar icon<br/>red on critical]
-    Banner[Non-dismissible banner]
-    Pre[Agent system-prompt<br/>degradation preamble]
-    M --> Roll
-    A --> Roll
-    O --> Roll
-    Vc --> Roll
-    Vi --> Roll
-    Mc --> Roll
-    R --> Roll
-    W --> Roll
-    Roll --> Icon
-    Roll --> Banner
-    Roll --> Pre
-```
+![Jarvis Boot-Health Probe Ladder](docs/boot_health.png)
 
 ## Project culture
 
