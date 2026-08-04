@@ -521,6 +521,16 @@ public actor AgentOrchestrator {
         // stays on T1 (the user got the response we have). This mirrors the
         // AGENT-09 retry budget but is independent of it.
         var escalationConsumed = false
+        // Local-first LLM routing (Task 6 / spec §2): one-shot reactive
+        // escalation from Ollama → Anthropic on a `providerError` carrying
+        // an `OllamaFailureKind`. Distinct from the D-02 vision escalation
+        // above (which swaps T1↔T2 mid-turn under the SAME turnId) and from
+        // AGENT-09's stream-truncation retry below (which allocates a fresh
+        // retry turnId). At-most-one fire per logical turn; the second
+        // provider error surfaces a terminal `.error` event. Resets
+        // naturally across turns because this var is declared inside
+        // `runTurnLoop` — each new turn call gets a fresh stack frame.
+        var escalatedThisTurn = false
 
         outer: while true {
             // Compute tool_choice based on remaining budget.
@@ -845,6 +855,97 @@ public actor AgentOrchestrator {
                         }
 
                     case .providerError(let err):
+                        // Local-first LLM routing (Task 6 / spec §2):
+                        // reactive escalation from Ollama → Anthropic when
+                        // the provider error carries an `OllamaFailureKind`
+                        // AND the current turn is running on Ollama AND
+                        // escalation is enabled AND we haven't already
+                        // escalated this turn. Otherwise fall through to
+                        // the terminal error path below.
+                        if let failureKind = err.ollamaFailureKind,
+                           currentPerTurn.resolvedProvider == .ollama,
+                           currentPerTurn.escalationEnabled,
+                           !escalatedThisTurn {
+                            escalatedThisTurn = true
+
+                            let decision = EscalationDecision(
+                                from: .ollama,
+                                to: .anthropic,
+                                reason: failureKind,
+                                firedAt: Date()
+                            )
+                            await events.send(.escalated(decision))
+
+                            // Build the Anthropic provider. If the factory
+                            // throws, surface a terminal error — we've
+                            // already consumed the escalation budget so
+                            // there's no second-chance retry path.
+                            let nextProvider: any LLMProvider
+                            do {
+                                nextProvider = try await providerFactory(.anthropic)
+                            } catch {
+                                logger.error("providerFactory(.anthropic) failed during escalation", metadata: [
+                                    "error": "\(error)",
+                                ])
+                                let redactedErr = Self.redact(err)
+                                await events.send(.error(turnId: currentTurnId, error: redactedErr))
+                                await replayLog.record(.error(Data(String(describing: redactedErr).utf8)), for: currentTurnId)
+                                await replayLog.endTurn(currentTurnId, stopReason: "provider_error")
+                                await events.send(.stateChange(.idle))
+                                currentTurn = nil
+                                return
+                            }
+
+                            // Close the original (Ollama) turn row with a
+                            // distinct stop reason so the replay log
+                            // captures the escalation point. Allocate a
+                            // fresh turn row for the Anthropic attempt,
+                            // mirroring the AGENT-09 streamTruncated-retry
+                            // pattern (retryOf set on the new row).
+                            await replayLog.endTurn(currentTurnId, stopReason: "ollama_escalation")
+
+                            let newTurnId = TurnID.fresh()
+                            let originalTurnId = retry.originalTurnId
+                            do {
+                                try await replayLog.startTurn(
+                                    turnId: newTurnId,
+                                    sessionId: sessionId,
+                                    retryOf: originalTurnId,
+                                    turnNonce: wrapper.nonce.rawValue,
+                                    source: source,
+                                    provider: ProviderSelection.anthropic.rawValue,
+                                    modelId: modelIDFor(.anthropic).rawValue
+                                )
+                            } catch {
+                                logger.error("escalation startTurn failed", metadata: ["error": "\(error)"])
+                                let redactedErr = Self.redact(err)
+                                await events.send(.error(turnId: currentTurnId, error: redactedErr))
+                                await events.send(.stateChange(.idle))
+                                currentTurn = nil
+                                return
+                            }
+
+                            currentTurnId = newTurnId
+                            currentProvider = nextProvider
+                            currentPerTurn = currentPerTurn.with(provider: .anthropic)
+                            // Clean state: restart from initial messages so
+                            // Anthropic doesn't inherit Ollama's partial
+                            // tool-use round-trips (which may have been
+                            // what tripped the malformed-tool-call path).
+                            messages = initialMessages
+                            toolCallBudget = currentPerTurn.maxToolCallsPerTurn()
+                            assistantTextSoFar = ""
+                            assistantTextSinceLastFlush = ""
+                            if let exec = currentTurn {
+                                currentTurn = TurnExecution(
+                                    id: newTurnId, task: exec.task,
+                                    startedAt: exec.startedAt, retryOf: originalTurnId
+                                )
+                            }
+                            await events.send(.stateChange(.reconfiguring))
+                            continue outer
+                        }
+
                         // HI-01: redact credential-shaped substrings from the
                         // provider error body BEFORE forwarding to either the
                         // bus or the replay log. Anthropic's API can echo a
@@ -920,6 +1021,10 @@ public actor AgentOrchestrator {
             return .transport(description: Redact.apply(description))
         case .streamTruncatedFinal:
             return .streamTruncatedFinal
+        case .malformedToolCall(let reason):
+            return .malformedToolCall(reason: Redact.apply(reason))
+        case .emptyResponse:
+            return .emptyResponse
         }
     }
 

@@ -1,5 +1,6 @@
 import XCTest
 import AgentCore
+import Config
 @testable import AgentOrchestrator
 
 /// Coverage for `BusForwarder.drain` — the .bus subscriber's translation
@@ -22,6 +23,7 @@ final class BusForwarderTests: XCTestCase {
         private(set) var turnStarts: [UUID] = []
         private(set) var turnEnds: [(UUID, BusForwarder.Terminator)] = []
         private(set) var rejections: [String] = []
+        private(set) var escalations: [EscalationDecision] = []
 
         func postToken(_ chunk: String) async { tokens.append(chunk) }
         func sendTurnStarted(id: UUID) async { turnStarts.append(id) }
@@ -29,14 +31,18 @@ final class BusForwarderTests: XCTestCase {
             turnEnds.append((id, terminator))
         }
         func sendSubmitRejected(reason: String) async { rejections.append(reason) }
+        func sendEscalated(decision: EscalationDecision) async {
+            escalations.append(decision)
+        }
 
         func snapshot() -> (
             tokens: [String],
             turnStarts: [UUID],
             turnEnds: [(UUID, BusForwarder.Terminator)],
-            rejections: [String]
+            rejections: [String],
+            escalations: [EscalationDecision]
         ) {
-            (tokens, turnStarts, turnEnds, rejections)
+            (tokens, turnStarts, turnEnds, rejections, escalations)
         }
     }
 
@@ -258,6 +264,58 @@ final class BusForwarderTests: XCTestCase {
         XCTAssertTrue(snap.turnStarts.isEmpty)
         XCTAssertTrue(snap.turnEnds.isEmpty)
         XCTAssertTrue(snap.rejections.isEmpty)
+    }
+
+    // MARK: - Escalation forwarding (BF-ESC1..2)
+
+    /// Local-first LLM routing Task 7 — `.escalated` must surface the
+    /// decision to the sink so the App-side adapter can translate to
+    /// `BusOutbound.escalated` and the HUD can render its badge.
+    func testDrain_escalated_emitsSendEscalatedWithMatchingDecision() async {
+        let sink = RecordingSink()
+        let firedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let decision = EscalationDecision(
+            from: .ollama,
+            to: .anthropic,
+            reason: .malformedToolCall,
+            firedAt: firedAt
+        )
+        let stream = makeStream([
+            .escalated(decision)
+        ])
+
+        await BusForwarder.drain(events: stream, sink: sink)
+
+        let snap = await sink.snapshot()
+        XCTAssertEqual(snap.escalations.count, 1)
+        XCTAssertEqual(snap.escalations.first, decision)
+        XCTAssertTrue(snap.tokens.isEmpty)
+        XCTAssertTrue(snap.turnStarts.isEmpty)
+        XCTAssertTrue(snap.turnEnds.isEmpty)
+        XCTAssertTrue(snap.rejections.isEmpty)
+    }
+
+    /// `.escalated` does NOT terminate the turn — the orchestrator continues
+    /// streaming on the next provider. The forwarder must not synthesize a
+    /// turnStarted/turnEnded pair on top of the escalation event.
+    func testDrain_escalated_doesNotEmitTurnLifecycleEvents() async {
+        let sink = RecordingSink()
+        let decision = EscalationDecision(
+            from: .ollama,
+            to: .anthropic,
+            reason: .connectionFailure,
+            firedAt: Date(timeIntervalSince1970: 1_700_000_001)
+        )
+        let stream = makeStream([
+            .escalated(decision)
+        ])
+
+        await BusForwarder.drain(events: stream, sink: sink)
+
+        let snap = await sink.snapshot()
+        XCTAssertEqual(snap.escalations.count, 1)
+        XCTAssertTrue(snap.turnStarts.isEmpty)
+        XCTAssertTrue(snap.turnEnds.isEmpty)
     }
 
     // MARK: - Malformed turn id guard (BF-G1)

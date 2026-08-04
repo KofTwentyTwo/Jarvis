@@ -80,14 +80,24 @@ export function attachBus(): void {
         let id = store.activeTextPartId
         if (!id) {
           id = nextTextPartId(turnId, store.chatEvents)
+          // If an escalation decision arrived before any assistant text
+          // event (e.g. connectionFailure on the very first response),
+          // attach it to the freshly-created text part so the badge isn't
+          // dropped. The pending slot is cleared as a side-effect of the
+          // store mutation below.
+          const pending = store.pendingEscalation
           store.pushEvent({
             kind: 'text',
             id,
             text: '',
             role: 'assistant',
             turnId,
+            ...(pending ? { escalation: pending } : {}),
           })
-          useJarvisStore.setState({ activeTextPartId: id })
+          useJarvisStore.setState({
+            activeTextPartId: id,
+            ...(pending ? { pendingEscalation: null } : {}),
+          })
         }
         store.appendTokenToLastText(id, msg.text)
         break
@@ -154,6 +164,14 @@ export function attachBus(): void {
         // Plan 07-06 added the case; AppDelegate.installMemory does not yet
         // hydrate (= WARN-INT-2). Until then we acknowledge but no-op so the
         // exhaustiveness sentinel below remains tight.
+        break
+      case 'escalated':
+        // Local-first LLM routing Task 8 — attach the EscalationDecision
+        // to the most-recent assistant text event. If none exists yet (the
+        // failure fired before the first token), the store parks the
+        // decision and the next assistant text event inherits it (see
+        // tokenDelta arm above).
+        store.attachEscalationToLastAssistantText(msg.decision)
         break
       default: {
         const _exhaustive: never = msg

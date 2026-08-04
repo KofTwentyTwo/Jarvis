@@ -19,8 +19,8 @@ function readFixture(name: string): { raw: string; parsed: unknown } {
 }
 
 describe("BUS_PROTOCOL_VERSION", () => {
-  it("equals 2.3.0 (must match Swift constant — Plan 09-04 chatSubmit + chatCancelAndSubmit + submitRejected bump)", () => {
-    expect(BUS_PROTOCOL_VERSION).toBe("2.3.0");
+  it("equals 2.4.0 (must match Swift constant — Local-first LLM routing Task 7 escalated bump)", () => {
+    expect(BUS_PROTOCOL_VERSION).toBe("2.4.0");
   });
 });
 
@@ -41,6 +41,7 @@ describe("BusOutbound round-trip", () => {
     "turnStarted.json",
     "turnEnded.json",
     "submitRejected.json",
+    "escalated.json",
   ];
 
   for (const name of outboundFixtures) {

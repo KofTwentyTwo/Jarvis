@@ -20,6 +20,13 @@ struct NDJSONDecoder {
     /// array — used to drive the implicit terminator mapping when
     /// `done_reason` is missing or `"stop"` but tool calls were observed.
     private(set) var sawToolCalls = false
+    /// Set to `true` once any non-empty text delta has been yielded.
+    /// Combined with `sawAnyToolUseRequested`, drives `emptyResponse`
+    /// detection on the terminator chunk (Task 5 / spec §2).
+    private(set) var sawAnyTextDelta = false
+    /// Set to `true` once at least one `toolUseRequested` event has been
+    /// yielded. Mirrors `sawAnyTextDelta` for the empty-response check.
+    private(set) var sawAnyToolUseRequested = false
     /// Final `prompt_eval_count` observed (Ollama only emits it on the
     /// terminator chunk in practice; keeping it as an accumulator is safe).
     private(set) var promptEvalCount: Int = 0
@@ -83,12 +90,38 @@ struct NDJSONDecoder {
                 if let args = function["arguments"] {
                     // Ollama native emits arguments as a JSON object.
                     if let str = args as? String {
-                        argsJSON = Data(str.utf8)
+                        // String form: validate it parses as JSON before
+                        // forwarding — orchestrator escalates on this kind
+                        // (Task 5 / spec §2).
+                        let strData = Data(str.utf8)
+                        do {
+                            _ = try JSONSerialization.jsonObject(
+                                with: strData,
+                                options: [.allowFragments]
+                            )
+                            argsJSON = strData
+                        } catch {
+                            yield(.providerError(.malformedToolCall(
+                                reason: "tool_calls[].function.arguments string failed to parse as JSON: \(error.localizedDescription)"
+                            )))
+                            yield(.messageStop)
+                            messageStopEmitted = true
+                            return
+                        }
                     } else {
-                        argsJSON = (try? JSONSerialization.data(
-                            withJSONObject: args,
-                            options: [.sortedKeys]
-                        )) ?? Data("{}".utf8)
+                        do {
+                            argsJSON = try JSONSerialization.data(
+                                withJSONObject: args,
+                                options: [.sortedKeys]
+                            )
+                        } catch {
+                            yield(.providerError(.malformedToolCall(
+                                reason: "tool_calls[].function.arguments object failed to re-encode: \(error.localizedDescription)"
+                            )))
+                            yield(.messageStop)
+                            messageStopEmitted = true
+                            return
+                        }
                     }
                 } else {
                     argsJSON = Data("{}".utf8)
@@ -100,6 +133,7 @@ struct NDJSONDecoder {
                     name: name,
                     argsJSON: argsJSON
                 )))
+                sawAnyToolUseRequested = true
             }
             sawToolCalls = true
         }
@@ -109,6 +143,7 @@ struct NDJSONDecoder {
            let content = message["content"] as? String,
            !content.isEmpty {
             yield(.textDelta(content))
+            sawAnyTextDelta = true
         }
 
         // 3) usage accumulators (Ollama only fills these on the terminator
@@ -136,6 +171,14 @@ struct NDJSONDecoder {
                 cacheCreationInputTokens: 0,
                 cacheReadInputTokens: 0
             )))
+            // Empty-response detection (Task 5 / spec §2): if the terminator
+            // arrives with zero textDelta AND zero toolUseRequested, surface
+            // `.emptyResponse` so the orchestrator can escalate to Anthropic.
+            // The providerError MUST precede messageStop so consumers that
+            // break on messageStop still observe it.
+            if !sawAnyTextDelta && !sawAnyToolUseRequested {
+                yield(.providerError(.emptyResponse))
+            }
             yield(.messageStop)
             messageStopEmitted = true
         }

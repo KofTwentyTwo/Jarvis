@@ -181,4 +181,80 @@ final class NDJSONDecoderTests: XCTestCase {
         })
         XCTAssertTrue(events.contains { if case .messageStop = $0 { return true } else { return false } })
     }
+
+    // MARK: - N8: malformedToolCall failure kind (Task 5 / spec §2)
+
+    /// `tool_calls[].function.arguments` is present as a string but is not
+    /// decodable as JSON — the decoder MUST emit a `providerError` carrying
+    /// `OllamaFailureKind.malformedToolCall` so the orchestrator (Task 6)
+    /// can escalate to Anthropic.
+    func testMalformedToolCallEmitsProviderError() {
+        let events = run([
+            #"{"model":"qwen2.5-coder:32b","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"get_time","arguments":"this is not json"}}]},"done":false}"#,
+            #"{"message":{"content":""},"done":true}"#,
+        ])
+        XCTAssertTrue(events.contains { event in
+            if case .providerError(let err) = event,
+               err.ollamaFailureKind == .malformedToolCall { return true }
+            return false
+        }, "Expected providerError carrying ollamaFailureKind == .malformedToolCall, got: \(events)")
+    }
+
+    // MARK: - N9: emptyResponse failure kind (Task 5 / spec §2)
+
+    /// Stream that terminates with zero textDelta and zero toolUseRequested
+    /// must emit `providerError(.emptyResponse)` BEFORE `messageStop`. This
+    /// drives the orchestrator's reactive escalation to Anthropic.
+    func testEmptyResponseEmitsProviderError() {
+        let events = run([
+            #"{"model":"qwen2.5-coder:32b","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop"}"#,
+        ])
+        XCTAssertTrue(events.contains { event in
+            if case .providerError(let err) = event,
+               err.ollamaFailureKind == .emptyResponse { return true }
+            return false
+        }, "Expected providerError carrying ollamaFailureKind == .emptyResponse, got: \(events)")
+        // emptyResponse must precede messageStop.
+        let errorIdx = events.firstIndex { event in
+            if case .providerError(let err) = event,
+               err.ollamaFailureKind == .emptyResponse { return true }
+            return false
+        }
+        let stopIdx = events.firstIndex { event in
+            if case .messageStop = event { return true } else { return false }
+        }
+        XCTAssertNotNil(errorIdx)
+        XCTAssertNotNil(stopIdx)
+        if let e = errorIdx, let s = stopIdx {
+            XCTAssertLessThan(e, s, "emptyResponse providerError must precede messageStop")
+        }
+    }
+
+    /// Negative case: a stream with at least one textDelta must NOT emit
+    /// `.emptyResponse` on terminator.
+    func testTextDeltaSuppressesEmptyResponse() {
+        let events = run([
+            #"{"message":{"role":"assistant","content":"hi"},"done":false}"#,
+            #"{"message":{"content":""},"done":true,"done_reason":"stop"}"#,
+        ])
+        XCTAssertFalse(events.contains { event in
+            if case .providerError(let err) = event,
+               err.ollamaFailureKind == .emptyResponse { return true }
+            return false
+        }, "non-empty stream must not emit emptyResponse, got: \(events)")
+    }
+
+    /// Negative case: a stream with at least one toolUseRequested must NOT
+    /// emit `.emptyResponse` on terminator.
+    func testToolUseSuppressesEmptyResponse() {
+        let events = run([
+            #"{"message":{"content":"","tool_calls":[{"function":{"name":"get_time","arguments":{}}}]},"done":false}"#,
+            #"{"message":{"content":""},"done":true,"done_reason":"tool_calls"}"#,
+        ])
+        XCTAssertFalse(events.contains { event in
+            if case .providerError(let err) = event,
+               err.ollamaFailureKind == .emptyResponse { return true }
+            return false
+        }, "tool-use stream must not emit emptyResponse, got: \(events)")
+    }
 }

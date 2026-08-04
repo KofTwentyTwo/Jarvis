@@ -327,6 +327,7 @@ final class OrchestratorEventBroadcasterTests: XCTestCase {
         case .usage:          return "usage"
         case .turnEnd:        return "turnEnd"
         case .error:          return "error"
+        case .escalated:      return "escalated"
         }
     }
 }

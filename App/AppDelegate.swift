@@ -3321,7 +3321,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // `WizardState.pttHotkey` is already persisted; rebind
                 // PushToTalk so the new shortcut takes effect immediately.
                 self?.rebindPTTFromState()
-            }
+            },
+            // Local-first LLM routing (Task 9 / spec §6): pass the live
+            // ConfigStore so the provider-mode picker can hydrate from /
+            // hot-reload-write to the per-turn snapshot.
+            configStore: configStore
         )
     }
 

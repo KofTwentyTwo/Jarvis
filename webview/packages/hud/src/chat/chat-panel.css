@@ -43,6 +43,23 @@
   color: rgba(255, 200, 200, 0.92);
 }
 
+/* Escalation badge — rendered as a footer chip inside an assistant text
+ * event when the orchestrator escalated that turn from Ollama to
+ * Anthropic. Amber accent so it reads as informational, not error. */
+
+.escalation-badge {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(245, 166, 35, 0.10);
+  border: 1px solid rgba(245, 166, 35, 0.32);
+  color: rgba(245, 200, 130, 0.92);
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
 /* Tool call card */
 
 .tool-call-card {

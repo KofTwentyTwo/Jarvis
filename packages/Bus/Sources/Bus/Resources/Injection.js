@@ -17,7 +17,7 @@
   "use strict";
   if (window.jarvisBus) { return; }
   window.jarvisBus = {
-    protocolVersion: "2.3.0",
+    protocolVersion: "2.4.0",
     _handler: null,
     // Queue (not a single slot) of messages received before the bundle
     // registered its handler via onOutbound. With a single slot, an early

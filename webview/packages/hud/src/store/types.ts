@@ -1,4 +1,4 @@
-import type { HudState } from '@jarvis/bus'
+import type { EscalationDecision, HudState } from '@jarvis/bus'
 
 export type { HudState }
 
@@ -9,8 +9,22 @@ export type ToolCallStatus =
   | 'completed'
   | 'failed'
 
+/**
+ * Local-first LLM routing (Task 8): when the orchestrator reactively
+ * escalates the active Ollama turn to Anthropic, the bus emits
+ * `BusOutbound.escalated`; the dispatcher attaches the decision to the
+ * most-recent assistant text event so the renderer can stamp an inline
+ * EscalationBadge under that message body.
+ */
 export type ChatEvent =
-  | { id: string; kind: 'text'; text: string; role: 'user' | 'assistant'; turnId: string }
+  | {
+      id: string
+      kind: 'text'
+      text: string
+      role: 'user' | 'assistant'
+      turnId: string
+      escalation?: EscalationDecision
+    }
   | {
       id: string
       kind: 'tool-call'

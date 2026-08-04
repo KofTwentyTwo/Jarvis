@@ -38,6 +38,72 @@ final class PerTurnSnapshotTests: XCTestCase {
     }
 }
 
+final class PerTurnSnapshotEscalationTests: XCTestCase {
+    func test_escalation_enabled_round_trips() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "provider": "ollama",
+          "escalationEnabled": true,
+          "tts": { "tier": "tier1" },
+          "stt": { "whisperKitFallback": false },
+          "featureFlags": { "orpheusTTSEnabled": false, "whisperKitSTTEnabled": false }
+        }
+        """.data(using: .utf8)!
+
+        let snapshot = try JSONDecoder().decode(PerTurnSnapshot.self, from: json)
+        XCTAssertEqual(snapshot.provider, .ollama)
+        XCTAssertTrue(snapshot.escalationEnabled)
+    }
+
+    func test_escalation_enabled_defaults_to_true_when_absent() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "provider": "ollama",
+          "tts": { "tier": "tier1" },
+          "stt": { "whisperKitFallback": false },
+          "featureFlags": { "orpheusTTSEnabled": false, "whisperKitSTTEnabled": false }
+        }
+        """.data(using: .utf8)!
+
+        let snapshot = try JSONDecoder().decode(PerTurnSnapshot.self, from: json)
+        XCTAssertTrue(snapshot.escalationEnabled)
+    }
+
+    func test_default_config_resource_is_local_first() throws {
+        let url = ConfigLoader.bundledDefaultConfigURL()!
+        let data = try Data(contentsOf: url)
+        let snapshot = try JSONDecoder().decode(PerTurnSnapshot.self, from: data)
+        XCTAssertEqual(snapshot.provider, .ollama,
+            "default-config.json must specify ollama as the default chat-turn provider (local-first)")
+        XCTAssertTrue(snapshot.escalationEnabled,
+            "default-config.json must enable escalation for new users (local-first)")
+    }
+
+    func test_escalation_enabled_survives_encode_decode_round_trip_when_false() throws {
+        // Catches a future regression where someone adds a custom encode(to:)
+        // that drops escalationEnabled — encoder must continue emitting the
+        // field so decoder reads the user's explicit `false` rather than
+        // defaulting back to `true`.
+        let original = PerTurnSnapshot(
+            schemaVersion: 1,
+            provider: .ollama,
+            escalationEnabled: false,
+            tts: TTSConfig(tier: "tier1"),
+            stt: STTConfig(whisperKitFallback: false),
+            featureFlags: FeatureFlags(["orpheusTTSEnabled": false, "whisperKitSTTEnabled": false])
+        )
+
+        let encoded = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(PerTurnSnapshot.self, from: encoded)
+
+        XCTAssertFalse(decoded.escalationEnabled,
+            "Encoder must emit escalationEnabled so round-trip preserves the user's explicit false")
+        XCTAssertEqual(decoded, original)
+    }
+}
+
 enum ConfigTestFixtures {
     static func launch() throws -> LaunchSnapshot {
         let json = """

@@ -21,6 +21,14 @@ public enum OrchestratorEvent: Sendable {
     case usage(turnId: TurnID, usage: TurnUsage)
     case turnEnd(turnId: TurnID, stopReason: StopReason)
     case error(turnId: TurnID, error: LLMProviderError)
+
+    /// Local-first LLM routing (Task 6 / spec §2): one-shot reactive
+    /// escalation from Ollama → Anthropic fired by the orchestrator when
+    /// the local provider emits a `providerError` carrying an
+    /// `OllamaFailureKind`. Emitted at most once per logical turn (budget
+    /// resets across turns — see `escalatedThisTurn` in `runTurnLoop`).
+    /// Task 7 wires this to the HUD badge via `BusOutbound.escalated`.
+    case escalated(EscalationDecision)
 }
 
 public struct ToolCardUpdate: Sendable {

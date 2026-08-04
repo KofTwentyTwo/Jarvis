@@ -22,4 +22,34 @@ public enum LLMProviderError: Error, Sendable, Equatable {
     /// after stream-truncation retry policy gives up. The provider does
     /// not emit this directly.
     case streamTruncatedFinal
+
+    /// Ollama `/api/chat` emitted a `tool_calls` block whose `arguments`
+    /// failed to decode as JSON. Carries a redacted underlying reason for
+    /// diagnostics. Surfaces `OllamaFailureKind.malformedToolCall` via
+    /// `ollamaFailureKind` so the orchestrator (Task 6) can escalate to
+    /// Anthropic. See spec §2.
+    case malformedToolCall(reason: String)
+
+    /// Ollama stream terminated with zero text deltas AND zero tool-use
+    /// requests — a model-side empty response. Surfaces
+    /// `OllamaFailureKind.emptyResponse` so the orchestrator (Task 6) can
+    /// escalate to Anthropic. See spec §2.
+    case emptyResponse
+
+    /// If this error originated from the local Ollama provider and matches
+    /// one of the closed failure kinds the orchestrator escalates on,
+    /// return that kind. Non-Ollama-specific errors (`.api`, `.decode`,
+    /// `.transport`, `.streamTruncatedFinal`) return `nil`.
+    ///
+    /// `streamTruncated`, `refusal`, `connectionFailure`, and `unknownTool`
+    /// are detected orchestrator-side from `LLMEvent.stopReason`, the
+    /// transport-layer `URLSession` error path, and the tool registry —
+    /// not from this enum.
+    public var ollamaFailureKind: OllamaFailureKind? {
+        switch self {
+        case .malformedToolCall: return .malformedToolCall
+        case .emptyResponse:     return .emptyResponse
+        case .api, .decode, .transport, .streamTruncatedFinal: return nil
+        }
+    }
 }

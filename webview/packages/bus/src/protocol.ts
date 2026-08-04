@@ -13,9 +13,12 @@
  * Plan 09-04 bumped 2.2.0 -> 2.3.0 (additive BusInbound cases chatSubmit +
  * chatCancelAndSubmit for chat-panel submit + barge-in; additive BusOutbound
  * case submitRejected for D-10 text-path rejection toast).
+ *
+ * Local-first LLM routing Task 7 bumped 2.3.0 -> 2.4.0 (additive BusOutbound
+ * case escalated{decision} for HUD escalation badge).
  */
 
-export const BUS_PROTOCOL_VERSION = "2.3.0";
+export const BUS_PROTOCOL_VERSION = "2.4.0";
 
 export type HudState =
   | "idle"
@@ -31,6 +34,42 @@ export type TurnTerminator =
   | "cancelled"
   | "errored"
   | "superseded";
+
+/**
+ * Provider identity mirror — `Config.ProviderSelection` (Swift) and
+ * `BusProviderSelection` (Bus). Carried by `EscalationDecision.from` /
+ * `EscalationDecision.to`.
+ */
+export type ProviderSelection = "anthropic" | "ollama";
+
+/**
+ * Detectable Ollama failure modes that trigger one-shot reactive escalation
+ * to Anthropic. Mirror of `AgentCore.OllamaFailureKind` (Swift) and
+ * `BusOllamaFailureKind` (Bus). The HUD escalation badge keys reason copy
+ * off this value.
+ */
+export type OllamaFailureKind =
+  | "streamTruncated"
+  | "malformedToolCall"
+  | "unknownTool"
+  | "refusal"
+  | "connectionFailure"
+  | "emptyResponse";
+
+/**
+ * Local-first LLM routing — payload of `BusOutbound.escalated`. Emitted at
+ * most once per turn when the orchestrator reactively escalates Ollama →
+ * Anthropic. The HUD renders an EscalationBadge keyed by `reason`.
+ *
+ * `firedAt` is an ISO-8601 string (Swift `JSONEncoder` with
+ * `dateEncodingStrategy = .iso8601`).
+ */
+export interface EscalationDecision {
+  from: ProviderSelection;
+  to: ProviderSelection;
+  reason: OllamaFailureKind;
+  firedAt: string;
+}
 
 /**
  * Local mirror of `Memory.TurnRow` (the backend Swift type) and
@@ -64,7 +103,14 @@ export type BusOutbound =
    * transient toast. Body string is byte-identical to the voice-path HUD
    * banner (single source of truth: RejectReasonCopy.swift).
    */
-  | { type: "submitRejected"; reason: string };
+  | { type: "submitRejected"; reason: string }
+  /**
+   * Local-first LLM routing Task 7 — additive case carrying an
+   * `EscalationDecision` for the HUD escalation badge. Emitted at most
+   * once per turn when the orchestrator reactively escalates Ollama →
+   * Anthropic.
+   */
+  | { type: "escalated"; decision: EscalationDecision };
 
 export type BusInbound =
   | { type: "helloAck"; version: string }
@@ -115,12 +161,34 @@ const TURN_TERMINATORS = [
   "superseded",
 ] as const satisfies readonly TurnTerminator[];
 
+const PROVIDER_SELECTIONS = [
+  "anthropic",
+  "ollama",
+] as const satisfies readonly ProviderSelection[];
+
+const OLLAMA_FAILURE_KINDS = [
+  "streamTruncated",
+  "malformedToolCall",
+  "unknownTool",
+  "refusal",
+  "connectionFailure",
+  "emptyResponse",
+] as const satisfies readonly OllamaFailureKind[];
+
 function isHudState(v: string): v is HudState {
   return (HUD_STATES as readonly string[]).includes(v);
 }
 
 function isTurnTerminator(v: string): v is TurnTerminator {
   return (TURN_TERMINATORS as readonly string[]).includes(v);
+}
+
+function isProviderSelection(v: string): v is ProviderSelection {
+  return (PROVIDER_SELECTIONS as readonly string[]).includes(v);
+}
+
+function isOllamaFailureKind(v: string): v is OllamaFailureKind {
+  return (OLLAMA_FAILURE_KINDS as readonly string[]).includes(v);
 }
 
 /**
@@ -237,6 +305,41 @@ export function decodeOutbound(json: string): DecodeResult<BusOutbound> {
     case "submitRejected":
       if (typeof parsed.reason !== "string") return { ok: false, error: "submitRejected: reason must be string" };
       return { ok: true, value: { type: "submitRejected", reason: parsed.reason } };
+    case "escalated": {
+      if (!isObject(parsed.decision)) {
+        return { ok: false, error: "escalated: decision must be an object" };
+      }
+      const d = parsed.decision;
+      if (
+        typeof d.from !== "string" ||
+        typeof d.to !== "string" ||
+        typeof d.reason !== "string" ||
+        typeof d.firedAt !== "string"
+      ) {
+        return { ok: false, error: "escalated: invalid decision fields" };
+      }
+      if (!isProviderSelection(d.from)) {
+        return { ok: false, error: `escalated: unknown 'from' provider '${d.from}'` };
+      }
+      if (!isProviderSelection(d.to)) {
+        return { ok: false, error: `escalated: unknown 'to' provider '${d.to}'` };
+      }
+      if (!isOllamaFailureKind(d.reason)) {
+        return { ok: false, error: `escalated: unknown reason '${d.reason}'` };
+      }
+      return {
+        ok: true,
+        value: {
+          type: "escalated",
+          decision: {
+            from: d.from,
+            to: d.to,
+            reason: d.reason,
+            firedAt: d.firedAt,
+          },
+        },
+      };
+    }
     default: {
       // Compile-time exhaustiveness. After all cases above narrow `type`, the
       // default branch should see `type: never`. Adding a new BusOutbound

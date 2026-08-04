@@ -1,0 +1,1 @@
+{"type":"escalated","decision":{"from":"ollama","to":"anthropic","reason":"malformedToolCall","firedAt":"2026-05-14T12:00:00Z"}}

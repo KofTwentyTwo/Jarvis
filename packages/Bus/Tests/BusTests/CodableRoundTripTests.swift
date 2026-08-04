@@ -234,6 +234,26 @@ final class CodableRoundTripTests: XCTestCase {
         )
     }
 
+    /// Local-first LLM routing Task 7 — additive `escalated(decision)` case
+    /// carrying an `EscalationDecision` for the HUD escalation badge.
+    /// ISO-8601 date encoding is exercised here; `BusCoder.makeEncoder/Decoder`
+    /// pin the strategy at `.iso8601`.
+    func test_roundTrip_escalated() throws {
+        // `firedAt` chosen to round-trip cleanly through the `.iso8601`
+        // strategy with no fractional seconds (matches the fixture verbatim).
+        let firedAt = ISO8601DateFormatter().date(from: "2026-05-14T12:00:00Z")!
+        let decision = EscalationDecision(
+            from: .ollama,
+            to: .anthropic,
+            reason: .malformedToolCall,
+            firedAt: firedAt
+        )
+        try assertOutboundRoundTrips(
+            fixture: "escalated",
+            expect: .escalated(decision)
+        )
+    }
+
     // MARK: - Shape invariants (these prove hand-written Codable is load-bearing)
 
     /// If SE-0295 synthesis leaked, we'd see `{"hudState":{"state":"idle"}}`.
