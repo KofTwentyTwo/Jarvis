@@ -20,17 +20,19 @@ concurrency:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   semgrep:
+    permissions:
+      contents: read
+      security-events: write
     name: Semgrep scan
     runs-on: ubuntu-latest
     container:
       image: semgrep/semgrep
     if: (github.actor != 'dependabot[bot]')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Semgrep CI
         env:
@@ -47,7 +49,7 @@ jobs:
 
       - name: Upload SARIF (when present)
         if: hashFiles('semgrep.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3
         with:
           sarif_file: semgrep.sarif
           category: semgrep
